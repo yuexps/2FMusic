@@ -236,6 +236,7 @@ async function initPlayerState() {
   switchTab(targetTab);
   if (state.savedState.volume !== undefined) { ui.audio.volume = state.savedState.volume; updateVolumeUI(ui.audio.volume); }
   if (state.savedState.playMode !== undefined) { state.playMode = state.savedState.playMode; updatePlayModeUI(); }
+  if (state.savedState.isFullScreen) { ui.overlay?.classList.add('active'); }
 
   if (state.savedState.currentFilename) {
     // 优先通过文件名匹配，而不是索引
@@ -490,6 +491,30 @@ export function bindUiControls() {
 
   if (ui.fpMenuBtn) ui.fpMenuBtn.addEventListener('click', (e) => { e.stopPropagation(); ui.actionMenuOverlay?.classList.add('active'); });
   ui.actionCancelBtn?.addEventListener('click', () => ui.actionMenuOverlay?.classList.remove('active'));
+
+  if (ui.actionDownloadBtn) {
+    ui.actionDownloadBtn.addEventListener('click', () => {
+      ui.actionMenuOverlay?.classList.remove('active');
+      const currentSong = state.playQueue[state.currentTrackIndex];
+      if (currentSong) {
+        showToast('开始下载...');
+        const a = document.createElement('a');
+        a.href = currentSong.src;
+        // Construct filename: Artist - Title.ext
+        // Note: browser might respect Content-Disposition header over this, but it's good practice.
+        // We need extension from src or default to mp3
+        let ext = 'mp3';
+        if (currentSong.filename) {
+          const match = currentSong.filename.match(/\.(\w+)$/);
+          if (match) ext = match[1];
+        }
+        a.download = `${currentSong.artist} - ${currentSong.title}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    });
+  }
   if (ui.actionDeleteBtn) {
     ui.actionDeleteBtn.addEventListener('click', () => {
       ui.actionMenuOverlay?.classList.remove('active');

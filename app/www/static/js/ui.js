@@ -61,6 +61,7 @@ export const ui = {
 
   fpMenuBtn: document.getElementById('fp-menu-btn'),
   actionMenuOverlay: document.getElementById('action-menu-overlay'),
+  actionDownloadBtn: document.getElementById('action-download'),
   actionDeleteBtn: document.getElementById('action-delete'),
   actionCancelBtn: document.getElementById('action-cancel'),
   confirmModalOverlay: document.getElementById('confirm-modal-overlay'),

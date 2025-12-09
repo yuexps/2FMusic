@@ -1,3 +1,5 @@
+import { ui } from './ui.js';
+
 // 状态集中管理
 export const state = {
   fullPlaylist: JSON.parse(localStorage.getItem('2fmusic_playlist') || '[]'),
@@ -34,7 +36,8 @@ export function persistState(audio) {
     playMode,
     currentTime: audio?.currentTime ?? 0,
     currentFilename: currentSong ? currentSong.filename : null,
-    tab: currentTab
+    tab: currentTab,
+    isFullScreen: ui.overlay ? ui.overlay.classList.contains('active') : false
   };
   localStorage.setItem('2fmusic_state', JSON.stringify(nextState));
 }

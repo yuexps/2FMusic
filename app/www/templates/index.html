@@ -313,6 +313,9 @@
         <div id="action-menu-overlay" class="custom-overlay">
             <div class="action-sheet glass-panel">
                 <div class="action-header">更多操作</div>
+                <button class="action-item" id="action-download">
+                    <i class="fas fa-download"></i> 本地下载
+                </button>
                 <button class="action-item delete" id="action-delete">
                     <i class="fas fa-trash-alt"></i> 永久删除
                 </button>
@@ -353,7 +356,14 @@
         (function () {
             try {
                 const saved = localStorage.getItem('2fmusic_state');
-                const tab = saved ? JSON.parse(saved).tab : 'local';
+                const state = saved ? JSON.parse(saved) : {};
+                const tab = state.tab || 'local';
+
+                // Restore FullScreen Overlay Immediately
+                if (state.isFullScreen) {
+                    const overlay = document.getElementById('full-player-overlay');
+                    if (overlay) overlay.classList.add('active');
+                }
 
                 // Update Nav
                 document.querySelectorAll('nav li').forEach(el => el.classList.remove('active'));
