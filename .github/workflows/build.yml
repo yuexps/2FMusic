@@ -1,4 +1,4 @@
-name: Auto Build 2FMusic (Binary)
+name: Auto Build 2FMusic (Dual Versions)
 
 on:
   workflow_dispatch:
@@ -19,7 +19,6 @@ jobs:
     - name: Extract Version from Manifest
       id: version
       run: |
-        # 查找以 version 开头的行，以 = 分割，打印第二部分，并去除首尾空格
         VERSION=$(grep "^version" manifest | awk -F'=' '{print $2}' | xargs)
         echo "version=${VERSION}" >> $GITHUB_OUTPUT
         echo "🎯 Detected version: ${VERSION}"
@@ -30,74 +29,121 @@ jobs:
       with:
         python-version: '3.12'
 
-    # 3. 安装依赖 (PyInstaller 和 项目依赖)
+    # 3. 安装编译工具和环境依赖
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install pyinstaller
-        # 安装项目运行所需的依赖，以便 PyInstaller 能打包它们
-        if [ -f app/server/requirements.txt ]; then pip install -r app/server/requirements.txt; fi
+        
+        # 虽然 lib 里已经有库了，但为了让 PyInstaller 能正确分析并打包进二进制文件，需要在 Runner 的临时环境中安装这些依赖。
+        if [ -f app/server/requirements.txt ]; then 
+           pip install -r app/server/requirements.txt
+        fi
 
-    # 4. 编译二进制并清理
-    - name: Compile and Cleanup
-      run: |
-        echo "🔨 Compiling app.py..."
-        # 编译为单文件，输出到 app/server/app
-        pyinstaller --clean --onefile --name "app" --distpath "app/server" "app/server/app.py"
-        
-        # 赋予执行权限
-        chmod +x app/server/app
-        
-        echo "🧹 Cleaning up..."
-        # 清理编译临时文件
-        rm -rf build/
-        rm -f app.spec
-        
-        # 删除源码和不再需要的依赖库文件夹
-        rm -f app/server/app.py
-        rm -rf app/server/lib
-        
-        echo "✅ Compilation and cleanup complete."
-
-    # 5. 安装 fnpack
+    # 4. 安装 fnpack
     - name: Install fnpack
       run: |
         wget https://static2.fnnas.com/fnpack/fnpack-1.0.4-linux-amd64 -O fnpack
         chmod +x fnpack
         sudo mv fnpack /usr/local/bin/
 
-    # 6. 构建 fpk 包
-    - name: Build fpk package
-      id: build
+    # ==========================================
+    # 5. 构建第一个版本：源码版 (Python Version)
+    #    利用仓库自带的 lib 目录直接打包
+    # ==========================================
+    - name: Build Source Package (Requires Python)
+      id: build_source
       run: |
+        echo "📦 Building Source (Python) Package..."
+        # 直接使用自带的 lib 目录打包
         fnpack build
-        FPK_FILE=$(ls *.fpk | head -n 1)
-        echo "fpk_file=${FPK_FILE}" >> $GITHUB_OUTPUT
-        echo "📦 FPK package built: ${FPK_FILE}"
+        
+        # 重命名生成的包
+        SOURCE_FPK_NAME="2fmusic-${{ steps.version.outputs.version }}-python_src.fpk"
+        mv *.fpk "$SOURCE_FPK_NAME"
+        
+        echo "source_pkg=${SOURCE_FPK_NAME}" >> $GITHUB_OUTPUT
+        echo "✅ Generated: $SOURCE_FPK_NAME"
 
-    # 7. 删除旧的同版本 Pre-release
+    # ==========================================
+    # 6. 环境转换：编译二进制 & 清理源码
+    # ==========================================
+    - name: Compile and Cleanup for Binary
+      run: |
+        echo "🔨 Compiling app.py to binary..."
+        # 编译为单文件，输出到 app/server/app
+        pyinstaller --clean --onefile --name "app" --distpath "app/server" "app/server/app.py"
+        
+        # 赋予执行权限
+        chmod +x app/server/app
+        
+        echo "🧹 Cleaning up source files..."
+        rm -rf build/
+        rm -f app.spec
+        
+        # 删除源码和依赖库
+        rm -f app/server/app.py
+        rm -rf app/server/lib
+        
+        echo "📝 Modifying manifest (Remove Python dependency)..."
+        # 从 manifest 中删除 install_dep_apps 这一行，因为二进制版不需要系统安装 python
+        sed -i '/install_dep_apps/d' manifest
+        
+        echo "✅ Ready for Binary Build."
+
+    # ==========================================
+    # 7. 构建第二个版本：二进制版 (Binary Version)
+    # ==========================================
+    - name: Build Binary Package (Standalone)
+      id: build_binary
+      run: |
+        echo "📦 Building Binary (Standalone) Package..."
+        fnpack build
+        
+        # 重命名生成的包
+        BINARY_FPK_NAME="2fmusic-${{ steps.version.outputs.version }}-bin_amd64.fpk"
+        mv *.fpk "$BINARY_FPK_NAME"
+        
+        echo "binary_pkg=${BINARY_FPK_NAME}" >> $GITHUB_OUTPUT
+        echo "✅ Generated: $BINARY_FPK_NAME"
+
+    # 8. 删除旧的同版本 Release
     - name: Delete old pre-releases
       run: |
         TAG="v${{ steps.version.outputs.version }}-pre"
-        echo "Checking for old release with tag: $TAG"
         gh release delete "$TAG" --yes || true
         git push --delete origin "$TAG" || true
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # 8. 创建 Pre-release
+    # 9. 创建发布并上传两个文件
     - name: Create Pre-release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: v${{ steps.version.outputs.version }}-pre
-        name: 2FMusic ${{ steps.version.outputs.version }} (Binary Pre-release)
+        name: 2FMusic ${{ steps.version.outputs.version }} (Dual Versions)
         body: |
-          ## 🚀 Auto-built Binary Release
+          ## 🚀 Auto-built Dual Release
 
           **Version**: ${{ steps.version.outputs.version }}
-          
-          此版本由 GitHub Actions 自动构建
 
-        files: ${{ steps.build.outputs.fpk_file }}
+          此 Release 包含两个版本的安装包：
+
+          ### 1. 🐍 Python Source Version (`-python_src.fpk`)
+          - **文件**: `${{ steps.build_source.outputs.source_pkg }}`
+          - **说明**: 使用仓库自带 `lib` 库，保留 `app.py` 源码。
+          - **依赖**: 依赖系统 Python 环境 (`python312`)。
+          
+          ### 2. ⚡ Binary Version (`-bin_amd64.fpk`)
+          - **文件**: `${{ steps.build_binary.outputs.binary_pkg }}`
+          - **说明**: 核心已编译为二进制文件，**不含源码**，启动更快。
+          - **依赖**: **无需**系统 Python 环境。
+
+          ### ⚠️ Notes
+          - 这是一个测试版 (Pre-release)。
+
+        files: |
+          ${{ steps.build_source.outputs.source_pkg }}
+          ${{ steps.build_binary.outputs.binary_pkg }}
         prerelease: true
         draft: false
