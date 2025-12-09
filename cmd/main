@@ -1,20 +1,43 @@
 #!/bin/bash
 # 环境变量说明:
-# TRIM_APPDEST    - 应用可执行文件目录 (target目录)  -> @appcenter
-# TRIM_PKGVAR     - 应用数据目录 (var目录)          -> @appdata
-# TRIM_PKGETC     - 应用配置目录 (etc目录)          -> @appconf
-# TRIM_PKGHOME    - 应用home目录 (home目录)         -> @apphome
-# TRIM_PKGTMP     - 应用临时目录 (tmp目录)          -> @apptemp
-# TRIM_SHARES     - 应用共享目录 (shares目录)       -> @appshare
+# TRIM_APPDEST    - 应用可执行文件目录 (target目录)   -> @appcenter
+# TRIM_PKGVAR     - 应用数据目录 (var目录)           -> @appdata
+# TRIM_PKGETC     - 应用配置目录 (etc目录)           -> @appconf
+# TRIM_PKGHOME    - 应用home目录 (home目录)          -> @apphome
+# TRIM_PKGTMP     - 应用临时目录 (tmp目录)           -> @apptemp
+# TRIM_SHARES     - 应用共享目录 (shares目录)        -> @appshare
 # TRIM_SERVICE_PORT - 服务端口
 
+# 将 Python 路径加入环境 (源码版需要，二进制版忽略即可)
 export PATH=/var/apps/python312/target/bin:$PATH
+
 LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
 MUSIC_LIBRARY_PATH="${TRIM_PKGVAR}/Music"
 
-# write the command to start your program here 
-CMD="python3 ${TRIM_APPDEST}/server/app.py --music-library-path ${MUSIC_LIBRARY_PATH} --log-path ${LOG_FILE} --port 23237"
+# ========================================================
+# 自动兼容逻辑：检测是 二进制版 还是 源码版
+
+# 定义可能的路径
+BINARY_APP="${TRIM_APPDEST}/server/app"
+SOURCE_APP="${TRIM_APPDEST}/server/app.py"
+# 定义通用的启动参数
+APP_ARGS="--music-library-path ${MUSIC_LIBRARY_PATH} --log-path ${LOG_FILE} --port 23237"
+
+if [ -f "${BINARY_APP}" ]; then
+    # 🔹 Case 1: 发现二进制文件 (Auto Build Binary Version)
+    # 确保有执行权限
+    chmod +x "${BINARY_APP}"
+    CMD="${BINARY_APP} ${APP_ARGS}"
+    MODE="Binary"
+else
+    # 🔸 Case 2: 未发现二进制，回退到 Python 源码 (Source Version)
+    CMD="python3 ${SOURCE_APP} ${APP_ARGS}"
+    MODE="Source(Python)"
+fi
+
+# ========================================================
+
 log_msg() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> ${LOG_FILE}
 }
@@ -24,13 +47,14 @@ start_process() {
         return 0
     fi
 
-    log_msg "Starting process ..."
+    log_msg "Starting process (Mode: ${MODE}) ..."
+    log_msg "Command: ${CMD}"
+    
     # run cmd to start process
     bash -c "${CMD}" &
     # write pid to pidfile
     printf "%s" "$!" > ${PID_FILE}
-    # log_msg "CMD = ${CMD}"
-    # log_msg "pid = $!"
+    
     return 0
 }
 
