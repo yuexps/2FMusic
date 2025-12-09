@@ -4,6 +4,7 @@
 import os
 import sys
 import time
+import re
 import sqlite3
 import threading
 import shutil
@@ -11,6 +12,7 @@ import logging
 import argparse
 import locale
 import concurrent.futures
+import json
 from urllib.parse import quote, unquote
 
 # 从 lib 目录导入第三方库
@@ -19,7 +21,7 @@ LIB_DIR = os.path.join(CURRENT_DIR, 'lib')
 sys.path.insert(0, LIB_DIR)
 
 try:
-    from flask import Flask, render_template, request, jsonify, send_file
+    from flask import Flask, render_template, request, jsonify, send_file, redirect
     import requests
     from mutagen import File
     from mutagen.easyid3 import EasyID3
@@ -440,6 +442,117 @@ COMMON_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
     'Authorization': '2FMusic'
 }
+NETEASE_API_BASE_DEFAULT = os.environ.get('NETEASE_API_BASE', 'http://localhost:3000')
+NETEASE_API_BASE = NETEASE_API_BASE_DEFAULT
+NETEASE_COOKIE_PATH = os.path.join(MUSIC_LIBRARY_PATH, '.netease_cookie')
+NETEASE_COOKIE = None
+NETEASE_CONFIG_PATH = os.path.join(MUSIC_LIBRARY_PATH, '.netease_config.json')
+NETEASE_DOWNLOAD_DIR = os.environ.get('NETEASE_DOWNLOAD_PATH', MUSIC_LIBRARY_PATH)
+
+def parse_cookie_string(cookie_str: str):
+    """将 Set-Cookie 字符串解析为 requests 兼容的字典。"""
+    if not cookie_str: 
+        return {}
+    cookies = {}
+    # 只取 key=value 形式，忽略 Path/Expires 等属性
+    for part in cookie_str.split(';'):
+        if '=' in part:
+            k, v = part.strip().split('=', 1)
+            if k.lower() in ('path', 'expires', 'max-age', 'domain', 'samesite', 'secure'): 
+                continue
+            cookies[k] = v
+    return cookies
+
+def normalize_cookie_string(raw: str) -> str:
+    """规范化 cookie 字符串，移除换行并用分号拼接。"""
+    if not raw: 
+        return ''
+    parts = [p.strip() for p in raw.replace('\n', ';').split(';') if p.strip()]
+    return '; '.join(parts)
+
+def load_netease_cookie():
+    global NETEASE_COOKIE
+    if os.path.exists(NETEASE_COOKIE_PATH):
+        try:
+            with open(NETEASE_COOKIE_PATH, 'r', encoding='utf-8') as f:
+                NETEASE_COOKIE = normalize_cookie_string(f.read().strip()) or None
+        except Exception as e:
+            logger.warning(f"读取网易云 cookie 失败: {e}")
+
+def save_netease_cookie(cookie_str: str):
+    global NETEASE_COOKIE
+    NETEASE_COOKIE = normalize_cookie_string(cookie_str or '')
+    try:
+        with open(NETEASE_COOKIE_PATH, 'w', encoding='utf-8') as f:
+            f.write(NETEASE_COOKIE)
+    except Exception as e:
+        logger.warning(f"保存网易云 cookie 失败: {e}")
+
+def load_netease_config():
+    global NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE
+    if os.path.exists(NETEASE_CONFIG_PATH):
+        try:
+            with open(NETEASE_CONFIG_PATH, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                download_dir = data.get('download_dir')
+                if download_dir:
+                    NETEASE_DOWNLOAD_DIR = download_dir
+                api_base = data.get('api_base')
+                if api_base:
+                    NETEASE_API_BASE = api_base
+                else:
+                    # 回填默认值，方便用户在配置文件中看到
+                    save_netease_config(NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE)
+        except Exception as e:
+            logger.warning(f"读取网易云配置失败: {e}")
+    else:
+        # 首次保存默认配置，方便用户查看
+        save_netease_config(NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE)
+
+def save_netease_config(download_dir: str = None, api_base: str = None):
+    global NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE
+    if download_dir:
+        NETEASE_DOWNLOAD_DIR = download_dir
+    if api_base:
+        NETEASE_API_BASE = api_base.rstrip('/') or NETEASE_API_BASE_DEFAULT
+    try:
+        with open(NETEASE_CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump({
+                'download_dir': NETEASE_DOWNLOAD_DIR,
+                'api_base': NETEASE_API_BASE
+            }, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.warning(f"保存网易云配置失败: {e}")
+
+def sanitize_filename(name: str) -> str:
+    """移除非法字符，避免文件名错误。"""
+    cleaned = re.sub(r'[\\/:*?"<>|]+', '_', name).strip().strip('.')
+    return cleaned or 'netease_song'
+
+def call_netease_api(path: str, params: dict, method: str = 'GET', need_cookie: bool = True):
+    """调用本地网易云 API，统一处理错误。"""
+    base = (NETEASE_API_BASE or NETEASE_API_BASE_DEFAULT).rstrip('/')
+    url = f"{base}{path}"
+    headers = dict(COMMON_HEADERS)
+    params = dict(params or {})
+    cookies = {}
+    if need_cookie and NETEASE_COOKIE:
+        # 直接透传原始 cookie 字符串，保证完整性
+        headers['Cookie'] = NETEASE_COOKIE
+        # 部分接口（如 login/status）需要 cookie 字符串参数
+        params.setdefault('cookie', NETEASE_COOKIE)
+        cookies = parse_cookie_string(NETEASE_COOKIE)
+    if method.upper() == 'POST':
+        resp = requests.post(url, data=params, timeout=10, headers=headers, cookies=cookies)
+    else:
+        resp = requests.get(url, params=params, timeout=10, headers=headers, cookies=cookies)
+    resp.raise_for_status()
+    return resp.json()
+
+# 预加载网易云 cookie
+load_netease_config()
+load_netease_cookie()
+
 @app.route('/api/music/lyrics')
 def get_lyrics_api():
     title = request.args.get('title')
@@ -590,6 +703,266 @@ def import_music_by_path():
             scan_library_incremental()
         return jsonify({'success': True, 'filename': filename})
     except Exception as e: return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/netease/search')
+def search_netease_music():
+    """通过本地网易云 API 搜索歌曲。"""
+    keywords = (request.args.get('keywords') or '').strip()
+    if not keywords:
+        return jsonify({'success': False, 'error': '请输入搜索关键词'})
+    limit = request.args.get('limit', 20)
+    try:
+        limit = max(1, min(int(limit), 50))
+    except Exception:
+        limit = 20
+
+    try:
+        api_resp = call_netease_api('/cloudsearch', {'keywords': keywords, 'type': 1, 'limit': limit})
+        songs = []
+        for item in api_resp.get('result', {}).get('songs', []):
+            song_id = item.get('id')
+            if not song_id: 
+                continue
+            artists = ' / '.join([a.get('name') for a in item.get('ar', []) if a.get('name')]) or '未知艺术家'
+            album_info = item.get('al') or {}
+            privilege = item.get('privilege') or {}
+            songs.append({
+                'id': song_id,
+                'title': item.get('name') or f"未命名 {song_id}",
+                'artist': artists,
+                'album': album_info.get('name') or '',
+                'cover': album_info.get('picUrl'),
+                'duration': (item.get('dt') or 0) / 1000,
+                'level': privilege.get('maxBrLevel') or privilege.get('maxbr') or 'standard'
+            })
+        return jsonify({'success': True, 'data': songs})
+    except Exception as e:
+        logger.warning(f"网易云搜索失败: {e}")
+        return jsonify({'success': False, 'error': '搜索失败，请检查网易云 API 服务'})
+
+@app.route('/api/netease/login/status')
+def netease_login_status():
+    """检测当前 cookie 是否已登录。"""
+    try:
+        if not NETEASE_COOKIE:
+            logger.info("网易云登录状态检查：当前未加载 cookie")
+        api_resp = call_netease_api('/login/status', {'timestamp': int(time.time() * 1000)}, need_cookie=True)
+        profile = api_resp.get('data', {}).get('profile') if isinstance(api_resp, dict) else None
+        if profile:
+            return jsonify({'success': True, 'logged_in': True, 'nickname': profile.get('nickname'), 'user_id': profile.get('userId')})
+        return jsonify({'success': True, 'logged_in': False, 'error': '未登录'})
+    except Exception as e:
+        logger.warning(f"检查网易云登录状态失败: {e}")
+        return jsonify({'success': False, 'error': '状态检查失败'})
+
+@app.route('/api/netease/login/qrcode')
+def netease_login_qrcode():
+    """生成扫码登录二维码。"""
+    try:
+        key_resp = call_netease_api('/login/qr/key', {'timestamp': int(time.time() * 1000)}, need_cookie=False)
+        unikey = key_resp.get('data', {}).get('unikey')
+        if not unikey:
+            return jsonify({'success': False, 'error': '获取登录 key 失败'})
+        qr_resp = call_netease_api('/login/qr/create', {'key': unikey, 'qrimg': 1, 'timestamp': int(time.time() * 1000)}, need_cookie=False)
+        qrimg = qr_resp.get('data', {}).get('qrimg')
+        if not qrimg:
+            return jsonify({'success': False, 'error': '获取二维码失败'})
+        return jsonify({'success': True, 'unikey': unikey, 'qrimg': qrimg})
+    except Exception as e:
+        logger.warning(f"生成网易云二维码失败: {e}")
+        return jsonify({'success': False, 'error': '二维码生成失败'})
+
+@app.route('/api/netease/login/check')
+def netease_login_check():
+    """轮询扫码状态，成功后保存 cookie。"""
+    key = request.args.get('key')
+    if not key:
+        return jsonify({'success': False, 'error': '缺少 key'})
+    try:
+        resp = call_netease_api('/login/qr/check', {'key': key, 'timestamp': int(time.time() * 1000)}, need_cookie=False)
+        code = resp.get('code')
+        message = resp.get('message')
+        cookie_str = resp.get('cookie')
+        if not cookie_str and isinstance(resp.get('cookies'), list):
+            cookie_str = '; '.join(resp.get('cookies'))
+        if code == 803 and cookie_str:
+            save_netease_cookie(cookie_str)
+            return jsonify({'success': True, 'status': 'authorized', 'message': message})
+        status_map = {
+            800: 'expired',
+            801: 'waiting',
+            802: 'scanned'
+        }
+        return jsonify({'success': True, 'status': status_map.get(code, 'unknown'), 'message': message})
+    except Exception as e:
+        logger.warning(f"扫码检查失败: {e}")
+        return jsonify({'success': False, 'error': '扫码轮询失败'})
+
+@app.route('/api/netease/download_page')
+def netease_download_page():
+    """重定向到网易云音乐客户端下载页面。"""
+    return redirect("https://music.163.com/client")
+
+@app.route('/api/netease/config', methods=['GET', 'POST'])
+def netease_config():
+    """获取或更新网易云下载配置。"""
+    try:
+        if request.method == 'GET':
+            return jsonify({'success': True, 'download_dir': NETEASE_DOWNLOAD_DIR, 'api_base': NETEASE_API_BASE})
+        data = request.json or {}
+        target_dir = data.get('download_dir')
+        api_base = (data.get('api_base') or '').strip()
+        if target_dir:
+            target_dir = os.path.abspath(target_dir)
+            os.makedirs(target_dir, exist_ok=True)
+        else:
+            target_dir = None
+        if api_base:
+            api_base = api_base.rstrip('/')
+        if not target_dir and not api_base:
+            return jsonify({'success': False, 'error': '缺少下载目录或API地址'})
+        save_netease_config(target_dir or NETEASE_DOWNLOAD_DIR, api_base or NETEASE_API_BASE)
+        return jsonify({'success': True, 'download_dir': NETEASE_DOWNLOAD_DIR, 'api_base': NETEASE_API_BASE})
+    except Exception as e:
+        logger.warning(f"更新网易云配置失败: {e}")
+        return jsonify({'success': False, 'error': '保存失败'})
+
+@app.route('/api/netease/debug')
+def netease_debug():
+    """调试用，查看 cookie 是否加载。"""
+    info = {
+        'cookie_loaded': bool(NETEASE_COOKIE),
+        'cookie_len': len(NETEASE_COOKIE) if NETEASE_COOKIE else 0,
+        'cookie_path': NETEASE_COOKIE_PATH,
+        'cookie_exists': os.path.exists(NETEASE_COOKIE_PATH),
+        'download_dir': NETEASE_DOWNLOAD_DIR,
+        'api_base': NETEASE_API_BASE,
+    }
+    if NETEASE_COOKIE:
+        parsed = parse_cookie_string(NETEASE_COOKIE)
+        info['cookie_keys'] = list(parsed.keys())
+    return jsonify(info)
+
+@app.route('/api/netease/playlist')
+def netease_playlist_detail():
+    """获取歌单详情及歌曲列表。"""
+    playlist_id = request.args.get('id')
+    if not playlist_id:
+        return jsonify({'success': False, 'error': '缺少歌单ID'})
+    try:
+        detail_resp = call_netease_api('/playlist/detail', {'id': playlist_id})
+        playlist = detail_resp.get('playlist') if isinstance(detail_resp, dict) else None
+        if not playlist:
+            return jsonify({'success': False, 'error': '无法获取歌单信息'})
+        track_ids = [t.get('id') for t in playlist.get('trackIds', []) if t.get('id')]
+        tracks = playlist.get('tracks') or []
+        songs = []
+        if tracks:
+            source_tracks = tracks
+        else:
+            # fallback fetch song detail by ids (limited length)
+            if track_ids:
+                ids_str = ','.join(map(str, track_ids[:300]))  # protect from huge lists
+                song_detail = call_netease_api('/song/detail', {'ids': ids_str})
+                source_tracks = song_detail.get('songs', []) if isinstance(song_detail, dict) else []
+            else:
+                source_tracks = []
+        for item in source_tracks:
+            sid = item.get('id')
+            if not sid:
+                continue
+            artists = ' / '.join([a.get('name') for a in item.get('ar', []) if a.get('name')]) or '未知艺术家'
+            album_info = item.get('al') or {}
+            songs.append({
+                'id': sid,
+                'title': item.get('name') or f"未命名 {sid}",
+                'artist': artists,
+                'album': album_info.get('name') or '',
+                'cover': album_info.get('picUrl'),
+                'duration': (item.get('dt') or 0) / 1000
+            })
+        return jsonify({'success': True, 'name': playlist.get('name'), 'data': songs})
+    except Exception as e:
+        logger.warning(f"歌单获取失败: {e}")
+        return jsonify({'success': False, 'error': '获取歌单失败'})
+
+@app.route('/api/netease/download', methods=['POST'])
+def download_netease_music():
+    """根据歌曲ID下载网易云音乐到本地库。"""
+    payload = request.json or {}
+    song_id = payload.get('id')
+    if not song_id:
+        return jsonify({'success': False, 'error': '缺少歌曲ID'})
+
+    title = (payload.get('title') or '').strip()
+    artist = (payload.get('artist') or '').strip()
+    album = (payload.get('album') or '').strip()
+    level = payload.get('level') or 'exhigh'
+    target_dir = payload.get('target_dir') or NETEASE_DOWNLOAD_DIR
+    target_dir = os.path.abspath(target_dir)
+
+    try:
+        os.makedirs(target_dir, exist_ok=True)
+        if not title:
+            # 拉取歌曲详情补充元信息
+            meta_resp = call_netease_api('/song/detail', {'ids': song_id})
+            songs = meta_resp.get('songs', []) if isinstance(meta_resp, dict) else []
+            if songs:
+                info = songs[0]
+                title = info.get('name') or title or f"未命名 {song_id}"
+                artist = ' / '.join([a.get('name') for a in info.get('ar', []) if a.get('name')]) or artist
+                album = (info.get('al') or {}).get('name') or album
+                base_filename = sanitize_filename(f"{artist or '未知艺术家'} - {title}")
+        if not title:
+            title = f"未命名 {song_id}"
+        if not artist:
+            artist = '未知艺术家'
+        if 'base_filename' not in locals() or not base_filename:
+            base_filename = sanitize_filename(payload.get('filename') or f"{artist} - {title}")
+
+        api_resp = call_netease_api('/song/url/v1', {'id': song_id, 'level': level})
+        data_list = api_resp.get('data') if isinstance(api_resp, dict) else None
+        track_info = None
+        if isinstance(data_list, list) and data_list:
+            track_info = data_list[0]
+        elif isinstance(data_list, dict):
+            track_info = data_list
+
+        if not track_info or (not track_info.get('url') and not track_info.get('proxyUrl')):
+            return jsonify({'success': False, 'error': '暂无可用下载地址，可能需要切换音质或登录'})
+
+        download_url = track_info.get('url') or track_info.get('proxyUrl')
+        ext = (track_info.get('type') or track_info.get('encodeType') or 'mp3').lower()
+        filename = base_filename if base_filename.lower().endswith(f".{ext}") else f"{base_filename}.{ext}"
+        target_path = os.path.join(target_dir, filename)
+
+        counter = 1
+        while os.path.exists(target_path):
+            filename = f"{base_filename} ({counter}).{ext}"
+            target_path = os.path.join(target_dir, filename)
+            counter += 1
+
+        tmp_path = target_path + ".part"
+        try:
+            with requests.get(download_url, stream=True, timeout=20, headers=COMMON_HEADERS) as resp:
+                resp.raise_for_status()
+                with open(tmp_path, 'wb') as f:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+            shutil.move(tmp_path, target_path)
+        finally:
+            if os.path.exists(tmp_path):
+                try: os.remove(tmp_path)
+                except: pass
+
+        # 触发扫描以更新列表
+        threading.Thread(target=scan_library_incremental, daemon=True).start()
+        logger.info(f"网易云歌曲已下载: {filename} | {title} - {artist}")
+        return jsonify({'success': True, 'filename': filename, 'title': title, 'artist': artist, 'album': album})
+    except Exception as e:
+        logger.warning(f"网易云下载失败: {e}")
+        return jsonify({'success': False, 'error': '下载失败，请检查网易云 API 服务或网络'})
 
 @app.route('/api/music/external/meta')
 def get_external_meta():

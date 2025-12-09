@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const viewPlayer = document.getElementById('view-player');
     const viewMount = document.getElementById('view-mount');
+    const viewNetease = document.getElementById('view-netease');
     const mountListContainer = document.getElementById('mount-list-container');
     const mountPathInput = document.getElementById('mount-path-input');
     const btnAddMount = document.getElementById('btn-add-mount');
@@ -24,8 +25,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const navLocal = document.getElementById('nav-local');
     const navFav = document.getElementById('nav-fav');
     const navMount = document.getElementById('nav-mount'); 
+    const navNetease = document.getElementById('nav-netease');
     const navUpload = document.getElementById('nav-upload');
     const fileUpload = document.getElementById('file-upload');
+
+    const neteaseKeywordsInput = document.getElementById('netease-keywords');
+    const neteaseQualitySelect = document.getElementById('netease-quality');
+    const neteaseSearchBtn = document.getElementById('netease-search-btn');
+    const neteaseResultList = document.getElementById('netease-result-list');
+    const neteaseLoginStatus = document.getElementById('netease-login-status');
+    const neteaseLoginCard = document.getElementById('netease-login-card');
+    const neteaseLoginDesc = document.getElementById('netease-login-desc');
+    const neteaseLoginBtn = document.getElementById('netease-login-btn');
+    const neteaseRefreshStatusBtn = document.getElementById('netease-refresh-status');
+    const neteaseQrImg = document.getElementById('netease-qr-img');
+    const neteaseQrModal = document.getElementById('netease-qr-modal'); // Changed from wrapper to modal
+    const closeQrModalBtn = document.getElementById('close-qr-modal'); // New close button
+    const neteaseQrHint = document.getElementById('netease-qr-hint');
+    const neteaseSongIdInput = document.getElementById('netease-song-id');
+    const neteasePlaylistIdInput = document.getElementById('netease-playlist-id');
+    const neteaseIdDownloadBtn = document.getElementById('netease-id-download');
+    const neteaseDownloadDirInput = document.getElementById('netease-download-dir');
+    
+    // Updated NetEase Elements
+    const neteaseApiGateInput = document.getElementById('netease-api-gate-input');
+    const neteaseApiGateBtn = document.getElementById('netease-api-gate-btn');
+    const neteaseChangeApiBtn = document.getElementById('netease-change-api');
+    
+    const neteaseConfigGate = document.getElementById('netease-config-gate');
+    const neteaseContent = document.getElementById('netease-content');
+    const neteaseOpenConfigBtn = document.getElementById('netease-open-config'); // Deprecated but might exist in old logic
+    const neteaseSaveDirBtn = document.getElementById('netease-save-dir');
+    const neteaseDownloadList = document.getElementById('netease-download-list');
+    const neteaseDownloadToggle = document.getElementById('netease-download-toggle');
+    const neteaseDownloadPanel = document.getElementById('netease-download-panel');
+    const neteaseDownloadFloating = document.getElementById('netease-download-floating');
 
     const uploadModal = document.getElementById('upload-modal');
     const uploadFileName = document.getElementById('upload-filename');
@@ -196,8 +230,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 初始化播放队列：如果队列为空，默认载入所有歌曲，确保控制按钮可用
                 if (playQueue.length === 0) playQueue = [...fullPlaylist];
 
-                // 只有不在挂载页时才渲染列表
-                if (currentTab !== 'mount') renderPlaylist();
+                // 仅在本地/收藏页渲染列表
+                if (currentTab === 'local' || currentTab === 'fav') renderPlaylist();
                 
                 if (!audio.src) { await initPlayerState(); }
             } else { 
@@ -368,27 +402,440 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // === 8. 标签切换 ===
+    // === 8. 网易云下载 ===
+    let neteaseResults = [];
+    let neteasePollingTimer = null;
+    let currentLoginKey = null;
+    let neteaseDownloadDir = '';
+    let neteaseApiBase = '';
+    let neteaseDownloadTasks = [];
+
+    function renderDownloadTasks() {
+        if (!neteaseDownloadList) return;
+        if (!neteaseDownloadTasks.length) {
+            neteaseDownloadList.innerHTML = '<div class="loading-text" style="padding: 3rem 0; opacity: 0.6; font-size: 0.9rem;">暂无下载记录</div>';
+            return;
+        }
+        neteaseDownloadList.innerHTML = '';
+        const frag = document.createDocumentFragment();
+        
+        const statusConfig = { 
+            queued: { text: '排队', icon: 'fas fa-clock', class: 'queued' },
+            downloading: { text: '下载中', icon: 'fas fa-spinner fa-spin', class: 'downloading' },
+            success: { text: '完成', icon: 'fas fa-check', class: 'success' },
+            error: { text: '失败', icon: 'fas fa-times', class: 'error' },
+            waiting: { text: '等待', icon: 'fas fa-hourglass-half', class: 'waiting' }
+        };
+
+        neteaseDownloadTasks.forEach(task => {
+            const row = document.createElement('div');
+            row.className = 'download-item';
+
+            const meta = document.createElement('div');
+            meta.className = 'download-meta';
+            meta.innerHTML = `<div class="download-title" title="${task.title || '未命名'}">${task.title || '未命名'}</div>
+                <div class="download-artist" title="${task.artist || '未知艺术家'}">${task.artist || '未知艺术家'}</div>`;
+
+            const config = statusConfig[task.status] || { text: task.status, icon: 'fas fa-info-circle', class: '' };
+            
+            const statusEl = document.createElement('div');
+            statusEl.className = `download-status ${config.class}`;
+            statusEl.innerHTML = `<i class="${config.icon}"></i> <span>${config.text}</span>`;
+
+            row.appendChild(meta);
+            row.appendChild(statusEl);
+            frag.appendChild(row);
+        });
+        neteaseDownloadList.appendChild(frag);
+    }
+
+    function addDownloadTask(song) {
+        const task = {
+            id: `dl_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
+            title: song.title || `歌曲 ${song.id || ''}`,
+            artist: song.artist || '',
+            status: 'queued'
+        };
+        neteaseDownloadTasks.unshift(task);
+        if (neteaseDownloadTasks.length > 30) neteaseDownloadTasks = neteaseDownloadTasks.slice(0, 30);
+        renderDownloadTasks();
+        return task.id;
+    }
+
+    function updateDownloadTask(id, status) {
+        const task = neteaseDownloadTasks.find(t => t.id === id);
+        if (task) {
+            task.status = status;
+            renderDownloadTasks();
+        }
+    }
+
+    function renderNeteaseResults() {
+        if (!neteaseResultList) return;
+        if (!neteaseResults.length) {
+            neteaseResultList.innerHTML = '<div class="loading-text">未找到相关歌曲</div>';
+            return;
+        }
+        neteaseResultList.innerHTML = '';
+        const frag = document.createDocumentFragment();
+        neteaseResults.forEach(song => {
+            const card = document.createElement('div');
+            card.className = 'netease-card';
+
+            const cover = document.createElement('img');
+            cover.src = song.cover || '/static/images/ICON_256.PNG';
+            cover.loading = 'lazy';
+
+            const meta = document.createElement('div');
+            meta.className = 'netease-meta';
+            const levelText = (song.level || 'standard').toUpperCase();
+            meta.innerHTML = `<div class="title">${song.title}</div>
+                <div class="subtitle">${song.artist}</div>
+                <div class="extra"><span class="netease-level-pill">${levelText}</span>${song.album || '未收录专辑'} · ${formatTime(song.duration || 0)}</div>`;
+
+            const actions = document.createElement('div');
+            actions.className = 'netease-actions';
+            const btn = document.createElement('button');
+            btn.className = 'btn-primary';
+            btn.innerHTML = '<i class="fas fa-download"></i> 下载';
+            btn.addEventListener('click', () => downloadNeteaseSong(song, btn));
+            actions.appendChild(btn);
+
+            card.appendChild(cover);
+            card.appendChild(meta);
+            card.appendChild(actions);
+            frag.appendChild(card);
+        });
+        neteaseResultList.appendChild(frag);
+    }
+
+    async function searchNeteaseSongs() {
+        if (!neteaseKeywordsInput) return;
+        const keywords = neteaseKeywordsInput.value.trim();
+        if (!keywords) { showToast('请输入关键词'); return; }
+        if (neteaseResultList) neteaseResultList.innerHTML = '<div class="loading-text">搜索中...</div>';
+        try {
+            const res = await fetch(`/api/netease/search?keywords=${encodeURIComponent(keywords)}`);
+            const json = await res.json();
+            if (json.success) {
+                neteaseResults = json.data || [];
+                renderNeteaseResults();
+            } else {
+                neteaseResultList.innerHTML = `<div class="loading-text">${json.error || '搜索失败'}</div>`;
+            }
+        } catch (err) {
+            console.error('NetEase search failed', err);
+            if (neteaseResultList) neteaseResultList.innerHTML = '<div class="loading-text">搜索失败，请检查 API 服务</div>';
+        }
+    }
+
+    async function downloadNeteaseSong(song, btnEl) {
+        if (!song || !song.id) return;
+        const level = neteaseQualitySelect ? neteaseQualitySelect.value : 'exhigh';
+        const taskId = addDownloadTask(song);
+        updateDownloadTask(taskId, 'downloading');
+        if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '<i class="fas fa-sync fa-spin"></i> 下载中'; }
+        try {
+            const res = await fetch('/api/netease/download', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ ...song, level, target_dir: neteaseDownloadDir || undefined }) });
+            const json = await res.json();
+            if (json.success) {
+                updateDownloadTask(taskId, 'success');
+                await loadSongs(false);
+            } else {
+                updateDownloadTask(taskId, 'error');
+            }
+        } catch (err) {
+            console.error('download netease error', err);
+            updateDownloadTask(taskId, 'error');
+        } finally {
+            if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<i class="fas fa-download"></i> 下载'; }
+        }
+    }
+
+    if (neteaseSearchBtn) neteaseSearchBtn.addEventListener('click', searchNeteaseSongs);
+    if (neteaseKeywordsInput) {
+        neteaseKeywordsInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') searchNeteaseSongs(); });
+    }
+
+    async function loadNeteaseConfig() {
+        try {
+            const res = await fetch('/api/netease/config');
+            const json = await res.json();
+            if (json.success) {
+                neteaseDownloadDir = json.download_dir || '';
+                neteaseApiBase = json.api_base || '';
+                if (neteaseDownloadDirInput) neteaseDownloadDirInput.value = neteaseDownloadDir;
+                if (neteaseApiGateInput) neteaseApiGateInput.value = neteaseApiBase || 'http://localhost:3000';
+                
+                // 改动：验证连接有效性后再显示
+                if (neteaseApiBase) {
+                    try {
+                        const statusRes = await fetch('/api/netease/login/status');
+                        const statusJson = await statusRes.json();
+                        
+                        if (statusJson.success) {
+                            toggleNeteaseGate(true); // 连接成功 -> 显示内容
+                            // 刷新登录状态 UI
+                            refreshLoginStatus();
+                        } else {
+                            toggleNeteaseGate(false); // 连接失败 -> 显示配置页
+                        }
+                    } catch (e) {
+                        toggleNeteaseGate(false);
+                    }
+                } else {
+                    toggleNeteaseGate(false);
+                }
+            }
+        } catch (err) {
+            console.error('config error', err);
+            toggleNeteaseGate(false);
+        }
+    }
+
+    async function bindNeteaseApi() {
+        if (!neteaseApiGateInput) return;
+        const apiBaseVal = neteaseApiGateInput.value.trim();
+        if (!apiBaseVal) { showToast('请输入 API 地址'); return; }
+        
+        if(neteaseApiGateBtn) { neteaseApiGateBtn.disabled = true; neteaseApiGateBtn.innerText = "正在检测..."; }
+
+        // 1. Save Config
+        try {
+            const payload = { api_base: apiBaseVal };
+            // If we have a download dir set, include it to avoid clearing it? 
+            // The backend likely merges or we should send what we have. 
+            // For now, let's just send api_base. 
+            // *Wait, if we only send api_base, does backend clear download_dir?*
+            // Let's include download_dir if we have it locally.
+            if (neteaseDownloadDir) payload.download_dir = neteaseDownloadDir;
+
+            const res = await fetch('/api/netease/config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+            const json = await res.json();
+            if (json.success) {
+                neteaseApiBase = json.api_base;
+                // 2. Verify Connectivity
+                const statusRes = await fetch('/api/netease/login/status'); // This will use the new API base on backend
+                const statusJson = await statusRes.json();
+                
+                if (statusJson.success) { 
+                    showToast('连接成功');
+                    toggleNeteaseGate(true);
+                    refreshLoginStatus(); // Update UI
+                } else {
+                    showToast('无法连接到该 API 地址');
+                }
+            } else {
+                showToast(json.error || '保存配置失败');
+            }
+        } catch (err) {
+            console.error('bind error', err);
+            showToast('连接失败，请检查地址');
+        } finally {
+            if(neteaseApiGateBtn) { neteaseApiGateBtn.disabled = false; neteaseApiGateBtn.innerText = "检测并连接"; }
+        }
+    }
+
+    async function saveNeteaseConfig() {
+        // This is for the "Settings" panel inside the content (mostly for download dir now)
+        const dir = neteaseDownloadDirInput ? neteaseDownloadDirInput.value.trim() : '';
+        const payload = {};
+        if (dir) payload.download_dir = dir;
+        // We don't change api_base here anymore, use the "Change API" button to go back to gate
+        
+        if (!payload.download_dir) { showToast('无需保存空设置'); return; }
+        try {
+            const res = await fetch('/api/netease/config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+            const json = await res.json();
+            if (json.success) {
+                neteaseDownloadDir = json.download_dir;
+                if (neteaseDownloadDirInput) neteaseDownloadDirInput.value = neteaseDownloadDir;
+                showToast('保存成功');
+            } else {
+                showToast(json.error || '保存失败');
+            }
+        } catch (err) {
+            console.error('save config error', err);
+            showToast('保存失败');
+        }
+    }
+
+    async function refreshLoginStatus(showToastMsg = false) {
+        if (!neteaseLoginStatus) return;
+        try {
+            const res = await fetch('/api/netease/login/status');
+            const json = await res.json();
+            if (json.success && json.logged_in) {
+                neteaseLoginStatus.innerText = `已登录：${json.nickname || ''}`;
+                if (neteaseLoginCard) { neteaseLoginCard.classList.remove('status-bad'); neteaseLoginCard.classList.add('status-ok'); }
+                if (neteaseLoginDesc) neteaseLoginDesc.innerText = '可以开始搜索或下载歌曲';
+                if (neteaseQrImg) neteaseQrImg.src = '';
+                if (neteaseQrModal) neteaseQrModal.classList.remove('active'); // Close modal
+                if (showToastMsg) showToast('网易云已登录');
+            } else {
+                neteaseLoginStatus.innerText = json.error || '未登录';
+                if (neteaseLoginCard) { neteaseLoginCard.classList.remove('status-ok'); neteaseLoginCard.classList.add('status-bad'); }
+                if (neteaseLoginDesc) neteaseLoginDesc.innerText = '请扫码登录网易云账号';
+                if (showToastMsg) showToast(json.error || '未登录');
+            }
+        } catch (err) {
+            console.error('status error', err);
+            if (showToastMsg) showToast('状态检查失败');
+        }
+    }
+
+    async function startNeteaseLogin() {
+        if (neteasePollingTimer) { clearInterval(neteasePollingTimer); neteasePollingTimer = null; }
+        try {
+            const res = await fetch('/api/netease/login/qrcode');
+            const json = await res.json();
+            if (!json.success) { showToast(json.error || '获取二维码失败'); return; }
+            currentLoginKey = json.unikey;
+            if (neteaseQrImg) neteaseQrImg.src = json.qrimg;
+            if (neteaseQrModal) neteaseQrModal.classList.add('active'); // Show modal
+            if (neteaseQrHint) neteaseQrHint.innerText = '使用网易云音乐扫码';
+            neteaseLoginStatus.innerText = '等待扫码...';
+            if (neteaseLoginCard) { neteaseLoginCard.classList.remove('status-ok'); neteaseLoginCard.classList.add('status-bad'); }
+            neteasePollingTimer = setInterval(checkLoginStatus, 2000);
+        } catch (err) {
+            console.error('login qr error', err);
+            showToast('获取二维码失败');
+        }
+    }
+
+    async function checkLoginStatus() {
+        if (!currentLoginKey) return;
+        try {
+            const res = await fetch(`/api/netease/login/check?key=${encodeURIComponent(currentLoginKey)}`);
+            const json = await res.json();
+            if (!json.success) return;
+            if (json.status === 'authorized') {
+                showToast('登录成功');
+                if (neteaseLoginStatus) neteaseLoginStatus.innerText = '已登录';
+                if (neteaseLoginCard) { neteaseLoginCard.classList.remove('status-bad'); neteaseLoginCard.classList.add('status-ok'); }
+                if (neteaseLoginDesc) neteaseLoginDesc.innerText = '可以开始搜索或下载歌曲';
+                if (neteaseQrModal) neteaseQrModal.classList.remove('active'); // 修复：关闭二维码弹窗
+                refreshLoginStatus();
+                if (neteasePollingTimer) { clearInterval(neteasePollingTimer); neteasePollingTimer = null; }
+            } else if (json.status === 'expired') {
+                showToast('二维码已过期，请重新获取');
+                if (neteaseQrHint) neteaseQrHint.innerText = '二维码已过期，请重新获取';
+                if (neteasePollingTimer) { clearInterval(neteasePollingTimer); neteasePollingTimer = null; }
+            } else if (json.status === 'scanned') {
+                neteaseLoginStatus.innerText = '已扫码，等待确认...';
+                if (neteaseLoginDesc) neteaseLoginDesc.innerText = '请在网易云确认登录';
+            }
+        } catch (err) {
+            console.error('check login error', err);
+        }
+    }
+
+    async function downloadByIds() {
+        const level = neteaseQualitySelect ? neteaseQualitySelect.value : 'exhigh';
+        const songId = neteaseSongIdInput ? neteaseSongIdInput.value.trim() : '';
+        const playlistId = neteasePlaylistIdInput ? neteasePlaylistIdInput.value.trim() : '';
+        if (!songId && !playlistId) { showToast('请输入单曲ID或歌单ID'); return; }
+        if (songId) {
+            await downloadNeteaseSong({ id: songId, level });
+        } else if (playlistId) {
+            try {
+                const res = await fetch(`/api/netease/playlist?id=${encodeURIComponent(playlistId)}`);
+                const json = await res.json();
+                if (!json.success) { showToast(json.error || '获取歌单失败'); return; }
+                const songs = json.data || [];
+                if (!songs.length) { showToast('歌单为空'); return; }
+                let count = 0;
+                for (const s of songs) {
+                    count++;
+                    await downloadNeteaseSong({ ...s, level });
+                }
+            } catch (err) {
+                console.error('playlist download error', err);
+            }
+        }
+    }
+
+    if (neteaseLoginBtn) neteaseLoginBtn.addEventListener('click', startNeteaseLogin);
+    if (closeQrModalBtn) closeQrModalBtn.addEventListener('click', () => {
+        if (neteaseQrModal) neteaseQrModal.classList.remove('active');
+        if (neteasePollingTimer) { clearInterval(neteasePollingTimer); neteasePollingTimer = null; }
+    });
+    if (neteaseRefreshStatusBtn) neteaseRefreshStatusBtn.addEventListener('click', () => refreshLoginStatus(true));
+    if (neteaseIdDownloadBtn) neteaseIdDownloadBtn.addEventListener('click', downloadByIds);
+    if (neteaseSaveDirBtn) neteaseSaveDirBtn.addEventListener('click', saveNeteaseConfig);
+    
+    // New Gate Listeners
+    if (neteaseApiGateBtn) neteaseApiGateBtn.addEventListener('click', bindNeteaseApi);
+    if (neteaseChangeApiBtn) {
+        neteaseChangeApiBtn.addEventListener('click', () => {
+            toggleNeteaseGate(false); // Show gate, hide content
+        });
+    }
+
+    if (neteaseDownloadToggle && neteaseDownloadPanel) {
+        neteaseDownloadToggle.addEventListener('click', () => {
+            neteaseDownloadPanel.classList.add('hidden');
+        });
+    }
+    if (neteaseDownloadFloating && neteaseDownloadPanel) {
+        neteaseDownloadFloating.addEventListener('click', () => {
+            neteaseDownloadPanel.classList.toggle('hidden');
+        });
+    }
+    // Removed deprecated neteaseOpenConfigBtn listener
+
+    function toggleNeteaseGate(enabled) {
+        // enabled = true means API IS configured -> Show Content, Hide Gate
+        // enabled = false means API NOT configured -> Hide Content, Show Gate
+        if (neteaseConfigGate) neteaseConfigGate.classList.toggle('hidden', enabled);
+        if (neteaseContent) neteaseContent.classList.toggle('hidden', !enabled);
+    }
+
+    // === 19. 网易云页面 Tab 切换 ===
+    const neteaseTabs = document.querySelectorAll('.tab-btn');
+    neteaseTabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // 移除所有激活状态
+            neteaseTabs.forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            // 激活当前
+            btn.classList.add('active');
+            const targetId = btn.getAttribute('data-target');
+            const targetContent = document.getElementById(targetId);
+            if(targetContent) targetContent.classList.add('active');
+        });
+    });
+
+    // === 9. 标签切换 ===
     function switchTab(tab) {
         currentTab = tab;
         navLocal.classList.remove('active');
         navFav.classList.remove('active');
         navMount.classList.remove('active');
+        if (navNetease) navNetease.classList.remove('active');
         
         if (tab === 'local') navLocal.classList.add('active');
         else if (tab === 'fav') navFav.classList.add('active');
         else if (tab === 'mount') navMount.classList.add('active');
+        else if (tab === 'netease' && navNetease) navNetease.classList.add('active');
 
         if (tab === 'mount') {
             viewPlayer.classList.add('hidden');
+            if(viewNetease) viewNetease.classList.add('hidden');
             viewMount.classList.remove('hidden');
             if(searchInput) searchInput.parentElement.style.visibility = 'hidden';
             loadMountPoints();
+        } else if (tab === 'netease') {
+            viewPlayer.classList.add('hidden');
+            viewMount.classList.add('hidden');
+            if(viewNetease) viewNetease.classList.remove('hidden');
+            if(searchInput) searchInput.parentElement.style.visibility = 'hidden';
         } else {
             viewMount.classList.add('hidden');
+            if(viewNetease) viewNetease.classList.add('hidden');
             viewPlayer.classList.remove('hidden');
-            if(searchInput) searchInput.parentElement.style.visibility = 'visible';
-            searchInput.value = ''; 
+            if(searchInput) { searchInput.parentElement.style.visibility = 'visible'; searchInput.value = ''; }
             renderPlaylist();
         }
         if (window.innerWidth <= 768 && sidebar.classList.contains('open')) sidebar.classList.remove('open');
@@ -397,10 +844,12 @@ document.addEventListener('DOMContentLoaded', () => {
     navLocal.addEventListener('click', () => switchTab('local'));
     navFav.addEventListener('click', () => switchTab('fav'));
     navMount.addEventListener('click', () => switchTab('mount'));
+    if (navNetease) navNetease.addEventListener('click', () => switchTab('netease'));
 
-    // === 9. 状态初始化 ===
+    // === 10. 状态初始化 ===
     async function initPlayerState() {
-        const targetTab = savedState.tab || 'local';
+        const allowedTabs = ['local', 'fav', 'mount', 'netease'];
+        const targetTab = allowedTabs.includes(savedState.tab) ? savedState.tab : 'local';
         switchTab(targetTab); 
         if (savedState.volume !== undefined) { audio.volume = savedState.volume; updateVolumeUI(audio.volume); }
         if (savedState.playMode !== undefined) { playMode = savedState.playMode; updatePlayModeUI(); }
@@ -425,7 +874,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // === 10. 文件上传 ===
+    // === 11. 文件上传 ===
     if (navUpload && fileUpload) {
         navUpload.addEventListener('click', () => { fileUpload.click(); if (window.innerWidth <= 768 && sidebar.classList.contains('open')) { sidebar.classList.remove('open'); } });
         fileUpload.addEventListener('change', () => {
@@ -444,7 +893,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (closeUploadBtn) closeUploadBtn.addEventListener('click', () => uploadModal.classList.remove('active'));
     }
 
-    // === 11. 删除功能 ===
+    // === 12. 删除功能 ===
     async function performDelete(filename) {
         const encodedName = encodeURIComponent(filename);
         if (audio.src.includes(encodedName)) {
@@ -467,7 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) { console.error('删除错误:', err); showToast('网络请求失败'); }
     }
 
-    // === 12. 外部文件处理 ===
+    // === 13. 外部文件处理 ===
     async function handleExternalFile() {
         const params = new URLSearchParams(window.location.search);
         const externalPath = params.get('path');
@@ -507,10 +956,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // === 13. 列表渲染 (DocumentFragment 优化) ===
+    // === 14. 列表渲染 (DocumentFragment 优化) ===
     function renderPlaylist() {
         songContainer.innerHTML = '';
-        if (currentTab === 'local') { displayPlaylist = fullPlaylist; } else { displayPlaylist = fullPlaylist.filter(s => favorites.has(s.filename)); }
+        if (currentTab === 'fav') { displayPlaylist = fullPlaylist.filter(s => favorites.has(s.filename)); } else { displayPlaylist = fullPlaylist; }
         if (displayPlaylist.length === 0) { songContainer.innerHTML = `<div class="loading" style="grid-column: 1/-1;">${currentTab === 'fav' ? '暂无收藏' : '暂无歌曲'}</div>`; return; }
         
         const frag = document.createDocumentFragment();
@@ -558,7 +1007,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // === 14. 播放核心逻辑 (使用 playQueue) ===
+    // === 15. 播放核心逻辑 (使用 playQueue) ===
     async function playTrack(index, autoPlay = true) {
         // 使用 playQueue 而不是 displayPlaylist，这样即使页面切换也不影响播放
         if (index < 0 || index >= playQueue.length) return;
@@ -601,7 +1050,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // === 15. 模式控制与播放事件 ===
+    // === 16. 模式控制与播放事件 ===
     function togglePlayMode() { playMode = (playMode + 1) % 3; updatePlayModeUI(); saveState(); }
     function updatePlayModeUI() {
         if (!fpBtnMode) return;
@@ -674,7 +1123,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function seek(e) { if (audio.duration) audio.currentTime = (e.target.value / 100) * audio.duration; updateSliderFill(e.target); }
     [progressBar, fpProgressBar].forEach(bar => bar?.addEventListener('input', seek));
 
-    // === 16. 元数据与歌词 ===
+    // === 17. 元数据与歌词 ===
     async function checkAndFetchMetadata(track, fetchId) {
         const query = `?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&filename=${encodeURIComponent(track.filename)}`;
         if (!track.lyrics) { 
@@ -721,7 +1170,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderNoLyrics(msg) { lyricsContainer.innerHTML = `<div style="height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-sub);font-size:1.2rem;">${msg}</div>`; }
     function formatTime(s) { if (isNaN(s)) return "0:00"; const min = Math.floor(s / 60); const sec = Math.floor(s % 60); return `${min}:${sec.toString().padStart(2, '0')}`; }
 
-    // === 17. 界面控制事件 ===
+    // === 18. 界面控制事件 ===
     function togglePlay() { if (playQueue.length === 0) return; if (isPlaying) audio.pause(); else { if(!audio.src) playTrack(0); else audio.play(); } isPlaying = !isPlaying; updatePlayState(); }
     function updatePlayState() { 
         const icon = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>'; 
@@ -779,6 +1228,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // === 启动顺序 ===
     startScanPolling(false); // 启动时检查，参数为 false 表示静默
+    // refreshLoginStatus(); // 已移至 loadNeteaseConfig 连接成功后调用
+    loadNeteaseConfig();
+    renderDownloadTasks();
     loadSongs().then(() => {
         handleExternalFile();
     });
