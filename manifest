@@ -1,5 +1,5 @@
 appname               = 2fmusic
-version               = 0.0.3
+version               = 0.0.4
 display_name          = 2FMusic
 desc                  = """
 <p><b>2FMusic</b> —— 一款简洁高效的本地音乐播放器，专为FNOS而设计。</p>
