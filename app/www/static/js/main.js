@@ -2,8 +2,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // === 核心状态变量 ===
     let fullPlaylist = [], displayPlaylist = [], currentTrackIndex = 0;
     // 新增：playQueue 独立播放队列，不再依赖当前显示的页面
-    let playQueue = []; 
-    let isPlaying = false, playMode = 0, lyricsData = [], currentFetchId = 0; 
+    let playQueue = [];
+    let isPlaying = false, playMode = 0, lyricsData = [], currentFetchId = 0;
     let favorites = new Set(JSON.parse(localStorage.getItem('2fmusic_favs') || '[]'));
     const savedState = JSON.parse(localStorage.getItem('2fmusic_state') || '{}');
     let currentTab = 'local';
@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const overlay = document.getElementById('full-player-overlay');
     const lyricsContainer = document.getElementById('lyrics-container');
     const searchInput = document.querySelector('.search-box input');
-    
+
     const viewPlayer = document.getElementById('view-player');
     const viewMount = document.getElementById('view-mount');
     const viewNetease = document.getElementById('view-netease');
@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const navLocal = document.getElementById('nav-local');
     const navFav = document.getElementById('nav-fav');
-    const navMount = document.getElementById('nav-mount'); 
+    const navMount = document.getElementById('nav-mount');
     const navNetease = document.getElementById('nav-netease');
     const navUpload = document.getElementById('nav-upload');
     const fileUpload = document.getElementById('file-upload');
@@ -46,12 +46,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const neteasePlaylistIdInput = document.getElementById('netease-playlist-id');
     const neteaseIdDownloadBtn = document.getElementById('netease-id-download');
     const neteaseDownloadDirInput = document.getElementById('netease-download-dir');
-    
+    const neteaseSelectAll = document.getElementById('netease-select-all');
+    const neteaseBulkDownloadBtn = document.getElementById('netease-bulk-download');
+
     // Updated NetEase Elements
     const neteaseApiGateInput = document.getElementById('netease-api-gate-input');
     const neteaseApiGateBtn = document.getElementById('netease-api-gate-btn');
     const neteaseChangeApiBtn = document.getElementById('netease-change-api');
-    
+
     const neteaseConfigGate = document.getElementById('netease-config-gate');
     const neteaseContent = document.getElementById('netease-content');
     const neteaseOpenConfigBtn = document.getElementById('netease-open-config'); // Deprecated but might exist in old logic
@@ -110,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
     autoResizeUI();
 
     // 错误处理与右键屏蔽
-    window.addEventListener('error', function(e) { if (e.target.tagName === 'IMG') e.target.src = '/static/images/ICON_256.PNG'; }, true);
+    window.addEventListener('error', function (e) { if (e.target.tagName === 'IMG') e.target.src = '/static/images/ICON_256.PNG'; }, true);
     document.addEventListener('contextmenu', (e) => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') e.preventDefault(); });
 
     // === 2. 状态保存 ===
@@ -118,13 +120,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // 保存状态时参考的是 playQueue，而不是 displayPlaylist
         const currentSong = playQueue[currentTrackIndex];
         if (currentSong && currentSong.isExternal) return;
-        
-        const state = { 
-            volume: audio.volume, 
-            playMode: playMode, 
-            currentTime: audio.currentTime, 
-            currentFilename: currentSong ? currentSong.filename : null, 
-            tab: currentTab 
+
+        const state = {
+            volume: audio.volume,
+            playMode: playMode,
+            currentTime: audio.currentTime,
+            currentFilename: currentSong ? currentSong.filename : null,
+            tab: currentTab
         };
         localStorage.setItem('2fmusic_state', JSON.stringify(state));
     }
@@ -137,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const toast = document.createElement('div');
             toast.className = 'toast';
             toast.textContent = message;
-            if(toastContainer) toastContainer.appendChild(toast);
+            if (toastContainer) toastContainer.appendChild(toast);
             requestAnimationFrame(() => toast.classList.add('show'));
             setTimeout(() => {
                 toast.classList.remove('show');
@@ -149,7 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!progressToastEl) {
             progressToastEl = document.createElement('div');
             progressToastEl.className = 'toast progress-toast';
-            if(toastContainer) toastContainer.appendChild(progressToastEl);
+            if (toastContainer) toastContainer.appendChild(progressToastEl);
             requestAnimationFrame(() => progressToastEl.classList.add('show'));
         }
         progressToastEl.innerHTML = `<i class="fas fa-sync fa-spin"></i> ${message}`;
@@ -158,9 +160,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function hideProgressToast() {
         if (progressToastEl) {
             progressToastEl.classList.remove('show');
-            setTimeout(() => { 
-                if(progressToastEl) progressToastEl.remove(); 
-                progressToastEl = null; 
+            setTimeout(() => {
+                if (progressToastEl) progressToastEl.remove();
+                progressToastEl = null;
             }, 300);
         }
     }
@@ -168,48 +170,48 @@ document.addEventListener('DOMContentLoaded', () => {
     // === 4. 确认对话框 ===
     let currentConfirmAction = null;
     function showConfirmDialog(title, message, onConfirm) {
-        if(confirmTitle) confirmTitle.innerText = title;
-        if(confirmText) confirmText.innerHTML = message;
+        if (confirmTitle) confirmTitle.innerText = title;
+        if (confirmText) confirmText.innerHTML = message;
         currentConfirmAction = onConfirm;
         confirmModalOverlay.classList.add('active');
     }
 
     // === 5. 收藏功能 ===
     function toggleFavorite(song, btnEl) {
-        if (favorites.has(song.filename)) { 
-            favorites.delete(song.filename); 
-            if(btnEl) { btnEl.classList.remove('active'); btnEl.innerHTML = '<i class="far fa-heart"></i>'; } 
-        } else { 
-            favorites.add(song.filename); 
-            if(btnEl) { btnEl.classList.add('active'); btnEl.innerHTML = '<i class="fas fa-heart"></i>'; } 
+        if (favorites.has(song.filename)) {
+            favorites.delete(song.filename);
+            if (btnEl) { btnEl.classList.remove('active'); btnEl.innerHTML = '<i class="far fa-heart"></i>'; }
+        } else {
+            favorites.add(song.filename);
+            if (btnEl) { btnEl.classList.add('active'); btnEl.innerHTML = '<i class="fas fa-heart"></i>'; }
         }
         localStorage.setItem('2fmusic_favs', JSON.stringify([...favorites]));
-        
+
         // 检查当前播放的歌曲是否就是这首，更新播放详情页的爱心
         const currentPlaying = playQueue[currentTrackIndex];
         if (currentPlaying && currentPlaying.filename === song.filename) {
-             updateDetailFavButton(favorites.has(song.filename));
+            updateDetailFavButton(favorites.has(song.filename));
         }
 
         if (currentTab === 'fav' && !favorites.has(song.filename)) renderPlaylist();
         saveState();
     }
 
-    function updateDetailFavButton(isFav) { 
-        if (!fpBtnFav) return; 
-        if (isFav) { fpBtnFav.classList.add('active-fav'); fpBtnFav.innerHTML = '<i class="fas fa-heart"></i>'; } 
-        else { fpBtnFav.classList.remove('active-fav'); fpBtnFav.innerHTML = '<i class="far fa-heart"></i>'; } 
+    function updateDetailFavButton(isFav) {
+        if (!fpBtnFav) return;
+        if (isFav) { fpBtnFav.classList.add('active-fav'); fpBtnFav.innerHTML = '<i class="fas fa-heart"></i>'; }
+        else { fpBtnFav.classList.remove('active-fav'); fpBtnFav.innerHTML = '<i class="far fa-heart"></i>'; }
     }
 
     if (fpBtnFav) {
-        fpBtnFav.addEventListener('click', () => { 
+        fpBtnFav.addEventListener('click', () => {
             const s = playQueue[currentTrackIndex]; // 从队列获取当前歌曲
-            if (s && !s.isExternal) { 
-                toggleFavorite(s, null); 
-                updateDetailFavButton(favorites.has(s.filename)); 
+            if (s && !s.isExternal) {
+                toggleFavorite(s, null);
+                updateDetailFavButton(favorites.has(s.filename));
                 // 如果当前在收藏页，可能需要刷新列表
-                if(currentTab === 'fav') renderPlaylist(); 
-            } 
+                if (currentTab === 'fav') renderPlaylist();
+            }
         });
     }
 
@@ -226,21 +228,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     src: `/api/music/play/${encodeURIComponent(item.filename)}`,
                     cover: item.album_art || '/static/images/ICON_256.PNG',
                 }));
-                
+
                 // 初始化播放队列：如果队列为空，默认载入所有歌曲，确保控制按钮可用
                 if (playQueue.length === 0) playQueue = [...fullPlaylist];
 
                 // 仅在本地/收藏页渲染列表
                 if (currentTab === 'local' || currentTab === 'fav') renderPlaylist();
-                
+
                 if (!audio.src) { await initPlayerState(); }
-            } else { 
-                if (songContainer.children.length === 0) 
-                    songContainer.innerHTML = '<div class="loading">加载失败</div>'; 
+            } else {
+                if (songContainer.children.length === 0)
+                    songContainer.innerHTML = '<div class="loading">加载失败</div>';
             }
         } catch (e) {
             console.error(e);
-            if(retry) setTimeout(() => loadSongs(false), 2000);
+            if (retry) setTimeout(() => loadSongs(false), 2000);
         }
     }
 
@@ -255,11 +257,11 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const res = await fetch('/api/system/status');
                 const status = await res.json();
-                
+
                 const isModalOpen = uploadModal && uploadModal.classList.contains('active');
 
                 if (status.scanning) {
-                    hasTrackedScan = true; 
+                    hasTrackedScan = true;
                     if (!isModalOpen) {
                         const percent = status.total > 0 ? Math.round((status.processed / status.total) * 100) : 0;
                         showToast(`正在处理库... ${status.processed}/${status.total} (${percent}%)`, true);
@@ -269,10 +271,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     clearInterval(interval);
                     isPolling = false;
                     hideProgressToast();
-                    
+
                     if ((isUserAction || hasTrackedScan) && !isModalOpen) {
                         showToast("处理完成！");
-                        loadSongs(); 
+                        loadSongs();
                         if (currentTab === 'mount') loadMountPoints();
                     }
                 }
@@ -281,7 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 isPolling = false;
                 clearInterval(interval);
             }
-        }, 1000); 
+        }, 1000);
     }
 
     // === 7. 挂载管理 (特殊字符修复版) ===
@@ -299,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         data.data.forEach(path => {
                             const card = document.createElement('div');
                             card.className = 'mount-card';
-                            
+
                             const infoDiv = document.createElement('div');
                             infoDiv.className = 'mount-info';
                             const icon = document.createElement('i');
@@ -309,12 +311,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             pathSpan.textContent = path;
                             infoDiv.appendChild(icon);
                             infoDiv.appendChild(pathSpan);
-                            
+
                             const btn = document.createElement('button');
                             btn.className = 'btn-remove-mount';
                             btn.textContent = '移除';
                             btn.onclick = () => triggerRemoveMount(path); // 修复：直接绑定函数
-                            
+
                             card.appendChild(infoDiv);
                             card.appendChild(btn);
                             frag.appendChild(card);
@@ -326,15 +328,15 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(() => mountListContainer.innerHTML = '<div class="loading-text">网络错误</div>');
     }
 
-    window.triggerRemoveMount = function(path) {
+    window.triggerRemoveMount = function (path) {
         showConfirmDialog("移除挂载", `确定要移除目录<br><b>${path}</b> 吗？`, () => {
             showToast("正在移除...");
-            fetch('/api/mount_points', { method: 'DELETE', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: path}) })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) { showToast(data.message); loadMountPoints(); loadSongs(); } 
-                else { showToast('移除失败: ' + data.error); }
-            });
+            fetch('/api/mount_points', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: path }) })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) { showToast(data.message); loadMountPoints(); loadSongs(); }
+                    else { showToast('移除失败: ' + data.error); }
+                });
         });
     };
 
@@ -344,22 +346,22 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const res = await fetch('/api/system/status');
                 const status = await res.json();
-                
+
                 if (status.scanning) {
                     const percent = status.total > 0 ? Math.round((status.processed / status.total) * 100) : 0;
-                    if(uploadFill) uploadFill.style.width = `${percent}%`;
-                    if(uploadPercent) uploadPercent.innerText = `${percent}%`;
-                    if(uploadMsg) uploadMsg.innerText = status.current_file || '处理中...';
+                    if (uploadFill) uploadFill.style.width = `${percent}%`;
+                    if (uploadPercent) uploadPercent.innerText = `${percent}%`;
+                    if (uploadMsg) uploadMsg.innerText = status.current_file || '处理中...';
                 } else {
                     clearInterval(interval);
-                    if(uploadFill) uploadFill.style.width = '100%';
-                    if(uploadPercent) uploadPercent.innerText = '100%';
-                    if(uploadMsg) uploadMsg.innerText = '挂载并索引完成!';
+                    if (uploadFill) uploadFill.style.width = '100%';
+                    if (uploadPercent) uploadPercent.innerText = '100%';
+                    if (uploadMsg) uploadMsg.innerText = '挂载并索引完成!';
                     setTimeout(() => {
                         uploadModal.classList.remove('active');
-                        if(btnAddMount) btnAddMount.disabled = false;
-                        if(mountPathInput) mountPathInput.value = ''; 
-                        loadMountPoints(); 
+                        if (btnAddMount) btnAddMount.disabled = false;
+                        if (mountPathInput) mountPathInput.value = '';
+                        loadMountPoints();
                         loadSongs();
                     }, 1000);
                 }
@@ -371,34 +373,34 @@ document.addEventListener('DOMContentLoaded', () => {
         btnAddMount.addEventListener('click', () => {
             const path = mountPathInput.value.trim();
             if (!path) { showToast('请输入路径'); return; }
-            
+
             uploadModal.classList.add('active');
-            if(uploadFileName) uploadFileName.innerText = "挂载目录: " + path;
-            if(uploadFill) uploadFill.style.width = '0%';
-            if(uploadPercent) uploadPercent.innerText = '0%';
-            if(uploadMsg) uploadMsg.innerText = '正在提交...';
-            if(closeUploadBtn) closeUploadBtn.style.display = 'none';
+            if (uploadFileName) uploadFileName.innerText = "挂载目录: " + path;
+            if (uploadFill) uploadFill.style.width = '0%';
+            if (uploadPercent) uploadPercent.innerText = '0%';
+            if (uploadMsg) uploadMsg.innerText = '正在提交...';
+            if (closeUploadBtn) closeUploadBtn.style.display = 'none';
             btnAddMount.disabled = true;
-            
-            fetch('/api/mount_points', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({path: path}) 
+
+            fetch('/api/mount_points', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: path })
             })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) { trackMountProgress(); } 
-                else { 
-                    if(uploadMsg) uploadMsg.innerText = '添加失败: ' + data.error; 
-                    if(closeUploadBtn) closeUploadBtn.style.display = 'inline-block';
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) { trackMountProgress(); }
+                    else {
+                        if (uploadMsg) uploadMsg.innerText = '添加失败: ' + data.error;
+                        if (closeUploadBtn) closeUploadBtn.style.display = 'inline-block';
+                        btnAddMount.disabled = false;
+                    }
+                })
+                .catch(() => {
+                    if (uploadMsg) uploadMsg.innerText = '网络请求失败';
+                    if (closeUploadBtn) closeUploadBtn.style.display = 'inline-block';
                     btnAddMount.disabled = false;
-                }
-            })
-            .catch(() => {
-                if(uploadMsg) uploadMsg.innerText = '网络请求失败';
-                if(closeUploadBtn) closeUploadBtn.style.display = 'inline-block';
-                btnAddMount.disabled = false;
-            });
+                });
         });
     }
 
@@ -408,6 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentLoginKey = null;
     let neteaseDownloadDir = '';
     let neteaseApiBase = '';
+    let neteaseSelected = new Set();
     let neteaseDownloadTasks = [];
 
     function renderDownloadTasks() {
@@ -418,8 +421,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         neteaseDownloadList.innerHTML = '';
         const frag = document.createDocumentFragment();
-        
-        const statusConfig = { 
+
+        const statusConfig = {
             queued: { text: '排队', icon: 'fas fa-clock', class: 'queued' },
             downloading: { text: '下载中', icon: 'fas fa-spinner fa-spin', class: 'downloading' },
             success: { text: '完成', icon: 'fas fa-check', class: 'success' },
@@ -437,7 +440,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="download-artist" title="${task.artist || '未知艺术家'}">${task.artist || '未知艺术家'}</div>`;
 
             const config = statusConfig[task.status] || { text: task.status, icon: 'fas fa-info-circle', class: '' };
-            
+
             const statusEl = document.createElement('div');
             statusEl.className = `download-status ${config.class}`;
             statusEl.innerHTML = `<i class="${config.icon}"></i> <span>${config.text}</span>`;
@@ -470,10 +473,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function updateSelectAllState() {
+        if (!neteaseSelectAll) return;
+        const total = neteaseResults.length;
+        const selectedCount = Array.from(neteaseSelected).filter(id => neteaseResults.some(s => String(s.id) === id)).length;
+        neteaseSelectAll.indeterminate = selectedCount > 0 && selectedCount < total;
+        neteaseSelectAll.checked = total > 0 && selectedCount === total;
+    }
+
     function renderNeteaseResults() {
         if (!neteaseResultList) return;
         if (!neteaseResults.length) {
             neteaseResultList.innerHTML = '<div class="loading-text">未找到相关歌曲</div>';
+            updateSelectAllState();
             return;
         }
         neteaseResultList.innerHTML = '';
@@ -481,6 +493,19 @@ document.addEventListener('DOMContentLoaded', () => {
         neteaseResults.forEach(song => {
             const card = document.createElement('div');
             card.className = 'netease-card';
+
+            const selectWrap = document.createElement('div');
+            selectWrap.className = 'netease-select';
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            const sid = String(song.id);
+            checkbox.checked = neteaseSelected.has(sid);
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) neteaseSelected.add(sid);
+                else neteaseSelected.delete(sid);
+                updateSelectAllState();
+            });
+            selectWrap.appendChild(checkbox);
 
             const cover = document.createElement('img');
             cover.src = song.cover || '/static/images/ICON_256.PNG';
@@ -501,12 +526,14 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', () => downloadNeteaseSong(song, btn));
             actions.appendChild(btn);
 
+            card.appendChild(selectWrap);
             card.appendChild(cover);
             card.appendChild(meta);
             card.appendChild(actions);
             frag.appendChild(card);
         });
         neteaseResultList.appendChild(frag);
+        updateSelectAllState();
     }
 
     async function searchNeteaseSongs() {
@@ -519,6 +546,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const json = await res.json();
             if (json.success) {
                 neteaseResults = json.data || [];
+                neteaseSelected = new Set();
                 renderNeteaseResults();
             } else {
                 neteaseResultList.innerHTML = `<div class="loading-text">${json.error || '搜索失败'}</div>`;
@@ -529,16 +557,85 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // === 动画特效 Helper ===
+    function flyToElement(startEl, targetEl) {
+        if (!startEl || !targetEl) return;
+        const startRect = startEl.getBoundingClientRect();
+        const targetRect = targetEl.getBoundingClientRect();
+
+        const flyer = document.createElement('div');
+        Object.assign(flyer.style, {
+            position: 'fixed',
+            zIndex: '9999',
+            pointerEvents: 'none',
+            width: '24px',
+            height: '24px',
+            borderRadius: '50%',
+            backgroundColor: '#1db954', // var(--primary)
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+            left: `${startRect.left + startRect.width / 2}px`,
+            top: `${startRect.top + startRect.height / 2}px`,
+            transform: 'translate(-50%, -50%) scale(1)',
+            transition: 'all 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)'
+        });
+        flyer.innerHTML = '<i class="fas fa-music" style="font-size: 12px;"></i>';
+
+        document.body.appendChild(flyer);
+
+        // 强制重绘
+        flyer.getBoundingClientRect();
+
+        requestAnimationFrame(() => {
+            const targetX = targetRect.left + targetRect.width / 2;
+            const targetY = targetRect.top + targetRect.height / 2;
+
+            Object.assign(flyer.style, {
+                left: `${targetX}px`,
+                top: `${targetY}px`,
+                transform: 'translate(-50%, -50%) scale(0.2)',
+                opacity: '0.5'
+            });
+        });
+
+        flyer.addEventListener('transitionend', () => {
+            flyer.remove();
+            // 目标震动反馈
+            if (targetEl) {
+                targetEl.style.transition = 'transform 0.1s';
+                targetEl.style.transform = 'scale(1.3)';
+                setTimeout(() => {
+                    targetEl.style.transform = '';
+                    setTimeout(() => targetEl.style.transition = '', 100);
+                }, 100);
+            }
+        });
+    }
+
     async function downloadNeteaseSong(song, btnEl) {
         if (!song || !song.id) return;
         const level = neteaseQualitySelect ? neteaseQualitySelect.value : 'exhigh';
+
+        // 乐观更新：先设置一个临时ID，等后端返回真正ID也可以，如果不涉及复杂逻辑
         const taskId = addDownloadTask(song);
         updateDownloadTask(taskId, 'downloading');
-        if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '<i class="fas fa-sync fa-spin"></i> 下载中'; }
+
+        if (btnEl) {
+            btnEl.disabled = true;
+            btnEl.innerHTML = '<i class="fas fa-sync fa-spin"></i> 下载中';
+            // 触发飞行激画
+            if (neteaseDownloadFloating) flyToElement(btnEl, neteaseDownloadFloating);
+        }
+
+        let isSuccess = false;
         try {
-            const res = await fetch('/api/netease/download', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ ...song, level, target_dir: neteaseDownloadDir || undefined }) });
+            const res = await fetch('/api/netease/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...song, level, target_dir: neteaseDownloadDir || undefined }) });
             const json = await res.json();
             if (json.success) {
+                isSuccess = true;
                 updateDownloadTask(taskId, 'success');
                 await loadSongs(false);
             } else {
@@ -548,7 +645,16 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('download netease error', err);
             updateDownloadTask(taskId, 'error');
         } finally {
-            if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<i class="fas fa-download"></i> 下载'; }
+            if (btnEl) {
+                if (isSuccess) {
+                    btnEl.disabled = true;
+                    btnEl.innerHTML = '<i class="fas fa-check"></i> 已下载';
+                    btnEl.classList.add('downloaded'); // 可配合 CSS 使用
+                } else {
+                    btnEl.disabled = false;
+                    btnEl.innerHTML = '<i class="fas fa-download"></i> 下载';
+                }
+            }
         }
     }
 
@@ -566,13 +672,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 neteaseApiBase = json.api_base || '';
                 if (neteaseDownloadDirInput) neteaseDownloadDirInput.value = neteaseDownloadDir;
                 if (neteaseApiGateInput) neteaseApiGateInput.value = neteaseApiBase || 'http://localhost:3000';
-                
+
                 // 改动：验证连接有效性后再显示
                 if (neteaseApiBase) {
                     try {
                         const statusRes = await fetch('/api/netease/login/status');
                         const statusJson = await statusRes.json();
-                        
+
                         if (statusJson.success) {
                             toggleNeteaseGate(true); // 连接成功 -> 显示内容
                             // 刷新登录状态 UI
@@ -597,8 +703,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!neteaseApiGateInput) return;
         const apiBaseVal = neteaseApiGateInput.value.trim();
         if (!apiBaseVal) { showToast('请输入 API 地址'); return; }
-        
-        if(neteaseApiGateBtn) { neteaseApiGateBtn.disabled = true; neteaseApiGateBtn.innerText = "正在检测..."; }
+
+        if (neteaseApiGateBtn) { neteaseApiGateBtn.disabled = true; neteaseApiGateBtn.innerText = "正在检测..."; }
 
         // 1. Save Config
         try {
@@ -610,15 +716,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // Let's include download_dir if we have it locally.
             if (neteaseDownloadDir) payload.download_dir = neteaseDownloadDir;
 
-            const res = await fetch('/api/netease/config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+            const res = await fetch('/api/netease/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             const json = await res.json();
             if (json.success) {
                 neteaseApiBase = json.api_base;
                 // 2. Verify Connectivity
                 const statusRes = await fetch('/api/netease/login/status'); // This will use the new API base on backend
                 const statusJson = await statusRes.json();
-                
-                if (statusJson.success) { 
+
+                if (statusJson.success) {
                     showToast('连接成功');
                     toggleNeteaseGate(true);
                     refreshLoginStatus(); // Update UI
@@ -632,7 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('bind error', err);
             showToast('连接失败，请检查地址');
         } finally {
-            if(neteaseApiGateBtn) { neteaseApiGateBtn.disabled = false; neteaseApiGateBtn.innerText = "检测并连接"; }
+            if (neteaseApiGateBtn) { neteaseApiGateBtn.disabled = false; neteaseApiGateBtn.innerText = "检测并连接"; }
         }
     }
 
@@ -642,10 +748,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = {};
         if (dir) payload.download_dir = dir;
         // We don't change api_base here anymore, use the "Change API" button to go back to gate
-        
+
         if (!payload.download_dir) { showToast('无需保存空设置'); return; }
         try {
-            const res = await fetch('/api/netease/config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+            const res = await fetch('/api/netease/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             const json = await res.json();
             if (json.success) {
                 neteaseDownloadDir = json.download_dir;
@@ -731,27 +837,75 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function downloadByIds() {
-        const level = neteaseQualitySelect ? neteaseQualitySelect.value : 'exhigh';
         const songId = neteaseSongIdInput ? neteaseSongIdInput.value.trim() : '';
         const playlistId = neteasePlaylistIdInput ? neteasePlaylistIdInput.value.trim() : '';
         if (!songId && !playlistId) { showToast('请输入单曲ID或歌单ID'); return; }
         if (songId) {
-            await downloadNeteaseSong({ id: songId, level });
+            try {
+                if (neteaseResultList) neteaseResultList.innerHTML = '<div class="loading-text">解析单曲中...</div>';
+                const res = await fetch(`/api/netease/song?id=${encodeURIComponent(songId)}`);
+                const json = await res.json();
+                if (!json.success) { showToast(json.error || '解析失败'); return; }
+                neteaseResults = json.data || [];
+                neteaseSelected = new Set(neteaseResults.map(s => String(s.id)));
+                renderNeteaseResults();
+                if (!neteaseResults.length) {
+                    if (neteaseResultList) neteaseResultList.innerHTML = '<div class="loading-text">未找到歌曲</div>';
+                } else {
+                    showToast(`解析到 ${neteaseResults.length} 首歌曲，可选择下载`);
+                }
+            } catch (err) {
+                console.error('song parse error', err);
+                showToast('解析失败');
+            }
         } else if (playlistId) {
             try {
+                if (neteaseResultList) neteaseResultList.innerHTML = '<div class="loading-text">解析歌单中...</div>';
                 const res = await fetch(`/api/netease/playlist?id=${encodeURIComponent(playlistId)}`);
                 const json = await res.json();
                 if (!json.success) { showToast(json.error || '获取歌单失败'); return; }
                 const songs = json.data || [];
-                if (!songs.length) { showToast('歌单为空'); return; }
-                let count = 0;
-                for (const s of songs) {
-                    count++;
-                    await downloadNeteaseSong({ ...s, level });
+                neteaseResults = songs;
+                neteaseSelected = new Set(neteaseResults.map(s => String(s.id)));
+                renderNeteaseResults();
+                if (!neteaseResults.length) {
+                    if (neteaseResultList) neteaseResultList.innerHTML = '<div class="loading-text">歌单为空</div>';
+                } else {
+                    showToast(`解析到 ${neteaseResults.length} 首歌曲，可选择下载`);
                 }
             } catch (err) {
                 console.error('playlist download error', err);
+                showToast('解析失败');
             }
+        }
+    }
+
+    async function bulkDownloadSelected() {
+        const level = neteaseQualitySelect ? neteaseQualitySelect.value : 'exhigh';
+        const targets = neteaseResults.filter(s => neteaseSelected.has(String(s.id)));
+        if (!targets.length) { showToast('请先选择歌曲'); return; }
+
+        if (neteaseBulkDownloadBtn) {
+            neteaseBulkDownloadBtn.disabled = true;
+            neteaseBulkDownloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 处理中...';
+        }
+
+        let addedCount = 0;
+        for (const s of targets) {
+            // 这里不 await 每一个请求完成，而是快速添加到下载队列
+            // 或者我们可以并行触发，但要注意不要瞬间发起过多请求导致后端堵塞
+            // 既然 main.js 的 downloadNeteaseSong 内部有 async fetch，且我们希望看到每个按钮独立变化
+            // 但在批量下载时，列表项的按钮可能不可见（因为在列表里），所以我们应该快速遍历触发
+            downloadNeteaseSong({ ...s, level }); // 不 await，让其后台进行
+            addedCount++;
+            await new Promise(r => setTimeout(r, 100)); // 稍微间隔一下，避免卡顿
+        }
+
+        showToast(`已开始下载 ${addedCount} 首歌曲`);
+
+        if (neteaseBulkDownloadBtn) {
+            neteaseBulkDownloadBtn.disabled = false;
+            neteaseBulkDownloadBtn.innerHTML = '<i class="fas fa-download"></i> 下载选中';
         }
     }
 
@@ -763,7 +917,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (neteaseRefreshStatusBtn) neteaseRefreshStatusBtn.addEventListener('click', () => refreshLoginStatus(true));
     if (neteaseIdDownloadBtn) neteaseIdDownloadBtn.addEventListener('click', downloadByIds);
     if (neteaseSaveDirBtn) neteaseSaveDirBtn.addEventListener('click', saveNeteaseConfig);
-    
+    if (neteaseSelectAll) neteaseSelectAll.addEventListener('change', (e) => {
+        if (e.target.checked) neteaseSelected = new Set(neteaseResults.map(s => String(s.id)));
+        else neteaseSelected.clear();
+        renderNeteaseResults();
+    });
+    if (neteaseBulkDownloadBtn) neteaseBulkDownloadBtn.addEventListener('click', bulkDownloadSelected);
+
     // New Gate Listeners
     if (neteaseApiGateBtn) neteaseApiGateBtn.addEventListener('click', bindNeteaseApi);
     if (neteaseChangeApiBtn) {
@@ -798,12 +958,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // 移除所有激活状态
             neteaseTabs.forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            
+
             // 激活当前
             btn.classList.add('active');
             const targetId = btn.getAttribute('data-target');
             const targetContent = document.getElementById(targetId);
-            if(targetContent) targetContent.classList.add('active');
+            if (targetContent) targetContent.classList.add('active');
         });
     });
 
@@ -814,7 +974,7 @@ document.addEventListener('DOMContentLoaded', () => {
         navFav.classList.remove('active');
         navMount.classList.remove('active');
         if (navNetease) navNetease.classList.remove('active');
-        
+
         if (tab === 'local') navLocal.classList.add('active');
         else if (tab === 'fav') navFav.classList.add('active');
         else if (tab === 'mount') navMount.classList.add('active');
@@ -822,20 +982,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (tab === 'mount') {
             viewPlayer.classList.add('hidden');
-            if(viewNetease) viewNetease.classList.add('hidden');
+            if (viewNetease) viewNetease.classList.add('hidden');
             viewMount.classList.remove('hidden');
-            if(searchInput) searchInput.parentElement.style.visibility = 'hidden';
+            if (searchInput) searchInput.parentElement.style.visibility = 'hidden';
             loadMountPoints();
         } else if (tab === 'netease') {
             viewPlayer.classList.add('hidden');
             viewMount.classList.add('hidden');
-            if(viewNetease) viewNetease.classList.remove('hidden');
-            if(searchInput) searchInput.parentElement.style.visibility = 'hidden';
+            if (viewNetease) viewNetease.classList.remove('hidden');
+            if (searchInput) searchInput.parentElement.style.visibility = 'hidden';
         } else {
             viewMount.classList.add('hidden');
-            if(viewNetease) viewNetease.classList.add('hidden');
+            if (viewNetease) viewNetease.classList.add('hidden');
             viewPlayer.classList.remove('hidden');
-            if(searchInput) { searchInput.parentElement.style.visibility = 'visible'; searchInput.value = ''; }
+            if (searchInput) { searchInput.parentElement.style.visibility = 'visible'; searchInput.value = ''; }
             renderPlaylist();
         }
         if (window.innerWidth <= 768 && sidebar.classList.contains('open')) sidebar.classList.remove('open');
@@ -850,10 +1010,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function initPlayerState() {
         const allowedTabs = ['local', 'fav', 'mount', 'netease'];
         const targetTab = allowedTabs.includes(savedState.tab) ? savedState.tab : 'local';
-        switchTab(targetTab); 
+        switchTab(targetTab);
         if (savedState.volume !== undefined) { audio.volume = savedState.volume; updateVolumeUI(audio.volume); }
         if (savedState.playMode !== undefined) { playMode = savedState.playMode; updatePlayModeUI(); }
-        
+
         // 恢复播放位置，注意这里使用 playQueue (默认为 fullPlaylist)
         if (savedState.currentFilename) {
             const idx = playQueue.findIndex(s => s.filename === savedState.currentFilename);
@@ -863,8 +1023,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (savedState.currentTime) {
                     audio.currentTime = savedState.currentTime;
                     const pct = (audio.currentTime / audio.duration) * 100 || 0;
-                    if(progressBar) { progressBar.value = pct; updateSliderFill(progressBar); }
-                    if(fpProgressBar) { fpProgressBar.value = pct; updateSliderFill(fpProgressBar); }
+                    if (progressBar) { progressBar.value = pct; updateSliderFill(progressBar); }
+                    if (fpProgressBar) { fpProgressBar.value = pct; updateSliderFill(fpProgressBar); }
                 }
             }
         }
@@ -898,20 +1058,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const encodedName = encodeURIComponent(filename);
         if (audio.src.includes(encodedName)) {
             audio.pause();
-            audio.removeAttribute('src'); 
+            audio.removeAttribute('src');
             audio.load();
-            ['current-title', 'fp-title'].forEach(id => { const el = document.getElementById(id); if(el) el.innerText = "等待播放"; });
-            ['current-cover', 'fp-cover'].forEach(id => { const el = document.getElementById(id); if(el) el.src = "/static/images/ICON_256.PNG"; });
+            ['current-title', 'fp-title'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = "等待播放"; });
+            ['current-cover', 'fp-cover'].forEach(id => { const el = document.getElementById(id); if (el) el.src = "/static/images/ICON_256.PNG"; });
             isPlaying = false;
             updatePlayState();
-            if(overlay.classList.contains('active')) overlay.classList.remove('active');
+            if (overlay.classList.contains('active')) overlay.classList.remove('active');
         }
         const delay = ms => new Promise(res => setTimeout(res, ms));
         await delay(200);
         try {
             const res = await fetch(`/api/music/delete/${encodedName}`, { method: 'DELETE' });
             const data = await res.json();
-            if (data.success) { showToast('删除成功'); await loadSongs(); if(actionMenuOverlay) actionMenuOverlay.classList.remove('active'); if(confirmModalOverlay) confirmModalOverlay.classList.remove('active'); } 
+            if (data.success) { showToast('删除成功'); await loadSongs(); if (actionMenuOverlay) actionMenuOverlay.classList.remove('active'); if (confirmModalOverlay) confirmModalOverlay.classList.remove('active'); }
             else { showToast('删除失败: ' + (data.error || '未知错误')); }
         } catch (err) { console.error('删除错误:', err); showToast('网络请求失败'); }
     }
@@ -930,13 +1090,15 @@ document.addEventListener('DOMContentLoaded', () => {
             uploadMsg.innerText = "正在导入...";
             closeUploadBtn.style.display = 'none';
             try {
-                const res = await fetch('/api/music/import_path', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ path: externalPath }) });
+                const res = await fetch('/api/music/import_path', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: externalPath }) });
                 const data = await res.json();
-                if (data.success) { uploadMsg.innerText = "导入成功"; window.history.replaceState({}, document.title, '/'); await loadSongs(); switchTab('local'); const idx = fullPlaylist.findIndex(s => s.filename === data.filename); if (idx !== -1) { 
-                    playQueue = [...fullPlaylist]; // 更新队列
-                    await playTrack(idx); 
-                    setTimeout(() => uploadModal.classList.remove('active'), 800); 
-                } } 
+                if (data.success) {
+                    uploadMsg.innerText = "导入成功"; window.history.replaceState({}, document.title, '/'); await loadSongs(); switchTab('local'); const idx = fullPlaylist.findIndex(s => s.filename === data.filename); if (idx !== -1) {
+                        playQueue = [...fullPlaylist]; // 更新队列
+                        await playTrack(idx);
+                        setTimeout(() => uploadModal.classList.remove('active'), 800);
+                    }
+                }
                 else { throw new Error(data.error); }
             } catch (err) { uploadMsg.innerText = "失败: " + err.message; closeUploadBtn.style.display = 'inline-block'; }
         } else {
@@ -947,9 +1109,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     const song = json.data;
                     const tempSong = { title: song.title, artist: song.artist, album: song.album, filename: song.filename, src: `/api/music/external/play?path=${encodeURIComponent(song.filename)}`, cover: song.album_art || '/static/images/ICON_256.PNG', isExternal: true };
                     fullPlaylist.unshift(tempSong);
-                    switchTab('local'); 
+                    switchTab('local');
                     playQueue = [...fullPlaylist]; // 更新队列
-                    await playTrack(0); 
+                    await playTrack(0);
                     overlay.classList.add('active'); window.history.replaceState({}, document.title, '/');
                 }
             } catch (err) { console.error("直接播放失败:", err); }
@@ -961,7 +1123,7 @@ document.addEventListener('DOMContentLoaded', () => {
         songContainer.innerHTML = '';
         if (currentTab === 'fav') { displayPlaylist = fullPlaylist.filter(s => favorites.has(s.filename)); } else { displayPlaylist = fullPlaylist; }
         if (displayPlaylist.length === 0) { songContainer.innerHTML = `<div class="loading" style="grid-column: 1/-1;">${currentTab === 'fav' ? '暂无收藏' : '暂无歌曲'}</div>`; return; }
-        
+
         const frag = document.createDocumentFragment();
         displayPlaylist.forEach((song, index) => {
             const card = document.createElement('div');
@@ -969,26 +1131,26 @@ document.addEventListener('DOMContentLoaded', () => {
             card.dataset.index = index;
             if (song.isExternal) card.style.border = '1px dashed var(--primary)';
             const isFav = favorites.has(song.filename);
-            
+
             // 构建卡片 HTML
             let favHtml = `<button class="card-fav-btn ${isFav ? 'active' : ''}" title="收藏"><i class="${isFav ? 'fas' : 'far'} fa-heart"></i></button>`;
-            if (song.isExternal) favHtml = ''; 
+            if (song.isExternal) favHtml = '';
             card.innerHTML = `${favHtml}<img src="${song.cover}" loading="lazy"><div class="card-info"><div class="title" title="${song.title}">${song.title}</div><div class="artist">${song.artist}</div></div>`;
-            
-            card.addEventListener('click', (e) => { 
-                if (!e.target.closest('.card-fav-btn')) { 
+
+            card.addEventListener('click', (e) => {
+                if (!e.target.closest('.card-fav-btn')) {
                     // 核心修复：点击列表时，将当前视图的列表作为播放队列
                     playQueue = [...displayPlaylist];
-                    playTrack(index); 
-                } 
+                    playTrack(index);
+                }
             });
-            
-            if (!song.isExternal) { 
-                const favBtn = card.querySelector('.card-fav-btn'); 
-                favBtn.addEventListener('click', (e) => { 
-                    e.stopPropagation(); 
-                    toggleFavorite(song, favBtn); 
-                }); 
+
+            if (!song.isExternal) {
+                const favBtn = card.querySelector('.card-fav-btn');
+                favBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleFavorite(song, favBtn);
+                });
             }
             frag.appendChild(card);
         });
@@ -1024,13 +1186,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadTrackInfo(track) {
         if (!track) return;
-        ['current-title', 'fp-title'].forEach(id => { const el = document.getElementById(id); if(el) el.innerText = track.title; });
-        ['current-artist', 'fp-artist'].forEach(id => { const el = document.getElementById(id); if(el) el.innerText = track.artist; });
+        ['current-title', 'fp-title'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = track.title; });
+        ['current-artist', 'fp-artist'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = track.artist; });
         const coverSrc = track.cover || '/static/images/ICON_256.PNG';
-        ['current-cover', 'fp-cover'].forEach(id => { const el = document.getElementById(id); if(el) el.src = coverSrc; });
+        ['current-cover', 'fp-cover'].forEach(id => { const el = document.getElementById(id); if (el) el.src = coverSrc; });
         updateDetailFavButton(favorites.has(track.filename));
         document.title = `${track.title} - 2FMusic`;
-        lyricsContainer.innerHTML = ''; 
+        lyricsContainer.innerHTML = '';
         if (track.lyrics) parseAndRenderLyrics(track.lyrics); else renderNoLyrics("正在搜索歌词...");
         if ('mediaSession' in navigator) { navigator.mediaSession.metadata = new MediaMetadata({ title: track.title, artist: track.artist, artwork: [{ src: coverSrc, sizes: '512x512', type: 'image/jpeg' }] }); }
         if (fpMenuBtn) { fpMenuBtn.style.display = track.isExternal ? 'none' : 'block'; }
@@ -1038,7 +1200,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function highlightCurrentTrack() {
         const currentSrc = audio.src; if (!currentSrc) return;
-        
+
         // 使用文件名匹配而不是索引匹配，因为队列和列表顺序可能不同
         const currentSong = playQueue[currentTrackIndex];
         if (!currentSong) return;
@@ -1058,7 +1220,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (playMode === 0) { fpBtnMode.innerHTML = '<i class="fas fa-redo"></i>'; fpBtnMode.title = "列表循环"; }
         else if (playMode === 1) { fpBtnMode.classList.add('active-mode', 'mode-loop-one'); fpBtnMode.innerHTML = '<i class="fas fa-random"></i>'; fpBtnMode.title = "随机播放"; } // 修复随机图标
         else if (playMode === 2) { fpBtnMode.classList.add('active-mode', 'mode-loop-one'); fpBtnMode.innerHTML = '<i class="fas fa-redo"></i>'; fpBtnMode.title = "单曲循环"; }
-        
+
         // 修正：playMode=1 实际上应该是随机，之前的代码图标可能有点乱，这里统一规范一下
         // playMode 0: 顺序循环 (Redo)
         // playMode 1: 随机 (Random)
@@ -1068,16 +1230,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function nextTrack() {
         if (playQueue.length === 0) return;
-        if (playMode === 1) { 
+        if (playMode === 1) {
             // 随机播放
-            let newIndex = Math.floor(Math.random() * playQueue.length); 
-            while(playQueue.length > 1 && newIndex === currentTrackIndex) newIndex = Math.floor(Math.random() * playQueue.length); 
-            playTrack(newIndex); 
-        } 
-        else { 
-            let nextIndex = currentTrackIndex + 1; 
-            if (nextIndex >= playQueue.length) nextIndex = 0; 
-            playTrack(nextIndex); 
+            let newIndex = Math.floor(Math.random() * playQueue.length);
+            while (playQueue.length > 1 && newIndex === currentTrackIndex) newIndex = Math.floor(Math.random() * playQueue.length);
+            playTrack(newIndex);
+        }
+        else {
+            let nextIndex = currentTrackIndex + 1;
+            if (nextIndex >= playQueue.length) nextIndex = 0;
+            playTrack(nextIndex);
         }
     }
     function prevTrack() {
@@ -1103,9 +1265,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!audio.duration) return;
         const percent = (audio.currentTime / audio.duration) * 100;
         const timeStr = formatTime(audio.currentTime);
-        if(progressBar) { progressBar.value = percent; updateSliderFill(progressBar); }
-        if(fpProgressBar) { fpProgressBar.value = percent; updateSliderFill(fpProgressBar); }
-        ['time-current', 'fp-time-current'].forEach(id => { const el = document.getElementById(id); if(el) el.innerText = timeStr; });
+        if (progressBar) { progressBar.value = percent; updateSliderFill(progressBar); }
+        if (fpProgressBar) { fpProgressBar.value = percent; updateSliderFill(fpProgressBar); }
+        ['time-current', 'fp-time-current'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = timeStr; });
         if (lyricsData.length) {
             let idx = lyricsData.findIndex(l => l.time > audio.currentTime);
             idx = idx === -1 ? lyricsData.length - 1 : idx - 1;
@@ -1119,50 +1281,50 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
-    audio.addEventListener('loadedmetadata', () => { const totalStr = formatTime(audio.duration); ['time-total', 'fp-time-total'].forEach(id => { const el = document.getElementById(id); if(el) el.innerText = totalStr; }); });
+    audio.addEventListener('loadedmetadata', () => { const totalStr = formatTime(audio.duration);['time-total', 'fp-time-total'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = totalStr; }); });
     function seek(e) { if (audio.duration) audio.currentTime = (e.target.value / 100) * audio.duration; updateSliderFill(e.target); }
     [progressBar, fpProgressBar].forEach(bar => bar?.addEventListener('input', seek));
 
     // === 17. 元数据与歌词 ===
     async function checkAndFetchMetadata(track, fetchId) {
         const query = `?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&filename=${encodeURIComponent(track.filename)}`;
-        if (!track.lyrics) { 
+        if (!track.lyrics) {
             try {
                 const res = await fetch(`/api/music/lyrics${query}`);
                 const d = await res.json();
                 if (fetchId !== currentFetchId) return;
-                if (d.success && d.lyrics) { track.lyrics = d.lyrics; parseAndRenderLyrics(d.lyrics); } 
+                if (d.success && d.lyrics) { track.lyrics = d.lyrics; parseAndRenderLyrics(d.lyrics); }
                 else { renderNoLyrics("暂无歌词"); }
-            } catch(e) { if (fetchId === currentFetchId) renderNoLyrics("歌词加载失败"); }
+            } catch (e) { if (fetchId === currentFetchId) renderNoLyrics("歌词加载失败"); }
         }
-        if (track.cover.includes('ICON_256.PNG')) { 
+        if (track.cover.includes('ICON_256.PNG')) {
             try {
                 const res = await fetch(`/api/music/album-art${query}`);
                 const d = await res.json();
                 if (fetchId !== currentFetchId) return;
-                if (d.success && d.album_art) { 
-                    track.cover = d.album_art; 
-                    if (audio.src.includes(encodeURIComponent(track.filename))) { ['current-cover', 'fp-cover'].forEach(id => { const el = document.getElementById(id); if(el) el.src = track.cover; }); } 
-                    renderPlaylist(); 
-                } 
-            } catch(e) {}
+                if (d.success && d.album_art) {
+                    track.cover = d.album_art;
+                    if (audio.src.includes(encodeURIComponent(track.filename))) { ['current-cover', 'fp-cover'].forEach(id => { const el = document.getElementById(id); if (el) el.src = track.cover; }); }
+                    renderPlaylist();
+                }
+            } catch (e) { }
         }
     }
-    
+
     function parseAndRenderLyrics(lrc) {
         lyricsData = []; const lines = lrc.split('\n'); const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
         lines.forEach(line => { const match = timeRegex.exec(line); if (match) { const min = parseInt(match[1]); const sec = parseInt(match[2]); const ms = parseInt(match[3]); const time = min * 60 + sec + (ms / (match[3].length === 3 ? 1000 : 100)); const text = line.replace(timeRegex, '').trim(); if (text) lyricsData.push({ time, text }); } });
         if (lyricsData.length === 0) { renderNoLyrics("纯音乐"); return; }
-        
-        lyricsContainer.innerHTML = lyricsData.map((l, i) => 
+
+        lyricsContainer.innerHTML = lyricsData.map((l, i) =>
             `<p class="lyric-line" data-index="${i}" data-time="${l.time}">${l.text}</p>`
         ).join('');
         document.querySelectorAll('.lyric-line').forEach(line => {
             line.addEventListener('click', (e) => {
                 const time = parseFloat(e.target.getAttribute('data-time'));
-                if(!isNaN(time) && audio.duration) {
+                if (!isNaN(time) && audio.duration) {
                     audio.currentTime = time;
-                    if(isPlaying) audio.play();
+                    if (isPlaying) audio.play();
                 }
             });
         });
@@ -1171,12 +1333,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatTime(s) { if (isNaN(s)) return "0:00"; const min = Math.floor(s / 60); const sec = Math.floor(s % 60); return `${min}:${sec.toString().padStart(2, '0')}`; }
 
     // === 18. 界面控制事件 ===
-    function togglePlay() { if (playQueue.length === 0) return; if (isPlaying) audio.pause(); else { if(!audio.src) playTrack(0); else audio.play(); } isPlaying = !isPlaying; updatePlayState(); }
-    function updatePlayState() { 
-        const icon = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>'; 
-        if(btnPlay) btnPlay.innerHTML = icon; 
-        if(fpBtnPlay) fpBtnPlay.innerHTML = icon; 
-        if(mobileMiniPlay) mobileMiniPlay.innerHTML = icon;
+    function togglePlay() { if (playQueue.length === 0) return; if (isPlaying) audio.pause(); else { if (!audio.src) playTrack(0); else audio.play(); } isPlaying = !isPlaying; updatePlayState(); }
+    function updatePlayState() {
+        const icon = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
+        if (btnPlay) btnPlay.innerHTML = icon;
+        if (fpBtnPlay) fpBtnPlay.innerHTML = icon;
+        if (mobileMiniPlay) mobileMiniPlay.innerHTML = icon;
     }
 
     [btnPlay, fpBtnPlay, mobileMiniPlay].forEach(btn => btn?.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); }));
@@ -1187,10 +1349,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('open-detail-view')?.addEventListener('click', () => overlay.classList.add('active'));
     document.getElementById('close-detail-view')?.addEventListener('click', () => overlay.classList.remove('active'));
 
-    if(fpMenuBtn) { fpMenuBtn.addEventListener('click', (e) => { e.stopPropagation(); actionMenuOverlay.classList.add('active'); }); }
-    if(actionCancelBtn) { actionCancelBtn.addEventListener('click', () => { actionMenuOverlay.classList.remove('active'); }); }
-    if(actionDeleteBtn) { 
-        actionDeleteBtn.addEventListener('click', () => { 
+    if (fpMenuBtn) { fpMenuBtn.addEventListener('click', (e) => { e.stopPropagation(); actionMenuOverlay.classList.add('active'); }); }
+    if (actionCancelBtn) { actionCancelBtn.addEventListener('click', () => { actionMenuOverlay.classList.remove('active'); }); }
+    if (actionDeleteBtn) {
+        actionDeleteBtn.addEventListener('click', () => {
             actionMenuOverlay.classList.remove('active');
             const currentSong = playQueue[currentTrackIndex];
             if (currentSong) {
@@ -1200,21 +1362,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     () => performDelete(currentSong.filename)
                 );
             }
-        }); 
+        });
     }
-    if(confirmNoBtn) { confirmNoBtn.addEventListener('click', () => { confirmModalOverlay.classList.remove('active'); currentConfirmAction = null; }); }
-    if(confirmYesBtn) { 
-        confirmYesBtn.addEventListener('click', () => { 
-            if(currentConfirmAction) {
+    if (confirmNoBtn) { confirmNoBtn.addEventListener('click', () => { confirmModalOverlay.classList.remove('active'); currentConfirmAction = null; }); }
+    if (confirmYesBtn) {
+        confirmYesBtn.addEventListener('click', () => {
+            if (currentConfirmAction) {
                 currentConfirmAction();
                 confirmModalOverlay.classList.remove('active');
                 currentConfirmAction = null;
             }
-        }); 
+        });
     }
 
     [actionMenuOverlay, confirmModalOverlay].forEach(overlay => {
-        if(overlay) { overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.classList.remove('active'); currentConfirmAction = null; } }); }
+        if (overlay) { overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.classList.remove('active'); currentConfirmAction = null; } }); }
     });
 
     if (menuBtn) {

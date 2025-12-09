@@ -170,7 +170,7 @@
                             <div class="netease-id-row">
                                 <input type="text" id="netease-song-id" placeholder="输入单曲ID">
                                 <input type="text" id="netease-playlist-id" placeholder="输入歌单ID">
-                                <button id="netease-id-download" class="btn-primary"><i class="fas fa-download"></i> 下载</button>
+                                <button id="netease-id-download" class="btn-primary"><i class="fas fa-search"></i> 解析</button>
                             </div>
                         </div>
 
@@ -181,14 +181,21 @@
                                 <button id="netease-save-dir" class="btn-normal"><i class="fas fa-save"></i> 保存设置</button>
                             </div>
                         </div>
-                    </div>
+                </div>
 
-                    <div class="section-subtitle">搜索结果</div>
-                    <div id="netease-result-list" class="netease-result-list">
-                        <div class="loading-text">等待搜索...</div>
-                    </div>
+                <div class="section-subtitle">搜索结果</div>
+                <div class="netease-bulk-row">
+                    <label class="netease-check">
+                        <input type="checkbox" id="netease-select-all">
+                        <span>全选</span>
+                    </label>
+                    <button id="netease-bulk-download" class="btn-primary"><i class="fas fa-download"></i> 下载选中</button>
+                </div>
+                <div id="netease-result-list" class="netease-result-list">
+                    <div class="loading-text">等待搜索...</div>
                 </div>
             </div>
+        </div>
         </div>
     </main>
 

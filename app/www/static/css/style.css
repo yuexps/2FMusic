@@ -47,7 +47,7 @@ body {
     background: url('../images/BG.png') no-repeat center center fixed;
     background-size: cover;
     cursor: default;
-    
+
     /* === 核心原生化设置 === */
     /* 禁用下拉刷新/弹性滚动，让应用更稳定 */
     overscroll-behavior: none;
@@ -92,7 +92,8 @@ body::before {
     display: flex;
     flex-direction: column;
     padding: 1.5rem;
-    padding-top: calc(1.5rem + var(--safe-area-inset-top)); /* 适配顶部 */
+    padding-top: calc(1.5rem + var(--safe-area-inset-top));
+    /* 适配顶部 */
     background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(20px);
     border-right: 1px solid var(--glass-border);
@@ -134,18 +135,20 @@ body::before {
 }
 
 #sidebar nav ul li:active {
-    transform: scale(0.98); /* 增加点击反馈 */
+    transform: scale(0.98);
+    /* 增加点击反馈 */
 }
 
 #main-content {
     grid-area: main;
     overflow-y: auto;
     position: relative;
-    scrollbar-gutter: stable; 
-    overflow-y: scroll; 
+    scrollbar-gutter: stable;
+    overflow-y: scroll;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
-    padding-top: var(--safe-area-inset-top); /* 适配顶部 */
+    padding-top: var(--safe-area-inset-top);
+    /* 适配顶部 */
 }
 
 @supports (scrollbar-gutter: stable) {
@@ -221,7 +224,7 @@ body::before {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
     gap: 1.2rem;
-    min-height: 60vh; 
+    min-height: 60vh;
     align-content: start;
 }
 
@@ -229,11 +232,12 @@ body::before {
     background: rgba(255, 255, 255, 0.05);
     padding: 0.8rem;
     border-radius: 0.6rem;
-    transition: transform 0.1s; /* 加快动画 */
+    transition: transform 0.1s;
+    /* 加快动画 */
     cursor: pointer;
     border: 1px solid transparent;
     position: relative;
-    contain: content; 
+    contain: content;
 }
 
 .song-card:hover {
@@ -244,7 +248,7 @@ body::before {
 
 /* 移动端点击效果 */
 .song-card:active {
-    transform: scale(0.97); 
+    transform: scale(0.97);
     background: rgba(255, 255, 255, 0.2);
 }
 
@@ -268,9 +272,9 @@ body::before {
     border-radius: 0.4rem;
     margin-bottom: 0.6rem;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-    background: rgba(0,0,0,0.2); 
+    background: rgba(0, 0, 0, 0.2);
     /* 图片禁止点击事件穿透，防止长按弹出保存 */
-    pointer-events: none; 
+    pointer-events: none;
 }
 
 .song-card .title {
@@ -279,7 +283,7 @@ body::before {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 0.95rem; 
+    font-size: 0.95rem;
 }
 
 .song-card .artist {
@@ -335,7 +339,8 @@ body::before {
     align-items: center;
     padding: 0 2rem;
     z-index: 100;
-    padding-bottom: var(--safe-area-inset-bottom); /* 适配底部横条 */
+    padding-bottom: var(--safe-area-inset-bottom);
+    /* 适配底部横条 */
 }
 
 .player-info {
@@ -393,7 +398,7 @@ body::before {
     cursor: pointer;
     transition: 0.2s;
     /* 扩大触摸区域 */
-    padding: 0.5rem; 
+    padding: 0.5rem;
     margin: -0.5rem;
 }
 
@@ -734,13 +739,13 @@ input[type=range]::-webkit-slider-thumb {
     color: white;
     padding: 0.8rem 1.5rem;
     border-radius: 2rem;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     font-size: 0.9rem;
     opacity: 0;
     transform: translateY(-20px);
     transition: all 0.3s ease;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     white-space: nowrap;
 }
 
@@ -847,7 +852,7 @@ input[type=range]::-webkit-slider-thumb {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+    box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.5);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -1087,15 +1092,17 @@ input[type=range]::-webkit-slider-thumb {
 
 /* === 移动端适配核心部分 (修复重写) === */
 @media (max-width: 768px) {
+
     /* 强制重置 html 字体大小，避免 JS 的 scale 影响手机显示 */
     html {
-        font-size: 16px !important; 
+        font-size: 16px !important;
     }
 
     #app {
         grid-template-areas: "main" "footer";
         grid-template-columns: 1fr;
-        grid-template-rows: 1fr 4rem; /* 底部播放条稍微加高一点点 */
+        grid-template-rows: 1fr 4rem;
+        /* 底部播放条稍微加高一点点 */
     }
 
     #sidebar {
@@ -1136,19 +1143,21 @@ input[type=range]::-webkit-slider-thumb {
         flex-direction: column;
         gap: 0.6rem;
         /* 手机端不需要 min-height 占位太多 */
-        min-height: auto; 
+        min-height: auto;
     }
 
     .song-card {
         display: flex;
-        flex-direction: row; /* 水平排列图片和文字 */
+        flex-direction: row;
+        /* 水平排列图片和文字 */
         align-items: center;
         padding: 0.6rem;
         gap: 0.8rem;
         width: 100%;
         background: rgba(40, 40, 40, 0.4);
         margin-bottom: 0;
-        height: 4.5rem; /* 固定高度确保整齐 */
+        height: 4.5rem;
+        /* 固定高度确保整齐 */
     }
 
     .song-card img {
@@ -1160,7 +1169,8 @@ input[type=range]::-webkit-slider-thumb {
 
     .song-card .card-info {
         flex: 1;
-        min-width: 0; /* 允许 flex 子项内的文本截断 */
+        min-width: 0;
+        /* 允许 flex 子项内的文本截断 */
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -1203,7 +1213,7 @@ input[type=range]::-webkit-slider-thumb {
         flex: 1;
         margin-right: 0.5rem;
     }
-    
+
     #player-bar .player-info img {
         width: 3rem;
         height: 3rem;
@@ -1222,39 +1232,51 @@ input[type=range]::-webkit-slider-thumb {
     .fp-header {
         padding: 1rem;
         height: 4rem;
-        flex: 0 0 auto; /* 防止被压缩 */
+        flex: 0 0 auto;
+        /* 防止被压缩 */
     }
 
     /* 核心布局修复：垂直排列，且内容不溢出 */
     .fp-content {
         flex-direction: column;
         padding: 0.5rem 1.5rem;
-        gap: 1rem; /* 稍微减小间距 */
+        gap: 1rem;
+        /* 稍微减小间距 */
         height: auto;
-        overflow: hidden; /* 内部滚动 */
+        overflow: hidden;
+        /* 内部滚动 */
         justify-content: flex-start;
     }
 
     /* 封面区域：改为横向排列 (Row Layout) */
     .fp-art-area {
         width: 100%;
-        max-width: 100%; /* 允许撑满宽度 */
+        max-width: 100%;
+        /* 允许撑满宽度 */
         height: auto;
-        flex: 0 0 auto; /* 封面不伸缩 */
+        flex: 0 0 auto;
+        /* 封面不伸缩 */
         margin-top: 0.5rem;
-        
-        display: flex; /* 启用 Flex */
-        flex-direction: row; /* 水平排列 */
-        align-items: center; /* 垂直居中 */
-        justify-content: flex-start; /* 左对齐 */
-        text-align: left; /* 文字左对齐 */
-        gap: 1rem; /* 图片与文字的间距 */
+
+        display: flex;
+        /* 启用 Flex */
+        flex-direction: row;
+        /* 水平排列 */
+        align-items: center;
+        /* 垂直居中 */
+        justify-content: flex-start;
+        /* 左对齐 */
+        text-align: left;
+        /* 文字左对齐 */
+        gap: 1rem;
+        /* 图片与文字的间距 */
     }
 
     .fp-art-area img {
-        margin-bottom: 0; /* 移除底部间距 */
+        margin-bottom: 0;
+        /* 移除底部间距 */
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-        
+
         /* 固定较小尺寸 (例如 4.5rem = 72px) */
         width: 4.5rem;
         height: 4.5rem;
@@ -1265,11 +1287,14 @@ input[type=range]::-webkit-slider-thumb {
 
     /* 信息区域：适应横向布局 */
     .fp-info {
-        flex: 1; /* 占据剩余宽度 */
-        min-width: 0; /* 关键：允许 Flex 子项内的文本截断 */
+        flex: 1;
+        /* 占据剩余宽度 */
+        min-width: 0;
+        /* 关键：允许 Flex 子项内的文本截断 */
         display: flex;
         flex-direction: column;
-        align-items: flex-start; /* 文字左对齐 */
+        align-items: flex-start;
+        /* 文字左对齐 */
         justify-content: center;
     }
 
@@ -1281,7 +1306,7 @@ input[type=range]::-webkit-slider-thumb {
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    
+
     .fp-info p {
         font-size: 0.9rem;
         color: var(--text-sub);
@@ -1295,8 +1320,9 @@ input[type=range]::-webkit-slider-thumb {
     .fp-lyrics-area {
         width: 100%;
         flex: 1;
-        height: 100%; 
-        min-height: 0; /* 关键：允许 flex 容器缩小以显示滚动条 */
+        height: 100%;
+        min-height: 0;
+        /* 关键：允许 flex 容器缩小以显示滚动条 */
         mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
         padding: 0;
         margin-bottom: 0.5rem;
@@ -1315,35 +1341,36 @@ input[type=range]::-webkit-slider-thumb {
     .fp-controls {
         padding: 1rem 1.5rem 2rem 1.5rem;
         height: auto;
-        flex: 0 0 auto; /* 高度自适应内容 */
+        flex: 0 0 auto;
+        /* 高度自适应内容 */
         gap: 1.2rem;
         padding-bottom: calc(2rem + var(--safe-area-inset-bottom));
     }
-    
+
     .fp-progress-bar {
         margin-bottom: 0.5rem;
     }
-    
+
     .fp-buttons {
         gap: 1rem;
     }
-    
+
     .play-huge {
         width: 3.5rem;
         height: 3.5rem;
         font-size: 1.2rem;
     }
-    
+
     /* 修复挂载页输入框 */
     .mount-input-group {
         flex-direction: column;
     }
-    
+
     .mount-input-group input {
         width: 100%;
         margin-bottom: 0.5rem;
     }
-    
+
     .btn-primary {
         width: 100%;
     }
@@ -1357,29 +1384,34 @@ input[type=range]::-webkit-slider-thumb {
 #fp-progress-bar {
     /* 移除默认样式 */
     -webkit-appearance: none;
-    appearance: none; 
-    
+    appearance: none;
+
     /* 尺寸与背景 */
-    height: 6px; /* 比底部栏的更粗一点 */
+    height: 6px;
+    /* 比底部栏的更粗一点 */
     border-radius: 3px;
-    background-color: rgba(255, 255, 255, 0.15); /* 未播放部分的颜色 */
-    
+    background-color: rgba(255, 255, 255, 0.15);
+    /* 未播放部分的颜色 */
+
     /* 进度填充 (由 JS 控制 background-size) */
     background-image: linear-gradient(90deg, var(--primary), var(--primary));
     background-repeat: no-repeat;
     /* 初始填充设为0，JS会更新它 */
-    background-size: 0% 100%; 
-    
+    background-size: 0% 100%;
+
     /* 交互设置 */
     cursor: pointer;
-    touch-action: none; /* 防止拖动时触发页面滚动 */
-    transition: height 0.2s ease; /* 高度变化的过渡动画 */
+    touch-action: none;
+    /* 防止拖动时触发页面滚动 */
+    transition: height 0.2s ease;
+    /* 高度变化的过渡动画 */
 }
 
 /* 2. 只有在手指按下或鼠标悬停时，轨道稍微变高，增加沉浸感 */
 #fp-progress-bar:hover,
 #fp-progress-bar:active {
-    height: 10px; /* 交互时变粗 */
+    height: 10px;
+    /* 交互时变粗 */
     border-radius: 5px;
 }
 
@@ -1387,23 +1419,26 @@ input[type=range]::-webkit-slider-thumb {
 #fp-progress-bar::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    
+
     /* 尺寸与形状 */
-    width: 16px;  /* 默认大小 */
+    width: 16px;
+    /* 默认大小 */
     height: 16px;
     border-radius: 50%;
     background: #ffffff;
-    
+
     /* 阴影增加立体感 */
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
     border: none;
-    
+
     /* 动画过渡 */
-    transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* 弹性动画 */
-    transform: scale(1); /* 默认大小 */
-    
+    transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    /* 弹性动画 */
+    transform: scale(1);
+    /* 默认大小 */
+
     /* 位置修正 (部分浏览器可能需要) */
-    margin-top: 0; 
+    margin-top: 0;
 }
 
 /* 4. 拖拽滑块 - Firefox 兼容 */
@@ -1421,8 +1456,10 @@ input[type=range]::-webkit-slider-thumb {
 /* 5. 交互反馈：按下或悬停时，滑块变大 */
 #fp-progress-bar:hover::-webkit-slider-thumb,
 #fp-progress-bar:active::-webkit-slider-thumb {
-    transform: scale(1.5); /* 放大 1.5 倍 */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); /* 阴影加深 */
+    transform: scale(1.5);
+    /* 放大 1.5 倍 */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    /* 阴影加深 */
 }
 
 #fp-progress-bar:hover::-moz-range-thumb,
@@ -1432,12 +1469,14 @@ input[type=range]::-webkit-slider-thumb {
 }
 
 /* 6. 调整时间文字的样式，使其与新进度条更协调 */
-#fp-time-current, 
+#fp-time-current,
 #fp-time-total {
-    font-variant-numeric: tabular-nums; /* 等宽数字，防止时间跳动导致布局抖动 */
+    font-variant-numeric: tabular-nums;
+    /* 等宽数字，防止时间跳动导致布局抖动 */
     font-size: 0.85rem;
     color: rgba(255, 255, 255, 0.6);
-    min-width: 2.5rem; /* 预留宽度 */
+    min-width: 2.5rem;
+    /* 预留宽度 */
     text-align: center;
     font-weight: 500;
 }
@@ -1446,12 +1485,14 @@ input[type=range]::-webkit-slider-thumb {
 .netease-search-box {
     display: flex;
     flex-direction: column;
-    padding: 0; /* Reset padding, inner elements have padding */
+    padding: 0;
+    /* Reset padding, inner elements have padding */
     border-radius: 1.2rem;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 12px 32px rgba(0,0,0,0.15);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
     background: rgba(255, 255, 255, 0.02);
-    overflow: hidden; /* For rounded corners */
+    overflow: hidden;
+    /* For rounded corners */
 }
 
 /* Status Section (Top of Card) */
@@ -1471,10 +1512,12 @@ input[type=range]::-webkit-slider-thumb {
     flex-direction: column;
     justify-content: center;
 }
+
 .netease-status-card.status-ok {
     border-color: rgba(67, 217, 173, 0.35);
     background: rgba(67, 217, 173, 0.12);
 }
+
 .netease-status-card.status-bad {
     border-color: rgba(255, 99, 132, 0.35);
     background: rgba(255, 99, 132, 0.12);
@@ -1486,16 +1529,27 @@ input[type=range]::-webkit-slider-thumb {
     align-items: center;
     gap: 1rem;
 }
+
 .netease-status-text {
     flex: 1;
 }
-.netease-status { font-weight: 700; font-size: 1.1rem; margin-bottom: 0.2rem; }
-.netease-status-desc { color: rgba(255, 255, 255, 0.6); font-size: 0.85rem; }
+
+.netease-status {
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: 0.2rem;
+}
+
+.netease-status-desc {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.85rem;
+}
 
 .netease-actions-inline {
     display: flex;
     gap: 0.8rem;
 }
+
 .netease-actions-inline button {
     padding: 0.5rem 1rem;
     border-radius: 2rem;
@@ -1554,8 +1608,15 @@ input[type=range]::-webkit-slider-thumb {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(5px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Tab Content Rows */
@@ -1588,7 +1649,10 @@ input[type=range]::-webkit-slider-thumb {
     background: rgba(0, 0, 0, 0.2);
     color: var(--text-main);
 }
-.netease-search-row input:focus, .netease-id-row input:focus, .netease-path-row input:focus {
+
+.netease-search-row input:focus,
+.netease-id-row input:focus,
+.netease-path-row input:focus {
     border-color: var(--primary);
     background: rgba(0, 0, 0, 0.4);
 }
@@ -1608,13 +1672,18 @@ input[type=range]::-webkit-slider-thumb {
         flex-direction: column;
         align-items: stretch;
     }
+
     .netease-actions-inline {
         margin-top: 1rem;
         justify-content: flex-end;
     }
-    .netease-search-row, .netease-id-row, .netease-path-row {
+
+    .netease-search-row,
+    .netease-id-row,
+    .netease-path-row {
         grid-template-columns: 1fr;
     }
+
     .tab-btn {
         padding: 0.8rem 0.5rem;
         font-size: 0.9rem;
@@ -1622,21 +1691,23 @@ input[type=range]::-webkit-slider-thumb {
 }
 
 /* Download Panel & Floating Button */
-#view-netease { position: relative; }
+#view-netease {
+    position: relative;
+}
 
 .netease-download-floating {
     position: absolute;
     right: 0;
     top: -0.4rem;
     border-radius: 12px;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     color: var(--text-main);
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
     padding: 0.45rem 0.75rem;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
     cursor: pointer;
 }
 
@@ -1673,12 +1744,17 @@ input[type=range]::-webkit-slider-thumb {
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.02);
 }
-.netease-download-title { font-weight: bold; }
+
+.netease-download-title {
+    font-weight: bold;
+}
+
 .netease-download-list {
     max-height: 300px;
     overflow-y: auto;
     padding: 0.5rem;
 }
+
 .download-item {
     padding: 0.8rem;
     border-radius: 0.6rem;
@@ -1686,14 +1762,50 @@ input[type=range]::-webkit-slider-thumb {
     justify-content: space-between;
     align-items: center;
 }
-.download-item:hover { background: rgba(255,255,255,0.05); }
-.download-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; margin-right: 1rem; }
-.download-title { font-size: 0.9rem; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.download-artist { font-size: 0.75rem; color: rgba(255,255,255,0.5); }
-.download-status { font-size: 0.75rem; display: flex; align-items: center; gap: 0.3rem; }
-.download-status.downloading { color: #43d9ad; }
-.download-status.error { color: #ff4757; }
-.download-status.success { color: #43d9ad; }
+
+.download-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.download-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+    margin-right: 1rem;
+}
+
+.download-title {
+    font-size: 0.9rem;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.download-artist {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.download-status {
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.download-status.downloading {
+    color: #43d9ad;
+}
+
+.download-status.error {
+    color: #ff4757;
+}
+
+.download-status.success {
+    color: #43d9ad;
+}
 
 /* QR Code */
 .netease-qr-box {
@@ -1702,8 +1814,18 @@ input[type=range]::-webkit-slider-thumb {
     padding: 0.8rem;
     text-align: center;
 }
-.netease-qr-box img { width: 140px; height: 140px; }
-.netease-qr-hint { margin-top: 0.5rem; font-size: 0.8rem; color: #333; font-weight: bold; }
+
+.netease-qr-box img {
+    width: 140px;
+    height: 140px;
+}
+
+.netease-qr-hint {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: #333;
+    font-weight: bold;
+}
 
 
 .netease-gate {
@@ -1712,38 +1834,55 @@ input[type=range]::-webkit-slider-thumb {
     gap: 1rem;
     padding: 1.2rem 1.4rem;
     margin-bottom: 1.2rem;
-    border: 1px dashed rgba(255,255,255,0.1);
-    flex-wrap: wrap; /* Allow wrapping on small screens */
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    flex-wrap: wrap;
+    /* Allow wrapping on small screens */
 }
+
 .netease-gate .gate-icon {
     width: 48px;
     height: 48px;
     display: grid;
     place-items: center;
     border-radius: 12px;
-    background: rgba(255,255,255,0.08);
+    background: rgba(255, 255, 255, 0.08);
     color: var(--primary);
     font-size: 1.3rem;
     flex-shrink: 0;
 }
-.netease-gate .gate-title { font-weight: 700; font-size: 1.05rem; }
-.netease-gate .gate-desc { color: rgba(255,255,255,0.65); font-size: 0.95rem; margin-top: 0.2rem; }
-.netease-gate .gate-actions { margin-left: auto; }
+
+.netease-gate .gate-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+
+.netease-gate .gate-desc {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.95rem;
+    margin-top: 0.2rem;
+}
+
+.netease-gate .gate-actions {
+    margin-left: auto;
+}
+
 .netease-gate .gate-form {
     margin-left: auto;
     display: flex;
     gap: 0.8rem;
     align-items: center;
 }
+
 .netease-gate .gate-form input {
     padding: 0.6rem 1rem;
     border-radius: 0.5rem;
-    border: 1px solid rgba(255,255,255,0.2);
-    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.3);
     color: white;
     width: 220px;
     font-size: 0.9rem;
 }
+
 .netease-gate .gate-form button {
     white-space: nowrap;
     padding: 0.6rem 1.2rem;
@@ -1756,15 +1895,18 @@ input[type=range]::-webkit-slider-thumb {
         align-items: flex-start;
         gap: 1.5rem;
     }
+
     .netease-gate .gate-form {
         margin-left: 0;
         width: 100%;
         flex-direction: column;
         align-items: stretch;
     }
+
     .netease-gate .gate-form input {
         width: 100%;
     }
+
     .netease-gate .gate-form button {
         width: 100%;
     }
@@ -1781,17 +1923,20 @@ input[type=range]::-webkit-slider-thumb {
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
-    padding: 0.5rem 0; /* Remove side padding as we removed the container bg */
+    padding: 0.5rem 0;
+    /* Remove side padding as we removed the container bg */
 }
 
 .netease-card {
     display: grid;
-    grid-template-columns: 60px 1fr auto; /* Slightly smaller image */
+    grid-template-columns: 32px 60px 1fr auto;
+    /* Slightly smaller image with checkbox */
     gap: 1rem;
     align-items: center;
     padding: 0.8rem 1.2rem;
     border-radius: 1rem;
-    background: rgba(255, 255, 255, 0.06); /* Slightly brighter */
+    background: rgba(255, 255, 255, 0.06);
+    /* Slightly brighter */
     border: 1px solid rgba(255, 255, 255, 0.05);
     transition: all 0.2s ease;
     backdrop-filter: blur(10px);
@@ -1801,7 +1946,7 @@ input[type=range]::-webkit-slider-thumb {
     transform: translateY(-2px);
     background: rgba(255, 255, 255, 0.12);
     border-color: rgba(255, 255, 255, 0.2);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
 .netease-card img {
@@ -1809,7 +1954,7 @@ input[type=range]::-webkit-slider-thumb {
     height: 60px;
     object-fit: cover;
     border-radius: 0.5rem;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .netease-meta .title {
@@ -1850,6 +1995,37 @@ input[type=range]::-webkit-slider-thumb {
     gap: 0.5rem;
 }
 
+.netease-bulk-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    /* Space between "Select All" and "Download" */
+    margin: 1rem 0;
+    padding: 0 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 0.5rem;
+    padding: 0.8rem 1.2rem;
+}
+
+.netease-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.netease-check input {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--primary);
+    cursor: pointer;
+    margin: 0;
+}
+
 .netease-actions .btn-primary {
     white-space: nowrap;
     border-radius: 2rem;
@@ -1857,32 +2033,53 @@ input[type=range]::-webkit-slider-thumb {
     font-size: 0.9rem;
 }
 
+.netease-select {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.netease-select input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
 @media (max-width: 768px) {
     #view-netease {
         padding-top: 2.5rem;
     }
+
     .netease-download-floating {
         top: 0;
     }
+
     .netease-hero {
         grid-template-columns: 1fr;
     }
+
     .netease-login-row {
         grid-template-columns: 1fr;
     }
+
     .netease-search-row {
         grid-template-columns: 1fr;
     }
+
     .netease-id-row {
         grid-template-columns: 1fr;
     }
+
     .netease-path-row {
         grid-template-columns: 1fr;
     }
+
     .netease-card {
-        grid-template-columns: 64px 1fr;
+        grid-template-columns: 32px 64px 1fr;
         grid-template-rows: auto auto;
     }
+
     .netease-actions {
         grid-column: 1 / -1;
         justify-content: flex-start;

@@ -886,6 +886,37 @@ def netease_playlist_detail():
         logger.warning(f"歌单获取失败: {e}")
         return jsonify({'success': False, 'error': '获取歌单失败'})
 
+@app.route('/api/netease/song')
+def netease_song_detail():
+    """根据单曲ID获取歌曲详情，用于解析而非直接下载。"""
+    song_id = request.args.get('id')
+    if not song_id:
+        return jsonify({'success': False, 'error': '缺少歌曲ID'})
+    try:
+        detail_resp = call_netease_api('/song/detail', {'ids': song_id})
+        songs = detail_resp.get('songs', []) if isinstance(detail_resp, dict) else []
+        parsed = []
+        for item in songs:
+            sid = item.get('id')
+            if not sid:
+                continue
+            artists = ' / '.join([a.get('name') for a in item.get('ar', []) if a.get('name')]) or '未知艺术家'
+            album_info = item.get('al') or {}
+            parsed.append({
+                'id': sid,
+                'title': item.get('name') or f"未命名 {sid}",
+                'artist': artists,
+                'album': album_info.get('name') or '',
+                'cover': album_info.get('picUrl'),
+                'duration': (item.get('dt') or 0) / 1000
+            })
+        if not parsed:
+            return jsonify({'success': False, 'error': '未获取到歌曲信息'})
+        return jsonify({'success': True, 'data': parsed})
+    except Exception as e:
+        logger.warning(f"获取单曲详情失败: {e}")
+        return jsonify({'success': False, 'error': '获取歌曲信息失败'})
+
 @app.route('/api/netease/download', methods=['POST'])
 def download_netease_music():
     """根据歌曲ID下载网易云音乐到本地库。"""
