@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { ui } from './ui.js';
 import { api } from './api.js';
-import { showToast, hideProgressToast, formatTime } from './utils.js';
+import { showToast, showConfirmDialog, hideProgressToast, formatTime } from './utils.js';
 
 // 网易云业务
 let songRefreshCallback = null;
@@ -293,48 +293,40 @@ async function searchNeteaseSongs() {
 }
 
 async function loadNeteaseConfig() {
+  let apiBase = 'http://localhost:23236'; // Default
+
   try {
     const json = await api.netease.configGet();
     if (json.success) {
+      if (json.api_base) apiBase = json.api_base;
       state.neteaseDownloadDir = json.download_dir || '';
-      state.neteaseApiBase = json.api_base || '';
       if (ui.neteaseDownloadDirInput) ui.neteaseDownloadDirInput.value = state.neteaseDownloadDir;
-      if (ui.neteaseApiGateInput) ui.neteaseApiGateInput.value = state.neteaseApiBase || 'http://localhost:3000';
+    }
+  } catch (err) {
+    console.warn('Config load failed, utilizing default:', err);
+  }
 
-      if (state.neteaseApiBase) {
-        // 1. 优先使用缓存状态渲染 UI (SWR 策略)
-        if (state.neteaseUser) {
-          toggleNeteaseGate(true);
-          renderLoginSuccessUI(state.neteaseUser);
-        }
+  // Update State & UI
+  state.neteaseApiBase = apiBase;
+  if (ui.neteaseApiGateInput) ui.neteaseApiGateInput.value = apiBase;
 
-        // 2. 后台验证状态
-        try {
-          const statusJson = await api.netease.loginStatus();
-          if (statusJson.success) {
-            toggleNeteaseGate(true);
-            refreshLoginStatus(); // 这会更新 state.neteaseUser 和 localStorage
-          } else {
-            // 只有明确失败才清除缓存（避免网络抖动导致登录态丢失）
-            if (state.neteaseUser) {
-              // 可选：如果 API 明确返回未登录，才清除
-              // 但为了稳健，这里暂不立刻清除 UI，而是交给 refreshLoginStatus 处理
-              refreshLoginStatus();
-            } else {
-              toggleNeteaseGate(false);
-            }
-          }
-        } catch (e) {
-          // 网络错误，保持缓存显示的 UI 不变
-          if (!state.neteaseUser) toggleNeteaseGate(false);
-        }
+  // Auto-Connect Attempt
+  try {
+    const statusJson = await api.netease.loginStatus();
+    if (statusJson.success) {
+      toggleNeteaseGate(true);
+      refreshLoginStatus();
+    } else {
+      // Connection failed or not logged in
+      if (state.neteaseUser) {
+        refreshLoginStatus(); // check if just session expired
       } else {
         toggleNeteaseGate(false);
       }
     }
-  } catch (err) {
-    console.error('config error', err);
-    toggleNeteaseGate(false);
+  } catch (e) {
+    // Network error or container down
+    if (!state.neteaseUser) toggleNeteaseGate(false);
   }
 }
 
@@ -350,7 +342,7 @@ async function saveNeteaseConfig() {
     if (json.success) {
       state.neteaseDownloadDir = json.download_dir;
       state.neteaseApiBase = json.api_base || '';
-      if (ui.neteaseApiGateInput) ui.neteaseApiGateInput.value = state.neteaseApiBase || 'http://localhost:3000';
+      if (ui.neteaseApiGateInput) ui.neteaseApiGateInput.value = state.neteaseApiBase || 'http://localhost:23236';
       toggleNeteaseGate(!!state.neteaseApiBase);
       showToast('保存成功');
     } else {
@@ -399,6 +391,7 @@ function renderLoginSuccessUI(user) {
   if (ui.neteaseLoginDesc) ui.neteaseLoginDesc.innerText = '可以开始搜索或下载歌曲';
   if (ui.neteaseQrImg) ui.neteaseQrImg.src = '';
   ui.neteaseQrModal?.classList.remove('active');
+  if (ui.neteaseLoginBtn) ui.neteaseLoginBtn.style.display = 'none';
 }
 
 async function refreshLoginStatus(showToastMsg = false) {
@@ -419,7 +412,9 @@ async function refreshLoginStatus(showToastMsg = false) {
       ui.neteaseLoginStatus.innerText = json.error || '未登录';
       ui.neteaseLoginCard?.classList.remove('status-ok');
       ui.neteaseLoginCard?.classList.add('status-bad');
+      ui.neteaseLoginCard?.classList.add('status-bad');
       if (ui.neteaseLoginDesc) ui.neteaseLoginDesc.innerText = '请扫码登录网易云账号';
+      if (ui.neteaseLoginBtn) ui.neteaseLoginBtn.style.display = '';
       if (showToastMsg) showToast(json.error || '未登录');
     }
   } catch (err) {
@@ -543,12 +538,84 @@ function bindEvents() {
   });
   ui.neteaseApiGateBtn?.addEventListener('click', bindNeteaseApi);
   if (ui.neteaseChangeApiBtn) ui.neteaseChangeApiBtn.addEventListener('click', () => toggleNeteaseGate(false));
-  if (ui.neteaseOpenConfigBtn && ui.neteaseApiGateInput) {
-    ui.neteaseOpenConfigBtn.addEventListener('click', () => {
-      ui.neteaseApiGateInput.focus();
-      ui.neteaseApiGateInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
-  }
+  ui.neteaseOpenConfigBtn.addEventListener('click', () => {
+    ui.neteaseApiGateInput.focus();
+    ui.neteaseApiGateInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+// 自动安装按钮事件
+// 自动安装按钮事件
+// 自动安装按钮事件
+const installBtn = document.getElementById('netease-api-install-btn');
+const progressContainer = document.getElementById('install-progress-container');
+const progressBar = document.getElementById('install-progress-bar');
+const stepText = document.getElementById('install-step-text');
+const percentText = document.getElementById('install-percent-text');
+
+if (installBtn) {
+  installBtn.addEventListener('click', () => {
+    // 使用自定义确认框
+    showConfirmDialog(
+      '确认安装',
+      '确定要尝试安装并启动 API 服务容器吗？。',
+      async () => {
+        // Confirm Callback
+        installBtn.disabled = true;
+        installBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 正在启动...';
+        if (progressContainer) progressContainer.classList.remove('hidden');
+
+        try {
+          const res = await api.netease.installService();
+          if (res.success) {
+            // 开始轮询进度
+            const pollTimer = setInterval(async () => {
+              try {
+                const statusRes = await api.netease.getInstallStatus();
+                const { status, progress, step, error } = statusRes;
+
+                // 更新 UI
+                if (progressBar) progressBar.style.width = `${progress}%`;
+                if (percentText) percentText.innerText = `${progress}%`;
+                if (stepText) stepText.innerText = step || '进行中...';
+
+                if (status === 'success') {
+                  clearInterval(pollTimer);
+                  installBtn.innerHTML = '<i class="fas fa-check"></i> 安装完成';
+                  showToast('服务已就绪，正在自动连接...', 'success');
+
+                  // 自动填充地址并连接
+                  if (ui.neteaseApiGateInput) ui.neteaseApiGateInput.value = 'http://localhost:23236';
+                  setTimeout(() => {
+                    if (ui.neteaseApiGateBtn) ui.neteaseApiGateBtn.click();
+                  }, 1000);
+
+                } else if (status === 'error') {
+                  clearInterval(pollTimer);
+                  installBtn.disabled = false;
+                  installBtn.innerHTML = '<i class="fas fa-magic"></i> 重试安装';
+                  showToast(`安装出错: ${error}`, 'error');
+                }
+              } catch (e) {
+                console.error("轮询状态失败", e);
+              }
+            }, 1000);
+          } else {
+            showToast(res.error || '请求失败', 'error');
+            installBtn.disabled = false;
+            installBtn.innerHTML = '<i class="fas fa-magic"></i> 一键安装 & 连接';
+            if (progressContainer) progressContainer.classList.add('hidden');
+          }
+        } catch (e) {
+          console.error(e);
+          showToast('请求异常', 'error');
+          installBtn.disabled = false;
+          installBtn.innerHTML = '<i class="fas fa-magic"></i> 一键安装 & 连接';
+          if (progressContainer) progressContainer.classList.add('hidden');
+        }
+      }
+    );
+  });
 }
 
 export async function initNetease(onRefreshSongs) {

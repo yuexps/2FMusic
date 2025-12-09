@@ -347,13 +347,21 @@ function prevTrack() {
   if (state.playMode === 1) playTrack(Math.floor(Math.random() * state.playQueue.length));
   else { let prevIndex = state.currentTrackIndex - 1; if (prevIndex < 0) prevIndex = state.playQueue.length - 1; playTrack(prevIndex); }
 }
+// 滑动状态
+let isDragging = false;
+
 ui.audio.addEventListener('ended', () => { if (state.playMode === 2) { ui.audio.currentTime = 0; ui.audio.play(); } else nextTrack(); });
 
 let lastVolume = 1.0;
 function updateVolumeUI(val) {
   if (ui.volumeSlider) { ui.volumeSlider.value = val; updateSliderFill(ui.volumeSlider); }
+  updateVolumeIcon(val);
+}
+
+function updateVolumeIcon(val) {
   if (ui.volIcon) { ui.volIcon.className = ''; if (val === 0) ui.volIcon.className = 'fas fa-volume-mute'; else if (val < 0.5) ui.volIcon.className = 'fas fa-volume-down'; else ui.volIcon.className = 'fas fa-volume-up'; }
 }
+
 function toggleMute() {
   if (ui.audio.volume > 0) { lastVolume = ui.audio.volume; ui.audio.volume = 0; updateVolumeUI(0); } else { ui.audio.volume = lastVolume > 0 ? lastVolume : 0.5; updateVolumeUI(ui.audio.volume); }
   persistState(ui.audio);
@@ -364,11 +372,8 @@ ui.audio.addEventListener('pause', () => persistState(ui.audio)); // 暂停时�
 ui.audio.addEventListener('timeupdate', () => {
   throttledPersist(); // 定期保存
   if (!ui.audio.duration) return;
-  const percent = (ui.audio.currentTime / ui.audio.duration) * 100;
-  const timeStr = formatTime(ui.audio.currentTime);
-  if (ui.progressBar) { ui.progressBar.value = percent; updateSliderFill(ui.progressBar); }
-  if (ui.fpProgressBar) { ui.fpProgressBar.value = percent; updateSliderFill(ui.fpProgressBar); }
-  ['time-current', 'fp-time-current'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = timeStr; });
+
+  // Process lyrics always
   if (state.lyricsData.length) {
     let idx = state.lyricsData.findIndex(l => l.time > ui.audio.currentTime);
     idx = idx === -1 ? state.lyricsData.length - 1 : idx - 1;
@@ -381,14 +386,58 @@ ui.audio.addEventListener('timeupdate', () => {
       }
     }
   }
+
+  // Only update sliders if not dragging
+  if (!isDragging) {
+    const percent = (ui.audio.currentTime / ui.audio.duration) * 100;
+    const timeStr = formatTime(ui.audio.currentTime);
+
+    if (ui.progressBar) { ui.progressBar.value = percent; updateSliderFill(ui.progressBar); }
+    if (ui.fpProgressBar) { ui.fpProgressBar.value = percent; updateSliderFill(ui.fpProgressBar); }
+    ['time-current', 'fp-time-current'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = timeStr; });
+  }
 });
+
 ui.audio.addEventListener('loadedmetadata', () => {
   const totalStr = formatTime(ui.audio.duration);
   ['time-total', 'fp-time-total'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = totalStr; });
 });
-function seek(e) { if (ui.audio.duration) ui.audio.currentTime = (e.target.value / 100) * ui.audio.duration; updateSliderFill(e.target); }
-ui.progressBar?.addEventListener('input', seek);
-ui.fpProgressBar?.addEventListener('input', seek);
+
+// Progress Bar Logic
+function onProgressInput(e) {
+  isDragging = true;
+  const val = e.target.value;
+  updateSliderFill(e.target);
+
+  // Sync Visuals
+  if (e.target === ui.progressBar && ui.fpProgressBar) { ui.fpProgressBar.value = val; updateSliderFill(ui.fpProgressBar); }
+  if (e.target === ui.fpProgressBar && ui.progressBar) { ui.progressBar.value = val; updateSliderFill(ui.progressBar); }
+
+  // Update Time Text Visuals
+  if (ui.audio.duration) {
+    const time = (val / 100) * ui.audio.duration;
+    const timeStr = formatTime(time);
+    ['time-current', 'fp-time-current'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = timeStr; });
+  }
+}
+
+function onProgressChange(e) {
+  isDragging = false;
+  if (ui.audio.duration) {
+    ui.audio.currentTime = (e.target.value / 100) * ui.audio.duration;
+  }
+  updateSliderFill(e.target);
+}
+
+// Bind Events replaces the old simple binding
+if (ui.progressBar) {
+  ui.progressBar.addEventListener('input', onProgressInput);
+  ui.progressBar.addEventListener('change', onProgressChange);
+}
+if (ui.fpProgressBar) {
+  ui.fpProgressBar.addEventListener('input', onProgressInput);
+  ui.fpProgressBar.addEventListener('change', onProgressChange);
+}
 
 async function checkAndFetchMetadata(track, fetchId) {
   const query = `?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&filename=${encodeURIComponent(track.filename)}`;
@@ -475,7 +524,12 @@ export function bindPlayerEvents() {
   });
 
   if (ui.volumeSlider) {
-    ui.volumeSlider.addEventListener('input', (e) => { ui.audio.volume = e.target.value; updateVolumeUI(ui.audio.volume); });
+    ui.volumeSlider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      ui.audio.volume = val;
+      updateSliderFill(ui.volumeSlider);
+      updateVolumeIcon(val);
+    });
     ui.volumeSlider.addEventListener('change', () => persistState(ui.audio));
   }
   ui.btnMute?.addEventListener('click', toggleMute);

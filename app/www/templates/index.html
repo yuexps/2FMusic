@@ -63,15 +63,17 @@
         <main id="main-content">
             <header class="top-bar">
                 <button id="mobile-menu-btn"><i class="fas fa-bars"></i></button>
-                <div class="search-box">
-                    <i class="fas fa-search"></i>
-                    <input type="text" placeholder="搜索本地歌曲...">
-                </div>
             </header>
 
             <div class="content-scroll">
                 <div id="view-player">
-                    <div class="section-title" id="list-title">歌曲列表</div>
+                    <div class="content-header">
+                        <div class="section-title" id="list-title">歌曲列表</div>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="search-input" placeholder="搜索本地歌曲...">
+                        </div>
+                    </div>
                     <div class="song-list" id="song-list-container">
                         <div class="loading">
                             <div class="loading-box">
@@ -104,17 +106,56 @@
 
                 <div id="view-netease" class="hidden">
                     <div class="netease-gate glass-panel hidden" id="netease-config-gate">
-                        <div class="gate-icon"><i class="fas fa-plug"></i></div>
-                        <div class="gate-text">
+                        <div class="gate-header-block">
                             <div class="gate-title">配置网易云 API</div>
-                            <div class="gate-desc">要使用网易云下载功能，需要部署【网易云API】应用，请在 FnDepot 商店添加源
-                                https://github.com/yuexps/FnDepot 下载。</div>
+                            <div class="gate-desc">请选择一种方式连接网易云音乐 API 服务</div>
                         </div>
-                        <div class="gate-form">
-                            <input type="text" id="netease-api-gate-input" placeholder="http://localhost:3000"
-                                value="http://localhost:3000">
-                            <button id="netease-api-gate-btn" class="btn-primary">检测并连接</button>
+
+                        <div class="gate-options-container">
+                            <!-- 方式 1: 自动安装 -->
+                            <div class="gate-option-card active-card">
+                                <div class="option-icon-box"><i class="fab fa-docker"></i></div>
+                                <div class="option-content">
+                                    <div class="option-title">自动安装 (推荐)</div>
+                                    <div class="option-desc">服务器必须已安装 Docker Desktop。我们将自动为您拉取镜像并启动服务。<br>无需手动操作，自动完成
+                                    </div>
+                                </div>
+                                <button id="netease-api-install-btn" class="btn-primary full-width-btn">
+                                    <i class="fas fa-magic"></i> 一键安装 & 连接
+                                </button>
+
+                                <div id="install-progress-container" class="hidden"
+                                    style="width: 100%; margin-top: 1rem;">
+                                    <div
+                                        style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.3rem; color: rgba(255,255,255,0.8);">
+                                        <span id="install-step-text">准备就绪</span>
+                                        <span id="install-percent-text">0%</span>
+                                    </div>
+                                    <div
+                                        style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                                        <div id="install-progress-bar"
+                                            style="width: 0%; height: 100%; background: var(--primary); transition: width 0.3s ease;">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 方式 2: 手动配置 -->
+                            <div class="gate-option-card">
+                                <div class="option-icon-box"><i class="fas fa-network-wired"></i></div>
+                                <div class="option-content">
+                                    <div class="option-title">手动连接</div>
+                                    <div class="option-desc">请在 FnDepot 添加源 https://github.com/yuexps/FnDepot <br>下载
+                                        网易云API应用，然后输入地址连接。</div>
+                                </div>
+                                <div class="gate-manual-form">
+                                    <input type="text" id="netease-api-gate-input" placeholder="http://localhost:23236"
+                                        value="http://localhost:23236">
+                                    <button id="netease-api-gate-btn" class="btn-normal full-width-btn">检测并连接</button>
+                                </div>
+                            </div>
                         </div>
+
                     </div>
                     <div id="netease-content">
                         <div class="section-title"
@@ -282,7 +323,7 @@
             <div class="fp-controls">
                 <div class="fp-progress-bar">
                     <span id="fp-time-current">0:00</span>
-                    <input type="range" id="fp-progress-bar" value="0" step="0.1">
+                    <input type="range" id="fp-progress-bar" value="0" min="0" max="100" step="0.1">
                     <span id="fp-time-total">0:00</span>
                 </div>
                 <div class="fp-buttons">
@@ -346,6 +387,19 @@
             </div>
         </div>
 
+
+        <!-- 通用确认模态框 -->
+        <div class="overlay" id="confirm-modal-overlay">
+            <div class="modal confirm-box">
+                <h3>提示</h3>
+                <p>确认执行此操作吗？</p>
+                <div class="modal-buttons">
+                    <button id="confirm-no" class="btn-normal">取消</button>
+                    <button id="confirm-yes" class="btn-primary">确定</button>
+                </div>
+            </div>
+        </div>
+
         <div id="toast-container"></div>
         <input type="file" id="file-upload" accept=".mp3,.flac,.wav,.ogg,.m4a" style="display: none;">
 
@@ -359,22 +413,20 @@
                 const state = saved ? JSON.parse(saved) : {};
                 const tab = state.tab || 'local';
 
-                // Restore FullScreen Overlay Immediately
+                // 1. Restore FullScreen Overlay
                 if (state.isFullScreen) {
                     const overlay = document.getElementById('full-player-overlay');
                     if (overlay) overlay.classList.add('active');
                 }
 
-                // Update Nav
+                // 2. Tab & View
                 document.querySelectorAll('nav li').forEach(el => el.classList.remove('active'));
                 const targetNav = document.getElementById('nav-' + tab);
                 if (targetNav) targetNav.classList.add('active');
 
-                // Update View
                 const vp = document.getElementById('view-player');
                 const vm = document.getElementById('view-mount');
                 const vn = document.getElementById('view-netease');
-
                 if (vp) vp.classList.add('hidden');
                 if (vm) vm.classList.add('hidden');
                 if (vn) vn.classList.add('hidden');
@@ -382,6 +434,52 @@
                 if (tab === 'mount') { if (vm) vm.classList.remove('hidden'); }
                 else if (tab === 'netease') { if (vn) vn.classList.remove('hidden'); }
                 else { if (vp) vp.classList.remove('hidden'); }
+
+                // 3. Search Box logic
+                const searchBox = document.querySelector('.search-box');
+                if (searchBox) {
+                    if (tab === 'local') {
+                        searchBox.style.visibility = 'visible';
+                        searchBox.style.opacity = '1';
+                    } else {
+                        searchBox.style.visibility = 'hidden';
+                        searchBox.style.opacity = '0';
+                    }
+                }
+
+                // 4. Volume
+                if (state.volume !== undefined) {
+                    const volSlider = document.getElementById('volume-slider');
+                    if (volSlider) {
+                        volSlider.value = state.volume;
+                        volSlider.style.backgroundSize = (state.volume * 100) + '% 100%';
+                    }
+                }
+
+                // 5. Current Song Info
+                if (state.currentFilename) {
+                    const playlist = JSON.parse(localStorage.getItem('2fmusic_playlist') || '[]');
+                    const song = playlist.find(s => s.filename === state.currentFilename);
+                    if (song) {
+                        const title = song.title || song.filename;
+                        const artist = song.artist || '未知艺术家';
+                        const cover = song.album_art || song.cover || "{{ url_for('static', filename='images/ICON_256.PNG') }}";
+
+                        ['current-title', 'fp-title'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) el.innerText = title;
+                        });
+                        ['current-artist', 'fp-artist'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) el.innerText = artist;
+                        });
+                        ['current-cover', 'fp-cover'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) el.src = cover;
+                        });
+                    }
+                }
+
             } catch (e) { console.error('Fast init error', e); }
         })();
     </script>

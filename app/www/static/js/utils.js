@@ -23,39 +23,70 @@ export function autoResizeUI() {
   }
 }
 
-export function showToast(message, isPersistent = false) {
-  if (!isPersistent) {
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.textContent = message;
-    if (ui.toastContainer) ui.toastContainer.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('show'));
+export function showToast(message, type = 'info') {
+  const iconMap = {
+    'info': '<i class="fas fa-info-circle"></i>',
+    'success': '<i class="fas fa-check-circle"></i>',
+    'error': '<i class="fas fa-exclamation-circle"></i>',
+    'warning': '<i class="fas fa-exclamation-triangle"></i>',
+    'loading': '<i class="fas fa-spinner fa-spin"></i>'
+  };
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `
+        <div class="toast-icon">${iconMap[type] || iconMap['info']}</div>
+        <div class="toast-content">${message}</div>
+    `;
+
+  if (ui.toastContainer) {
+    ui.toastContainer.appendChild(toast);
+    // 限制最大显示数量，防止刷屏
+    if (ui.toastContainer.childElementCount > 5) {
+      ui.toastContainer.firstChild.remove();
+    }
+  }
+
+  // 动画进入
+  requestAnimationFrame(() => toast.classList.add('show'));
+
+  // 自动移除 (loading 类型除外，需手动移除)
+  if (type !== 'loading') {
     setTimeout(() => {
       toast.classList.remove('show');
-      toast.addEventListener('transitionend', () => toast.remove());
+      toast.addEventListener('transitionend', () => {
+        if (toast.parentElement) toast.remove();
+      });
     }, 3000);
-    return;
   }
 
-  if (!state.progressToastEl) {
-    state.progressToastEl = document.createElement('div');
-    state.progressToastEl.className = 'toast progress-toast';
-    if (ui.toastContainer) ui.toastContainer.appendChild(state.progressToastEl);
-    requestAnimationFrame(() => state.progressToastEl.classList.add('show'));
-  }
-  state.progressToastEl.innerHTML = `<i class="fas fa-sync fa-spin"></i> ${message}`;
+  return toast; // 返回元素以便手动控制
 }
 
-export function hideProgressToast() {
-  if (state.progressToastEl) {
-    state.progressToastEl.classList.remove('show');
+// 保持兼容性，处理旧的 persistent 调用
+export function showPersistentToast(message) {
+  return showToast(message, 'loading');
+}
+
+// 移除指定的 toast (用于 loading 类型)
+export function removeToast(toastEl) {
+  if (toastEl && toastEl.classList) {
+    toastEl.classList.remove('show');
     setTimeout(() => {
-      if (state.progressToastEl) state.progressToastEl.remove();
-      state.progressToastEl = null;
+      if (toastEl.parentElement) toastEl.remove();
     }, 300);
   }
 }
 
+// 兼容旧接口：hideProgressToast
+// 注意：旧逻辑是依赖 state.progressToastEl 单例，
+// 新逻辑建议调用方保存 showPersistentToast 返回的 element 并传给 removeToast。
+// 这里为了不破坏旧代码，尝试清除页面上所有的 loading toast
+export function hideProgressToast() {
+  const loadingToasts = document.querySelectorAll('.toast-loading');
+  loadingToasts.forEach(el => removeToast(el));
+  state.progressToastEl = null;
+}
 export function showConfirmDialog(title, message, onConfirm) {
   if (ui.confirmTitle) ui.confirmTitle.innerText = title;
   if (ui.confirmText) ui.confirmText.innerHTML = message;
@@ -83,8 +114,15 @@ export function renderNoLyrics(msg) {
 
 export function updateSliderFill(el) {
   if (!el) return;
-  const val = (el.value - el.min) / (el.max - el.min);
-  el.style.backgroundSize = `${val * 100}% 100%`;
+  const val = parseFloat(el.value) || 0;
+  const min = parseFloat(el.min) || 0;
+  const max = parseFloat(el.max) || 100;
+
+  let percent = ((val - min) / (max - min)) * 100;
+  if (isNaN(percent)) percent = 0;
+  percent = Math.max(0, Math.min(100, percent));
+
+  el.style.backgroundSize = `${percent}% 100%`;
 }
 
 export function flyToElement(startEl, targetEl) {

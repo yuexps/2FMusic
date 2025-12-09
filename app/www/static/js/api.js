@@ -116,6 +116,14 @@ export const api = {
     async task(taskId) {
       const res = await fetch(`/api/netease/task/${encodeURIComponent(taskId)}`);
       return jsonOrThrow(res);
+    },
+    async installService() {
+      const res = await fetch('/api/netease/install_service', { method: 'POST' });
+      return jsonOrThrow(res);
+    },
+    async getInstallStatus() {
+      const res = await fetch('/api/netease/install/status');
+      return jsonOrThrow(res);
     }
   }
 };

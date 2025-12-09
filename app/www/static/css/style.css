@@ -212,7 +212,15 @@ body::before {
     z-index: 10;
     /* 顶部通透 */
     background: transparent;
+    background: transparent;
     border-bottom: 1px solid transparent;
+}
+
+/* 桌面端隐藏顶部栏 (已移走搜索框，只剩移动端菜单) */
+@media (min-width: 769px) {
+    .top-bar {
+        display: none;
+    }
 }
 
 #mobile-menu-btn {
@@ -244,7 +252,8 @@ body::before {
     backdrop-filter: blur(12px);
     /* 增加模糊度 */
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    margin: 0 auto;
+    margin: 0;
+    /* 移除 auto，不再居中 */
 }
 
 /* 消除浏览器自动填充的白色背景 */
@@ -324,13 +333,31 @@ body::before {
 }
 
 .content-scroll {
-    padding: 2rem;
+    padding: 1.5rem 2rem;
+    /* 减少顶部 padding */
+}
+
+.content-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+    /* 允许换行适配窄屏 */
 }
 
 .section-title {
     font-size: 1.5rem;
     font-weight: bold;
     margin-bottom: 1.5rem;
+    /* 恢复通用间距 */
+    color: white;
+}
+
+/* 特殊处理 header 中的标题，去除下边距 */
+.content-header .section-title {
+    margin-bottom: 0;
 }
 
 /* === 歌曲列表 (桌面端优化) === */
@@ -578,10 +605,18 @@ input[type=range] {
     height: 4px;
     border-radius: 2px;
     background-color: rgba(255, 255, 255, 0.1);
-    background-image: linear-gradient(var(--text-main), var(--text-main));
+    background-image: linear-gradient(var(--text-main, #fff), var(--text-main, #fff));
     background-size: 0% 100%;
     background-repeat: no-repeat;
     transition: height 0.1s;
+}
+
+/* 修复主页滑块颜色 (确保白色填充可见) */
+#progress-bar,
+#volume-slider {
+    background-image: linear-gradient(#ffffff, #ffffff);
+    background-repeat: no-repeat;
+    background-size: 0% 100%;
 }
 
 input[type=range]:hover {
@@ -962,22 +997,22 @@ input[type=range]::-webkit-slider-thumb {
     background: rgba(25, 25, 35, 0.9);
     backdrop-filter: blur(50px);
     -webkit-backdrop-filter: blur(50px);
-    
+
     border-radius: 1.5rem;
     padding: 1.2rem;
     padding-bottom: calc(1.2rem + var(--safe-area-inset-bottom));
-    
+
     /* 浮动布局 */
     margin-bottom: calc(1.5rem + var(--safe-area-inset-bottom));
-    
+
     transform: translateY(150%);
     /* 弹性弹出动画 */
     transition: transform 0.4s cubic-bezier(0.3, 1.5, 0.5, 1);
-    
+
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
-    
+
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -999,18 +1034,20 @@ input[type=range]::-webkit-slider-thumb {
 }
 
 .action-item {
-    background: rgba(255, 255, 255, 0.08); /* 统一块状背景 */
+    background: rgba(255, 255, 255, 0.08);
+    /* 统一块状背景 */
     border: 1px solid rgba(255, 255, 255, 0.03);
     padding: 1.1rem;
     border-radius: 1rem;
     color: white;
     font-size: 1.05rem;
-    
+
     display: flex;
     align-items: center;
-    justify-content: flex-start; /* 左对齐 */
+    justify-content: flex-start;
+    /* 左对齐 */
     padding-left: 2rem;
-    
+
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -1055,7 +1092,8 @@ input[type=range]::-webkit-slider-thumb {
     margin-top: 0.5rem;
     background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    justify-content: center; /* 居中 */
+    justify-content: center;
+    /* 居中 */
     padding-left: 1.1rem;
     color: var(--text-sub);
     font-weight: bold;
@@ -1209,6 +1247,31 @@ select:focus {
 }
 
 .btn-primary:active {
+    transform: scale(0.95);
+}
+
+.btn-normal {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 0.7rem 1.5rem;
+    border-radius: 2rem;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.btn-normal:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: translateY(-2px);
+}
+
+.btn-normal:active {
     transform: scale(0.95);
 }
 
@@ -2085,87 +2148,117 @@ select:focus {
 }
 
 
+/* === New Netease Config Panel === */
 .netease-gate {
     display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1.2rem 1.4rem;
-    margin-bottom: 1.2rem;
-    border: 1px dashed rgba(255, 255, 255, 0.1);
-    flex-wrap: wrap;
-    /* Allow wrapping on small screens */
+    flex-direction: column;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    gap: 1.5rem;
 }
 
-.netease-gate .gate-icon {
-    width: 48px;
-    height: 48px;
+.gate-header-block {
+    text-align: center;
+    margin-bottom: 0.5rem;
+}
+
+.gate-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: white;
+}
+
+.gate-desc {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.95rem;
+}
+
+.gate-options-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.gate-option-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.gate-option-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+.gate-option-card.active-card {
+    background: rgba(108, 92, 231, 0.1);
+    border-color: rgba(108, 92, 231, 0.3);
+}
+
+.option-icon-box {
+    font-size: 2rem;
+    color: var(--primary);
+    margin-bottom: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    width: 60px;
+    height: 60px;
     display: grid;
     place-items: center;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--primary);
-    font-size: 1.3rem;
-    flex-shrink: 0;
+    border-radius: 50%;
 }
 
-.netease-gate .gate-title {
-    font-weight: 700;
-    font-size: 1.05rem;
+.option-content {
+    flex: 1;
+    margin-bottom: 1.5rem;
 }
 
-.netease-gate .gate-desc {
-    color: rgba(255, 255, 255, 0.65);
-    font-size: 0.95rem;
-    margin-top: 0.2rem;
-}
-
-.netease-gate .gate-actions {
-    margin-left: auto;
-}
-
-.netease-gate .gate-form {
-    margin-left: auto;
-    display: flex;
-    gap: 0.8rem;
-    align-items: center;
-}
-
-.netease-gate .gate-form input {
-    padding: 0.6rem 1rem;
-    border-radius: 0.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    background: rgba(0, 0, 0, 0.3);
+.option-title {
+    font-weight: bold;
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
     color: white;
-    width: 220px;
-    font-size: 0.9rem;
 }
 
-.netease-gate .gate-form button {
-    white-space: nowrap;
-    padding: 0.6rem 1.2rem;
-    border-radius: 0.5rem;
+.option-desc {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.5);
+    line-height: 1.4;
+}
+
+.full-width-btn {
+    width: 100%;
+    margin-top: auto;
+    justify-content: center;
+}
+
+.gate-manual-form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.gate-manual-form input {
+    width: 100%;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.2);
 }
 
 @media (max-width: 768px) {
-    .netease-gate {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 1.5rem;
-    }
-
-    .netease-gate .gate-form {
-        margin-left: 0;
-        width: 100%;
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .netease-gate .gate-form input {
-        width: 100%;
-    }
-
-    .netease-gate .gate-form button {
-        width: 100%;
+    .gate-options-container {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -2424,4 +2517,206 @@ select:focus {
     to {
         transform: rotate(360deg);
     }
+}
+
+/* === Toast Notifications (New) === */
+#toast-container {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    /* 右下角 */
+    display: flex;
+    flex-direction: column-reverse;
+    /* 新消息在下，向上堆叠? Or column for top-down? Usually column-reverse for bottom-up stacking if container is bottom aligned? 
+    Actually, if bottom-aligned, flex-col means flow down. 
+    Let's align to bottom right. we want new toasts to appear at bottom or top of stack?
+    Usually standard is new on top or new on bottom. 
+    If column-reverse, first child is at bottom. 
+    Let's stick to simple column and managing order in JS (appendChild puts at bottom). 
+    */
+    flex-direction: column;
+    gap: 0.8rem;
+    z-index: 10000;
+    pointer-events: none;
+    /* Allow clicks through container */
+}
+
+.toast {
+    pointer-events: auto;
+    background: rgba(45, 52, 54, 0.8);
+    /* Darker glass for better contrast */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.8rem;
+    padding: 1rem 1.2rem;
+    color: white;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+
+    opacity: 0;
+    transform: translateX(20px);
+    /* Slide in from right */
+    transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.toast-icon {
+    font-size: 1.2rem;
+    display: grid;
+    place-items: center;
+}
+
+.toast-content {
+    line-height: 1.4;
+    font-weight: 500;
+}
+
+/* Toast Variants */
+.toast-info {
+    border-left: 4px solid var(--primary);
+}
+
+.toast-info .toast-icon {
+    color: var(--primary);
+}
+
+.toast-success {
+    border-left: 4px solid #00b894;
+}
+
+.toast-success .toast-icon {
+    color: #00b894;
+}
+
+.toast-error {
+    border-left: 4px solid #ff7675;
+}
+
+.toast-error .toast-icon {
+    color: #ff7675;
+}
+
+.toast-warning {
+    border-left: 4px solid #fdcb6e;
+}
+
+.toast-warning .toast-icon {
+    color: #fdcb6e;
+}
+
+.toast-loading {
+    border-left: 4px solid #74b9ff;
+}
+
+.toast-loading .toast-icon {
+
+    color: #74b9ff;
+}
+
+/* Mobile Adjustment */
+@media (max-width: 768px) {
+    #toast-container {
+        bottom: 5rem;
+        /* Above bottom nav */
+        right: 1rem;
+        left: 1rem;
+        align-items: center;
+    }
+
+    .toast {
+        width: 100%;
+        justify-content: center;
+        background: rgba(45, 52, 54, 0.95);
+    }
+}
+
+/* === Generic Confirm Modal === */
+.confirm-box {
+    width: 90%;
+    max-width: 400px;
+    background: rgba(30, 30, 35, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1.2rem;
+    padding: 2rem;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    transform: scale(0.95);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+#confirm-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+#confirm-modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+#confirm-modal-overlay.active .confirm-box {
+    transform: scale(1);
+}
+
+.confirm-box h3 {
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+    color: var(--text-main);
+}
+
+.confirm-box p {
+    color: var(--text-sub);
+    margin-bottom: 2rem;
+    line-height: 1.6;
+}
+
+.confirm-box .modal-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    width: 100%;
+    /* Ensure container takes full width */
+}
+
+.confirm-box .modal-buttons button {
+    flex: 1;
+    /* Force equal width */
+    min-width: 0;
+    /* Allow shrinking if needed */
+    padding: 0.8rem 0;
+    /* Consistent vertical padding */
+    border-radius: 2rem;
+    font-size: 0.95rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.confirm-box .btn-danger {
+    background: linear-gradient(135deg, #ff7675, #d63031);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 15px rgba(214, 48, 49, 0.3);
 }

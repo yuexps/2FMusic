@@ -476,7 +476,7 @@ COMMON_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
     'Authorization': '2FMusic'
 }
-NETEASE_API_BASE_DEFAULT = os.environ.get('NETEASE_API_BASE', 'http://localhost:3000')
+NETEASE_API_BASE_DEFAULT = os.environ.get('NETEASE_API_BASE', 'http://localhost:23236')
 NETEASE_API_BASE = NETEASE_API_BASE_DEFAULT
 NETEASE_COOKIE_PATH = os.path.join(MUSIC_LIBRARY_PATH, '.netease_cookie')
 NETEASE_COOKIE = None
@@ -1204,6 +1204,89 @@ def play_external_file():
     path = request.args.get('path')
     if path and os.path.exists(path): return send_file(path, conditional=True)
     return jsonify({'error': '文件未找到'}), 404
+
+# --- 安装状态管理 ---
+INSTALL_STATUS = {
+    'status': 'idle', # idle, running, success, error
+    'progress': 0,
+    'step': '',
+    'error': None
+}
+
+@app.route('/api/netease/install/status')
+def get_install_status():
+    return jsonify(INSTALL_STATUS)
+
+@app.route('/api/netease/install_service', methods=['POST'])
+def install_netease_service():
+    """尝试自动拉取并运行网易云 API 容器"""
+    import subprocess
+    global INSTALL_STATUS
+    
+    if INSTALL_STATUS['status'] == 'running':
+         return jsonify({'success': False, 'error': '安装任务正在进行中'})
+
+    INSTALL_STATUS = {'status': 'running', 'progress': 0, 'step': '准备安装...', 'error': None}
+    logger.info("API请求: 安装网易云服务")
+    
+    def run_install():
+        global INSTALL_STATUS
+        try:
+            # 1. 检查 Docker 是否可用
+            INSTALL_STATUS.update({'progress': 10, 'step': '检查 Docker 环境...'})
+            subprocess.run(["docker", "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # 2. 检查由我们创建的容器是否已存在
+            container_name = "2fmusic-ncm-api"
+            INSTALL_STATUS.update({'progress': 20, 'step': f'检查容器 {container_name}...'})
+            
+            check_proc = subprocess.run(
+                ["docker", "ps", "-a", "--filter", f"name={container_name}", "--format", "{{.Names}}"],
+                capture_output=True, text=True
+            )
+            
+            if container_name in check_proc.stdout.strip():
+                # 容器已存在，尝试启动
+                INSTALL_STATUS.update({'progress': 60, 'step': '容器已存在，正在启动...'})
+                logger.info("容器已存在，尝试启动...")
+                subprocess.run(["docker", "start", container_name], check=True)
+            else:
+                # 容器不存在，拉取并运行
+                INSTALL_STATUS.update({'progress': 30, 'step': '正在拉取镜像 (耗时较长)...'})
+                logger.info("正在拉取镜像 moefurina/ncm-api...")
+                subprocess.run(["docker", "pull", "moefurina/ncm-api:latest"], check=True)
+                
+                INSTALL_STATUS.update({'progress': 70, 'step': '镜像拉取完成，正在启动容器...'})
+                logger.info("正在启动容器...")
+                # 映射端口 23236:3000
+                subprocess.run([
+                    "docker", "run", "-d", 
+                    "-p", "23236:3000", 
+                    "--name", container_name, 
+                    "--restart", "always",
+                    "moefurina/ncm-api"
+                ], check=True)
+            
+            INSTALL_STATUS.update({'status': 'success', 'progress': 100, 'step': '服务启动成功！'})
+            logger.info("网易云服务安装/启动指令执行完成")
+            
+        except subprocess.CalledProcessError as e:
+            msg = f"操作失败: {e}"
+            logger.error(msg)
+            INSTALL_STATUS.update({'status': 'error', 'error': msg, 'step': '发生错误'})
+        except FileNotFoundError:
+            msg = "未找到 Docker，请确保已安装 Docker Desktop"
+            logger.error(msg)
+            INSTALL_STATUS.update({'status': 'error', 'error': msg, 'step': '环境缺失'})
+        except Exception as e:
+            msg = f"未知错误: {str(e)}"
+            logger.exception(msg)
+            INSTALL_STATUS.update({'status': 'error', 'error': msg, 'step': '系统异常'})
+
+    # 异步执行，避免阻塞
+    threading.Thread(target=run_install, daemon=True).start()
+    
+    return jsonify({'success': True, 'message': '安装任务已启动'})
 
 if __name__ == '__main__':
     logger.info(f"服务启动，端口: {args.port} ...")
