@@ -520,7 +520,47 @@ function parseAndRenderLyrics(lrc) {
   }
 }
 
-function togglePlay() { if (state.playQueue.length === 0) return; if (state.isPlaying) ui.audio.pause(); else { if (!ui.audio.src) playTrack(0); else ui.audio.play(); } state.isPlaying = !state.isPlaying; updatePlayState(); }
+async function togglePlay() {
+  if (state.playQueue.length === 0) return;
+
+  // 如果正在播放，尝试暂停
+  if (state.isPlaying) {
+    ui.audio.pause();
+    state.isPlaying = false;
+    updatePlayState();
+    return;
+  }
+
+  // 如果原本是暂停状态，尝试播放
+  try {
+    if (!ui.audio.src) {
+      await playTrack(0);
+    } else {
+      await ui.audio.play();
+    }
+    state.isPlaying = true;
+    updatePlayState();
+  } catch (err) {
+    console.error('Play failed:', err);
+    state.isPlaying = false;
+    updatePlayState();
+
+    // 针对移动端后台恢复时的特定错误处理
+    if (err.name === 'NotAllowedError') {
+      showToast('播放被阻止，请手动点击播放');
+    } else if (err.name === 'AbortError') {
+      // 可能是之前的加载被中断，尝试重新加载当前进度
+      const curTime = ui.audio.currentTime;
+      ui.audio.load();
+      ui.audio.currentTime = curTime;
+      // 不自动播放，等待用户再次点击，避免死循环
+      showToast('音频加载中断，已重置，请重试');
+    } else {
+      showToast('无法播放: ' + err.message);
+    }
+  }
+}
+
 function updatePlayState() {
   const icon = state.isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
   if (ui.btnPlay) ui.btnPlay.innerHTML = icon;
@@ -570,6 +610,43 @@ export function bindPlayerEvents() {
   ui.btnMute?.addEventListener('click', toggleMute);
   updatePlayModeUI();
   updateVolumeUI(ui.audio.volume);
+
+  // 增强：音频错误监听
+  ui.audio.addEventListener('error', (e) => {
+    console.error('Audio Error:', e);
+    state.isPlaying = false;
+    updatePlayState();
+    // 尝试获取错误详情
+    const err = ui.audio.error;
+    let msg = '未知音频错误';
+    if (err) {
+      switch (err.code) {
+        case MediaError.MEDIA_ERR_ABORTED: msg = '加载被中断'; break;
+        case MediaError.MEDIA_ERR_NETWORK: msg = '网络错误'; break;
+        case MediaError.MEDIA_ERR_DECODE: msg = '解码错误'; break;
+        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: msg = '不支持的音频格式'; break;
+      }
+    }
+    // 只有在用户试图播放时才频繁打扰，或者只记录
+    if (state.playQueue.length > 0) {
+      showToast('播放出错: ' + msg);
+    }
+  });
+
+  // 增强：页面可见性恢复检查
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      // 检查 audio 是否丢失了状态
+      if (ui.audio.error && state.playQueue.length > 0) {
+        console.log('Restoring audio state after visibility mismatch...');
+        const curTime = ui.audio.currentTime;
+        ui.audio.load();
+        ui.audio.currentTime = curTime;
+        // 不自动 play，以免此时浏览器策略限制自动播放
+        updatePlayState();
+      }
+    }
+  });
 }
 
 export function bindUiControls() {
