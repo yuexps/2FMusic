@@ -601,11 +601,17 @@ function logoutNetease() {
 function openSettingsModal() {
   if (ui.neteaseApiSettingsInput) ui.neteaseApiSettingsInput.value = state.neteaseApiBase || '';
   if (ui.neteaseDownloadDirInput) ui.neteaseDownloadDirInput.value = state.neteaseDownloadDir || '';
-  ui.neteaseSettingsModal?.classList.remove('hidden');
+  if (ui.neteaseSettingsModal) {
+    ui.neteaseSettingsModal.classList.remove('hidden');
+    ui.neteaseSettingsModal.classList.add('active');
+  }
 }
 
 function closeSettingsModal() {
-  ui.neteaseSettingsModal?.classList.add('hidden');
+  if (ui.neteaseSettingsModal) {
+    ui.neteaseSettingsModal.classList.add('hidden');
+    ui.neteaseSettingsModal.classList.remove('active');
+  }
 }
 
 function bindEvents() {

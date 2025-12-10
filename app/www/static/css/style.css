@@ -919,6 +919,10 @@ input[type=range]::-webkit-slider-thumb {
     transition: opacity 0.3s;
 }
 
+.custom-overlay.centered {
+    align-items: center;
+}
+
 .custom-overlay.active {
     opacity: 1;
     pointer-events: auto;
