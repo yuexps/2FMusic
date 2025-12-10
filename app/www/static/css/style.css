@@ -3002,6 +3002,56 @@ select:focus {
     z-index: 90;
 }
 
+@media (max-width: 768px) {
+    .netease-title-large {
+        display: none !important;
+    }
+
+    .netease-header {
+        /* Remove flow impact */
+        margin-bottom: 0 !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        height: 0 !important;
+    }
+
+    /* 将按钮组移入 Top Bar 区域 (Fixed) */
+    .netease-header-right {
+        position: fixed;
+        top: 0.8rem;
+        right: 1rem;
+        z-index: 2000;
+        /* 高于 Top Bar (1000) */
+        gap: 0.5rem;
+    }
+
+    /* 手机端隐藏下载管理按钮 */
+    #netease-download-floating {
+        display: none !important;
+    }
+
+    /* 缩小一下移动端的按钮尺寸，避免挤占 */
+    .netease-user-display {
+        padding: 0.2rem 0.6rem;
+        background: rgba(255, 255, 255, 0.15);
+        /*稍微调亮一点以适应深色TopBar*/
+    }
+
+    .user-name {
+        font-size: 0.8rem;
+        max-width: 5rem;
+    }
+
+    .user-tag {
+        transform: scale(0.9);
+    }
+
+    /* 调整搜索框上方间距 - 使用负边距抵消 content-scroll 默认 padding */
+    .netease-search-hero {
+        margin-top: -2rem !important;
+    }
+}
+
 .netease-user-display.hidden {
     display: none;
 }
