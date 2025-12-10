@@ -2149,6 +2149,40 @@ select:focus {
     padding: 0.5rem;
 }
 
+.netease-download-controls {
+    padding: 0 1rem 0.5rem;
+}
+
+.netease-download-controls label {
+    display: block;
+    margin-bottom: 0.4rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.9rem;
+}
+
+.netease-download-limit-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.netease-download-limit-row select,
+.netease-download-limit-row input {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 0.5rem 0.6rem;
+    border-radius: 0.4rem;
+}
+
+.netease-download-limit-row select {
+    flex: 1;
+}
+
+.netease-download-limit-row input {
+    width: 7rem;
+}
+
 .netease-download-row {
     padding: 0.8rem;
     border-radius: 0.6rem;
@@ -3222,6 +3256,26 @@ select:focus {
     color: white;
     padding: 0.6rem;
     border-radius: 0.4rem;
+}
+
+.setting-inline {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.setting-inline select {
+    flex: 1;
+}
+
+.setting-inline input {
+    width: 8rem;
+}
+
+.setting-hint {
+    margin-top: 0.35rem;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.65);
 }
 
 .setting-actions {
