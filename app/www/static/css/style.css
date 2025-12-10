@@ -49,6 +49,30 @@ html {
     height: 100%;
 }
 
+/* === 全局精美滚动条 === */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+    transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
 body {
     color: var(--text-main);
     overflow: hidden;
@@ -117,7 +141,10 @@ body::before {
     grid-template-rows: 1fr var(--player-height);
     height: 100vh;
     height: 100dvh;
-    width: 100vw;
+    width: 100%;
+    /* 修复: 使用 100% 而不是 100vw，防止滚动条导致布局挤压 */
+    max-width: 100%;
+    overflow-x: hidden;
 }
 
 .hidden {
@@ -263,7 +290,8 @@ body::before {
     /* 使用 gap 控制图标和输入框距离 */
     width: 20rem;
     /* 稍微加宽 */
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    /* 修复: 移除 transition: all，只过渡特定属性 */
+    transition: background-color 0.3s, transform 0.3s, box-shadow 0.3s, border-color 0.3s, width 0.3s;
     backdrop-filter: blur(12px);
     /* 增加模糊度 */
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -642,6 +670,22 @@ body::before {
     color: var(--text-sub);
 }
 
+/* 修复: 时间数字固定宽度，防止跳动 */
+.progress-container span,
+.fp-progress-bar span {
+    font-variant-numeric: tabular-nums;
+    /* 等宽数字 */
+    /* 更加优雅的科技感等宽字体 */
+    font-family: 'Roboto Mono', 'Consolas', monospace;
+    font-size: 0.85rem;
+    /* 稍微调大一点点以匹配新字体 */
+    width: 4rem;
+    /* 稍微加宽适配等宽字体 */
+    text-align: center;
+    display: inline-block;
+    opacity: 0.8;
+}
+
 .player-extra {
     width: 30%;
     display: flex;
@@ -804,29 +848,66 @@ input[type=range]::-webkit-slider-thumb {
     display: none;
 }
 
+
+
 .lyric-line {
     padding: 0.8rem 0;
     color: rgba(255, 255, 255, 0.4);
     font-size: 1.2rem;
-    transition: 0.3s;
+    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     cursor: pointer;
+
+    /* 默认状态 (远距离) */
+    opacity: 0.4;
+    filter: blur(1.2px);
+    /* 稍微减弱模糊 (2px -> 1.2px) */
+    transform: scale(0.95);
+    transform-origin: center center;
 }
 
+/* 悬停时稍微清晰一点 */
 .lyric-line:hover {
-    color: rgba(255, 255, 255, 0.8);
+    opacity: 0.8 !important;
+    filter: blur(0) !important;
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .lyric-line:active {
+    transform: scale(0.95);
     color: white;
-    transform: scale(0.98);
 }
 
+/* --- 渐进式模糊 (Focus Effect) --- */
+
+/* 1. 激活行 (最清晰) */
 .lyric-line.active {
     color: white;
-    font-size: 1.6rem;
     font-weight: bold;
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.6);
+    transform: scale(1.35);
+    opacity: 1;
+    filter: blur(0);
+    z-index: 10;
+}
+
+/* 2. 紧邻行 (第一级模糊) */
+/* 后一行 */
+.lyric-line.active+.lyric-line,
+/* 前一行 (使用 :has 选择器) */
+.lyric-line:has(+ .lyric-line.active) {
+    opacity: 0.8;
+    filter: blur(0.5px);
     transform: scale(1.05);
+}
+
+/* 3. 次邻行 (第二级模糊) */
+/* 后两行 */
+.lyric-line.active+.lyric-line+.lyric-line,
+/* 前两行 */
+.lyric-line:has(+ .lyric-line + .lyric-line.active) {
+    opacity: 0.6;
+    filter: blur(1px);
+    transform: scale(1);
 }
 
 .fp-controls {
@@ -2772,6 +2853,7 @@ select:focus {
     border: none;
     box-shadow: 0 4px 15px rgba(214, 48, 49, 0.3);
 }
+
 /* Mobile Optimizations for Toasts */
 @media (max-width: 768px) {
     #toast-container {
@@ -2783,6 +2865,7 @@ select:focus {
 
 /* Mobile optimizations for top spacing */
 @media (max-width: 768px) {
+
     /* Hide header completely for Favorites tab to remove gap */
     .tab-fav .content-header {
         display: none !important;
@@ -2798,4 +2881,54 @@ select:focus {
 .netease-path-row {
     grid-template-columns: auto 1fr auto !important;
     align-items: center;
+}
+
+/* === 移动端歌词最终修正适配 (放在最后确保优先级) === */
+@media (max-width: 768px) {
+    .lyric-line {
+        font-size: 0.95rem !important;
+        /* 进一步减小字号 */
+        padding: 0.5rem 1.5rem !important;
+        /* 增加内边距防止贴边 */
+        filter: blur(0px);
+        transition: filter 0.3s ease-out;
+    }
+
+    /* Gradual blur for lines after the active one */
+    .lyric-line.active+.lyric-line {
+        filter: blur(1px);
+    }
+
+    .lyric-line.active+.lyric-line+.lyric-line {
+        filter: blur(2px);
+    }
+
+    .lyric-line.active+.lyric-line+.lyric-line+.lyric-line {
+        filter: blur(3px);
+    }
+
+    /* Gradual blur for lines before the active one using :has() */
+    .lyric-line:has(+ .lyric-line.active) {
+        filter: blur(1px);
+    }
+
+    .lyric-line:has(+ .lyric-line + .lyric-line.active) {
+        filter: blur(2px);
+    }
+
+    .lyric-line:has(+ .lyric-line + .lyric-line + .lyric-line.active) {
+        filter: blur(3px);
+    }
+
+    .lyric-line.active {
+        transform: scale(1.25) !important;
+        /* 增大放大倍数 (1.15 -> 1.25) */
+        /* 由于使用了 scale，实际占用位置不变，视觉放大 */
+    }
+
+    .fp-lyrics-area {
+        padding: 1rem 0 !important;
+        width: 100% !important;
+        box-sizing: border-box;
+    }
 }

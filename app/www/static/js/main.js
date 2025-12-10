@@ -8,7 +8,9 @@ import { initPlayer, loadSongs, performDelete, handleExternalFile, renderPlaylis
 document.addEventListener('DOMContentLoaded', async () => {
   // UI 适配与基础防护
   autoResizeUI();
-  window.addEventListener('resize', autoResizeUI);
+  window.addEventListener('resize', () => {
+    requestAnimationFrame(autoResizeUI);
+  });
   window.addEventListener('error', function (e) { if (e.target.tagName === 'IMG') e.target.src = '/static/images/ICON_256.PNG'; }, true);
   document.addEventListener('contextmenu', (e) => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') e.preventDefault(); });
   persistOnUnload(ui.audio);
