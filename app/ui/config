@@ -3,7 +3,7 @@
         "2fmusic.Application": {
             "title": "2FMusic",
             "icon": "images/icon_{0}.png",
-            "type": "iframe",
+            "type": "url",
             "protocol": "http",
             "port": "23237",
             "url": "/",
