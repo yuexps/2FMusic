@@ -24,6 +24,24 @@ function toggleFavorite(song, btnEl) {
 
 const throttledPersist = throttle(() => persistState(ui.audio), 2000);
 
+// Wake Lock Logic
+let wakeLock = null;
+async function requestWakeLock() {
+  if ('wakeLock' in navigator) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      console.log('Wake Lock active');
+    } catch (err) {
+      console.warn('Wake Lock failed:', err);
+    }
+  }
+}
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release().then(() => { wakeLock = null; console.log('Wake Lock released'); });
+  }
+}
+
 export async function loadSongs(retry = true) {
   // 1. 优先使用缓存显示 (SWR)
   if (state.fullPlaylist.length > 0 && state.playQueue.length === 0) {
@@ -318,7 +336,12 @@ export async function playTrack(index, autoPlay = true) {
   checkAndFetchMetadata(track, state.currentFetchId);
   highlightCurrentTrack();
   if (autoPlay) {
-    try { await ui.audio.play(); state.isPlaying = true; updatePlayState(); }
+    try {
+      await ui.audio.play();
+      state.isPlaying = true;
+      updatePlayState();
+      requestWakeLock();
+    }
     catch (e) { console.error('Auto-play blocked:', e); state.isPlaying = false; updatePlayState(); }
   }
   persistState(ui.audio);
@@ -528,6 +551,7 @@ async function togglePlay() {
     ui.audio.pause();
     state.isPlaying = false;
     updatePlayState();
+    releaseWakeLock();
     return;
   }
 
@@ -540,10 +564,12 @@ async function togglePlay() {
     }
     state.isPlaying = true;
     updatePlayState();
+    requestWakeLock();
   } catch (err) {
     console.error('Play failed:', err);
     state.isPlaying = false;
     updatePlayState();
+    releaseWakeLock();
 
     // 针对移动端后台恢复时的特定错误处理
     if (err.name === 'NotAllowedError') {
@@ -611,6 +637,20 @@ export function bindPlayerEvents() {
   updatePlayModeUI();
   updateVolumeUI(ui.audio.volume);
 
+  // 增强：MediaSession 控制 (支持锁屏控制/后台控制)
+  if ('mediaSession' in navigator) {
+    const actionHandlers = [
+      ['play', () => { if (!state.isPlaying) togglePlay(); }],
+      ['pause', () => { if (state.isPlaying) togglePlay(); }],
+      ['previoustrack', prevTrack],
+      ['nexttrack', nextTrack],
+      ['stop', () => { ui.audio.pause(); state.isPlaying = false; updatePlayState(); }]
+    ];
+    for (const [action, handler] of actionHandlers) {
+      try { navigator.mediaSession.setActionHandler(action, handler); } catch (e) { }
+    }
+  }
+
   // 增强：音频错误监听
   ui.audio.addEventListener('error', (e) => {
     console.error('Audio Error:', e);
@@ -645,6 +685,12 @@ export function bindPlayerEvents() {
         // 不自动 play，以免此时浏览器策略限制自动播放
         updatePlayState();
       }
+      // 恢复 Wake Lock (如果应该播放)
+      if (state.isPlaying) requestWakeLock();
+    } else {
+      // 页面不可见时（如手动锁屏），Wake Lock 会自动释放，这里显式调用清理变量
+      // 只有 Screen Wake Lock 在页面隐藏时会自动释放，但我们最好保持状态同步
+      if (wakeLock) { wakeLock = null; }
     }
   });
 }
