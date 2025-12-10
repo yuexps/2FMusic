@@ -124,7 +124,14 @@ export async function performDelete(songId) {
   await delay(200);
   try {
     const data = await api.library.deleteFile(songId);
-    if (data.success) { showToast('删除成功'); await loadSongs(); ui.actionMenuOverlay?.classList.remove('active'); ui.confirmModalOverlay?.classList.remove('active'); }
+    if (data.success) {
+      showToast('删除成功');
+      await loadSongs();
+      // 删除后保持当前标签页，刷新时不跳走
+      switchTab(state.currentTab || 'local');
+      ui.actionMenuOverlay?.classList.remove('active');
+      ui.confirmModalOverlay?.classList.remove('active');
+    }
     else { showToast('删除失败: ' + (data.error || '未知错误')); }
   } catch (err) { console.error('删除错误:', err); showToast('网络请求失败'); }
 }
@@ -279,7 +286,9 @@ function switchTab(tab) {
 
 async function initPlayerState() {
   const allowedTabs = ['local', 'fav', 'mount', 'netease'];
-  const targetTab = allowedTabs.includes(state.savedState.tab) ? state.savedState.tab : 'local';
+  const preferredTab = allowedTabs.includes(state.currentTab) ? state.currentTab : null;
+  const savedTab = allowedTabs.includes(state.savedState.tab) ? state.savedState.tab : 'local';
+  const targetTab = preferredTab || savedTab;
   switchTab(targetTab);
   if (state.savedState.volume !== undefined) { ui.audio.volume = state.savedState.volume; updateVolumeUI(ui.audio.volume); }
   if (state.savedState.playMode !== undefined) { state.playMode = state.savedState.playMode; updatePlayModeUI(); }

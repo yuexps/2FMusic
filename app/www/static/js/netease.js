@@ -5,6 +5,30 @@ import { showToast, showConfirmDialog, hideProgressToast, formatTime } from './u
 
 // 网易云业务
 let songRefreshCallback = null;
+let recommendLoading = false;
+
+function syncDownloadLimitUI(value) {
+  const select = ui.neteaseDownloadLimitSelect;
+  const customInput = ui.neteaseDownloadLimitCustom;
+  const presets = ['5', '10', '15', '20'];
+  const valStr = String(value || '');
+
+  if (select) {
+    if (presets.includes(valStr)) {
+      select.value = valStr;
+      if (customInput) {
+        customInput.classList.add('hidden');
+        customInput.value = '';
+      }
+    } else {
+      select.value = 'custom';
+      if (customInput) {
+        customInput.classList.remove('hidden');
+        customInput.value = value || '';
+      }
+    }
+  }
+}
 
 function renderDownloadTasks() {
   const list = ui.neteaseDownloadList;
@@ -14,9 +38,26 @@ function renderDownloadTasks() {
     list.innerHTML = '<div class="loading-text" style="padding: 3rem 0; opacity: 0.6; font-size: 0.9rem;">暂无下载记录</div>';
     return;
   }
+
+  const orderMap = {
+    downloading: 0,
+    preparing: 1,
+    pending: 2,
+    queued: 3,
+    error: 4,
+    success: 5
+  };
+  const indexed = tasks.map((t, idx) => ({ t, idx }));
+  indexed.sort((a, b) => {
+    const oa = orderMap[a.t.status] ?? 99;
+    const ob = orderMap[b.t.status] ?? 99;
+    if (oa !== ob) return oa - ob;
+    return a.idx - b.idx;
+  });
+
   list.innerHTML = '';
   const frag = document.createDocumentFragment();
-  tasks.forEach(task => {
+  indexed.forEach(({ t: task }) => {
     const row = document.createElement('div');
     row.className = 'netease-download-row';
     const meta = document.createElement('div');
@@ -24,6 +65,7 @@ function renderDownloadTasks() {
     meta.innerHTML = `<div class="title">${task.title}</div><div class="artist">${task.artist}</div>`;
     const statusEl = document.createElement('div');
     const config = {
+      pending: { icon: 'fas fa-clock', text: '等待中', class: 'status-wait' },
       queued: { icon: 'fas fa-clock', text: '等待中', class: 'status-wait' },
       preparing: { icon: 'fas fa-spinner fa-spin', text: '准备中', class: 'status-progress' },
       downloading: { icon: 'fas fa-sync fa-spin', text: '下载中', class: 'status-progress' },
@@ -51,13 +93,13 @@ function renderDownloadTasks() {
   list.appendChild(frag);
 }
 
-function addDownloadTask(song) {
+function addDownloadTask(song, status = 'queued') {
   const task = {
     id: `dl_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
     title: song.title || `歌曲 ${song.id || ''}`,
     artist: song.artist || '',
     songId: song.id,
-    status: 'queued'
+    status
   };
   state.neteaseDownloadTasks.unshift(task);
   if (state.neteaseDownloadTasks.length > 30) state.neteaseDownloadTasks = state.neteaseDownloadTasks.slice(0, 30);
@@ -92,13 +134,38 @@ function renderNeteaseResults() {
   const list = ui.neteaseResultList;
   if (!list) return;
   if (!state.neteaseResults.length) {
-    list.innerHTML = '<div class="loading-text">未找到相关歌曲</div>';
+    const isRecommend = state.neteaseResultSource === 'recommend';
+    list.innerHTML = isRecommend
+      ? `<div class="netease-empty-state">
+            <div class="empty-title">暂无推荐</div>
+            <div class="empty-desc">请先登录网易云账号获取每日推荐</div>
+         </div>`
+      : '<div class="loading-text">未找到相关歌曲</div>';
     toggleBulkActions(false);
     updateSelectAllState();
     return;
   }
   list.innerHTML = '';
   const frag = document.createDocumentFragment();
+
+  // 推荐列表标题
+  if (state.neteaseResultSource === 'recommend') {
+    const head = document.createElement('div');
+    head.className = 'netease-recommend-head';
+    head.innerHTML = `
+      <div class="netease-recommend-text">
+        <div class="recommend-title">每日推荐</div>
+      </div>
+    `;
+    const btn = head.querySelector('button');
+    btn?.addEventListener('click', () => loadDailyRecommendations(true));
+    frag.appendChild(head);
+  }
+
+  if (ui.neteaseBulkActions) {
+    frag.appendChild(ui.neteaseBulkActions);
+  }
+
   state.neteaseResults.forEach(song => {
     const card = document.createElement('div');
     card.className = 'netease-card';
@@ -161,17 +228,32 @@ function renderNeteaseResults() {
   updateSelectAllState();
 }
 
-async function downloadNeteaseSong(song, btnEl) {
-  if (!song || !song.id) return;
-  const level = ui.neteaseQualitySelect ? ui.neteaseQualitySelect.value : 'exhigh';
+function getActiveDownloadCount() {
+  return state.neteaseDownloadTasks.filter(t => ['pending', 'preparing', 'downloading'].includes(t.status)).length;
+}
 
-  // 检查是否有正在进行的相同任务
-  const existingTask = state.neteaseDownloadTasks.find(t => String(t.songId) === String(song.id) && (t.status === 'preparing' || t.status === 'downloading'));
-  if (existingTask) { showToast('该任务正在进行中'); return; }
+function processDownloadQueue() {
+  const limit = state.neteaseMaxConcurrent || 5;
+  let available = limit - getActiveDownloadCount();
+  let started = 0;
 
-  const taskId = addDownloadTask(song);
+  while (available > 0 && state.neteasePendingQueue.length) {
+    const next = state.neteasePendingQueue.shift();
+    const task = state.neteaseDownloadTasks.find(t => t.id === next.taskId);
+    if (task) task.status = 'pending';
+    started++;
+    available--;
+    startNeteaseDownload(next);
+  }
+  if (started) renderDownloadTasks();
+  if (state.neteasePendingQueue.length === 0) state.neteaseQueueToastShown = false;
+}
+
+async function startNeteaseDownload({ taskId, song, btnEl }) {
+  if (!taskId || !song) return;
 
   if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '<i class="fas fa-sync fa-spin"></i> 请求中'; }
+  updateDownloadTask(taskId, 'preparing');
 
   // 自动展开下载列表
   if (ui.neteaseDownloadPanel && ui.neteaseDownloadPanel.classList.contains('hidden')) {
@@ -179,15 +261,13 @@ async function downloadNeteaseSong(song, btnEl) {
   }
 
   try {
-    const res = await api.netease.download({ ...song, level, target_dir: state.neteaseDownloadDir || undefined });
+    const res = await api.netease.download({ ...song, target_dir: state.neteaseDownloadDir || undefined });
     if (res.success) {
       const backendTaskId = res.task_id;
-      updateDownloadTask(taskId, 'preparing');
 
       // 保持按钮状态直到下载结束
       if (btnEl) {
         btnEl.disabled = true;
-        // 清除 finally 中的恢复逻辑，改为手动恢复
       }
 
       // 轮询进度
@@ -212,8 +292,7 @@ async function downloadNeteaseSong(song, btnEl) {
             if (currentTask) {
               // 状态映射
               let newStatus = tData.status;
-              if (newStatus === 'pending') newStatus = 'queued';
-              if (newStatus === 'preparing') newStatus = 'preparing';
+              if (newStatus === 'pending') newStatus = 'pending';
 
               currentTask.status = newStatus;
               currentTask.progress = tData.progress;
@@ -240,11 +319,11 @@ async function downloadNeteaseSong(song, btnEl) {
                 }
 
                 if (newStatus === 'success') {
-                  // showToast(`下载完成: ${tData.title}`);
                   if (songRefreshCallback) songRefreshCallback();
                 } else {
                   showToast(`下载失败: ${tData.message || '未知错误'}`);
                 }
+                processDownloadQueue();
               }
             } else {
               clearInterval(pollTimer); // 任务在前端被移除了
@@ -255,6 +334,7 @@ async function downloadNeteaseSong(song, btnEl) {
             clearInterval(pollTimer);
             showToast('任务已失效 (服务器可能已重启)');
             if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<i class="fas fa-redo"></i> 重试'; }
+            processDownloadQueue();
           }
         } catch (e) {
           console.error(e);
@@ -264,6 +344,7 @@ async function downloadNeteaseSong(song, btnEl) {
             updateDownloadTask(taskId, 'error');
             showToast('网络连接丢失，停止轮询');
             if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<i class="fas fa-redo"></i> 重试'; }
+            processDownloadQueue();
           }
         }
       }, 200);
@@ -272,11 +353,47 @@ async function downloadNeteaseSong(song, btnEl) {
       updateDownloadTask(taskId, 'error');
       showToast(res.error || '请求失败');
       if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<i class="fas fa-download"></i> 下载'; }
+      processDownloadQueue();
     }
   } catch (err) {
     console.error('download netease error', err);
     updateDownloadTask(taskId, 'error');
     if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<i class="fas fa-download"></i> 下载'; }
+    processDownloadQueue();
+  }
+}
+
+async function downloadNeteaseSong(song, btnEl) {
+  if (!song || !song.id) return;
+  const level = ui.neteaseQualitySelect ? ui.neteaseQualitySelect.value : 'exhigh';
+
+  // 检查是否有正在进行的相同任务
+  const existingTask = state.neteaseDownloadTasks.find(t => String(t.songId) === String(song.id)
+    && ['preparing', 'downloading', 'pending', 'queued'].includes(t.status));
+  if (existingTask) { showToast('该任务正在进行中'); return; }
+
+  const limit = state.neteaseMaxConcurrent || 5;
+  const active = getActiveDownloadCount();
+  const payload = { ...song, level };
+
+  if (active < limit) {
+    const taskId = addDownloadTask(song, 'pending');
+    if (btnEl) {
+      btnEl.disabled = true;
+      btnEl.innerHTML = '<i class="fas fa-sync fa-spin"></i> 请求中';
+    }
+    startNeteaseDownload({ taskId, song: payload, btnEl });
+  } else {
+    const taskId = addDownloadTask(song, 'queued');
+    if (btnEl) {
+      btnEl.disabled = true;
+      btnEl.innerHTML = '<i class="fas fa-clock"></i> 排队中';
+    }
+    state.neteasePendingQueue.push({ taskId, song: payload, btnEl });
+    if (!state.neteaseQueueToastShown) {
+      showToast(`已加入队列，当前并发上限 ${limit}`);
+      state.neteaseQueueToastShown = true;
+    }
   }
 }
 
@@ -284,6 +401,7 @@ async function searchNeteaseSongs() {
   if (!ui.neteaseKeywordsInput) return;
   const inputVal = ui.neteaseKeywordsInput.value.trim();
   if (!inputVal) { showToast('请输入关键词或链接'); return; }
+  state.neteaseResultSource = 'search';
 
   // Clear previous results and show loading
   if (ui.neteaseResultList) {
@@ -338,6 +456,59 @@ async function searchNeteaseSongs() {
   }
 }
 
+async function loadDailyRecommendations(forceReload = false) {
+  if (recommendLoading) return;
+  if (!forceReload && state.neteaseRecommendations.length) {
+    state.neteaseResults = state.neteaseRecommendations;
+    state.neteaseResultSource = 'recommend';
+    state.neteaseSelected = new Set();
+    renderNeteaseResults();
+    return;
+  }
+
+  recommendLoading = true;
+  if (ui.neteaseResultList && (state.neteaseResultSource === 'recommend' || !state.neteaseResults.length)) {
+    ui.neteaseResultList.innerHTML = `
+      <div class="netease-empty-state" style="opacity:0.8; padding: 2rem;">
+        <div class="loading-spinner" style="width:2rem;height:2rem;margin-bottom:1rem;"></div>
+        <div class="loading-text">正在获取每日推荐...</div>
+      </div>`;
+    toggleBulkActions(false);
+  }
+
+  try {
+    const json = await api.netease.recommend();
+    if (json.success) {
+      state.neteaseRecommendations = json.data || [];
+      state.neteaseResults = state.neteaseRecommendations;
+      state.neteaseResultSource = 'recommend';
+      state.neteaseSelected = new Set();
+      renderNeteaseResults();
+    } else {
+      if (ui.neteaseResultList && (state.neteaseResultSource === 'recommend' || !state.neteaseResults.length)) {
+        ui.neteaseResultList.innerHTML = `
+          <div class="netease-empty-state">
+            <div class="empty-title">无法获取推荐</div>
+            <div class="empty-desc">${json.error || '请检查登录状态或 API 服务'}</div>
+          </div>`;
+      }
+      toggleBulkActions(false);
+    }
+  } catch (err) {
+    console.error('load recommend failed', err);
+    if (ui.neteaseResultList && (state.neteaseResultSource === 'recommend' || !state.neteaseResults.length)) {
+      ui.neteaseResultList.innerHTML = `
+        <div class="netease-empty-state">
+          <div class="empty-title">获取推荐失败</div>
+          <div class="empty-desc">请检查网络或重新登录后重试</div>
+        </div>`;
+    }
+    toggleBulkActions(false);
+  } finally {
+    recommendLoading = false;
+  }
+}
+
 async function loadNeteaseConfig() {
   let apiBase = 'http://localhost:23236'; // Default
 
@@ -346,8 +517,10 @@ async function loadNeteaseConfig() {
     if (json.success) {
       if (json.api_base) apiBase = json.api_base;
       state.neteaseDownloadDir = json.download_dir || '';
+      state.neteaseMaxConcurrent = json.max_concurrent || state.neteaseMaxConcurrent || 5;
       if (ui.neteaseDownloadDirInput) ui.neteaseDownloadDirInput.value = state.neteaseDownloadDir;
       if (ui.neteaseApiSettingsInput) ui.neteaseApiSettingsInput.value = apiBase;
+      syncDownloadLimitUI(state.neteaseMaxConcurrent);
     }
   } catch (err) {
     console.warn('Config load failed, utilizing default:', err);
@@ -357,6 +530,7 @@ async function loadNeteaseConfig() {
   state.neteaseApiBase = apiBase;
   if (ui.neteaseApiGateInput) ui.neteaseApiGateInput.value = apiBase;
   if (ui.neteaseApiSettingsInput) ui.neteaseApiSettingsInput.value = apiBase;
+  syncDownloadLimitUI(state.neteaseMaxConcurrent);
 
   // Auto-Connect Attempt
   try {
@@ -383,17 +557,35 @@ async function saveNeteaseConfig() {
   const apiBaseVal = ui.neteaseApiSettingsInput
     ? ui.neteaseApiSettingsInput.value.trim()
     : (ui.neteaseApiGateInput ? ui.neteaseApiGateInput.value.trim() : state.neteaseApiBase);
+  const limitSelectVal = ui.neteaseDownloadLimitSelect ? ui.neteaseDownloadLimitSelect.value : '';
+  const customLimitVal = ui.neteaseDownloadLimitCustom ? ui.neteaseDownloadLimitCustom.value.trim() : '';
+  let maxConcurrent = null;
+
+  if (limitSelectVal) {
+    if (limitSelectVal === 'custom') {
+      if (!customLimitVal) { showToast('请输入自定义同时下载数量'); return; }
+      maxConcurrent = parseInt(customLimitVal, 10);
+    } else {
+      maxConcurrent = parseInt(limitSelectVal, 10);
+    }
+    if (!maxConcurrent || maxConcurrent < 1) { showToast('同时下载数量需为正整数'); return; }
+  }
+
   const payload = {};
   if (dir || state.neteaseDownloadDir) payload.download_dir = dir || state.neteaseDownloadDir;
   if (apiBaseVal) payload.api_base = apiBaseVal;
-  if (!payload.download_dir && !payload.api_base) { showToast('请输入下载目录或API地址'); return; }
+  if (maxConcurrent !== null) payload.max_concurrent = maxConcurrent;
+  if (!payload.download_dir && !payload.api_base && maxConcurrent === null) { showToast('请输入下载目录或API地址'); return; }
   try {
     const json = await api.netease.configSave(payload);
     if (json.success) {
       state.neteaseDownloadDir = json.download_dir;
       state.neteaseApiBase = json.api_base || '';
+      state.neteaseMaxConcurrent = json.max_concurrent || maxConcurrent || state.neteaseMaxConcurrent;
       if (ui.neteaseApiGateInput) ui.neteaseApiGateInput.value = state.neteaseApiBase || 'http://localhost:23236';
       if (ui.neteaseApiSettingsInput) ui.neteaseApiSettingsInput.value = state.neteaseApiBase || 'http://localhost:23236';
+      syncDownloadLimitUI(state.neteaseMaxConcurrent);
+      processDownloadQueue();
       toggleNeteaseGate(!!state.neteaseApiBase);
       showToast('保存成功');
       closeSettingsModal();
@@ -477,6 +669,9 @@ async function refreshLoginStatus(showToastMsg = false) {
       localStorage.setItem('2fmusic_netease_user', JSON.stringify(user));
 
       renderLoginSuccessUI(user);
+      if (state.neteaseResultSource === 'recommend' || !state.neteaseResults.length) {
+        loadDailyRecommendations(true);
+      }
       if (showToastMsg) showToast('网易云已登录');
     } else {
       state.neteaseUser = null;
@@ -541,6 +736,7 @@ async function checkLoginStatus() {
 async function parseNeteaseLink() {
   const linkVal = ui.neteaseLinkInput ? ui.neteaseLinkInput.value.trim() : '';
   if (!linkVal) { showToast('请输入网易云链接或ID'); return; }
+  state.neteaseResultSource = 'search';
   if (ui.neteaseResultList) ui.neteaseResultList.innerHTML = '<div class="loading-text">解析中...</div>';
   toggleBulkActions(false);
   try {
@@ -595,6 +791,10 @@ function logoutNetease() {
     .finally(() => {
       state.neteaseUser = null;
       localStorage.removeItem('2fmusic_netease_user');
+      state.neteaseRecommendations = [];
+      state.neteaseResults = [];
+      state.neteaseResultSource = 'recommend';
+      renderNeteaseResults();
       toggleLoginUI(false);
       showToast('已退出网易云');
     });
@@ -603,6 +803,7 @@ function logoutNetease() {
 function openSettingsModal() {
   if (ui.neteaseApiSettingsInput) ui.neteaseApiSettingsInput.value = state.neteaseApiBase || '';
   if (ui.neteaseDownloadDirInput) ui.neteaseDownloadDirInput.value = state.neteaseDownloadDir || '';
+  syncDownloadLimitUI(state.neteaseMaxConcurrent);
   if (ui.neteaseSettingsModal) {
     ui.neteaseSettingsModal.classList.remove('hidden');
     ui.neteaseSettingsModal.classList.add('active');
@@ -613,6 +814,17 @@ function closeSettingsModal() {
   if (ui.neteaseSettingsModal) {
     ui.neteaseSettingsModal.classList.add('hidden');
     ui.neteaseSettingsModal.classList.remove('active');
+  }
+}
+
+function handleLimitSelectChange() {
+  if (!ui.neteaseDownloadLimitSelect || !ui.neteaseDownloadLimitCustom) return;
+  const isCustom = ui.neteaseDownloadLimitSelect.value === 'custom';
+  ui.neteaseDownloadLimitCustom.classList.toggle('hidden', !isCustom);
+  if (isCustom && !ui.neteaseDownloadLimitCustom.value) {
+    ui.neteaseDownloadLimitCustom.focus();
+  } else if (!isCustom) {
+    ui.neteaseDownloadLimitCustom.value = '';
   }
 }
 
@@ -631,6 +843,7 @@ function bindEvents() {
   // Settings Modal
   ui.neteaseSettingsBtn?.addEventListener('click', openSettingsModal);
   ui.neteaseCloseSettingsBtn?.addEventListener('click', closeSettingsModal);
+  ui.neteaseDownloadLimitSelect?.addEventListener('change', handleLimitSelectChange);
 
   ui.neteaseSaveDirBtn?.addEventListener('click', saveNeteaseConfig);
   if (ui.neteaseSelectAll) ui.neteaseSelectAll.addEventListener('change', (e) => {
@@ -753,6 +966,7 @@ if (installBtn) {
 export async function initNetease(onRefreshSongs) {
   songRefreshCallback = onRefreshSongs;
   bindEvents();
+  syncDownloadLimitUI(state.neteaseMaxConcurrent);
 
   // 1. Optimistic UI: Load from cache immediately
   try {
@@ -770,4 +984,5 @@ export async function initNetease(onRefreshSongs) {
   // 2. Background Validation
   await loadNeteaseConfig();
   renderDownloadTasks();
+  loadDailyRecommendations();
 }

@@ -2203,6 +2203,40 @@ select:focus {
     padding: 0.5rem;
 }
 
+.netease-download-controls {
+    padding: 0 1rem 0.5rem;
+}
+
+.netease-download-controls label {
+    display: block;
+    margin-bottom: 0.4rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.9rem;
+}
+
+.netease-download-limit-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.netease-download-limit-row select,
+.netease-download-limit-row input {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 0.5rem 0.6rem;
+    border-radius: 0.4rem;
+}
+
+.netease-download-limit-row select {
+    flex: 1;
+}
+
+.netease-download-limit-row input {
+    width: 7rem;
+}
+
 .netease-download-row {
     padding: 0.8rem;
     border-radius: 0.6rem;
@@ -2468,6 +2502,25 @@ select:focus {
     /* Remove side padding as we removed the container bg */
 }
 
+.netease-recommend-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.6rem 0.4rem 0.2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.netease-recommend-text .recommend-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+
+.netease-recommend-text .recommend-sub {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.9rem;
+}
+
 .netease-card {
     display: grid;
     grid-template-columns: 32px 60px 1fr auto;
@@ -2592,10 +2645,6 @@ select:focus {
         padding-top: 2.5rem;
     }
 
-    .netease-download-floating {
-        top: 0;
-    }
-
     .netease-hero {
         grid-template-columns: 1fr;
     }
@@ -2624,6 +2673,24 @@ select:focus {
     .netease-actions {
         grid-column: 1 / -1;
         justify-content: flex-start;
+    }
+
+    .netease-download-floating {
+        position: fixed;
+        right: 1rem;
+        bottom: 1rem;
+        top: auto;
+        z-index: 120;
+    }
+
+    .netease-download-panel {
+        position: fixed;
+        left: 1rem;
+        right: 1rem;
+        top: 4rem;
+        bottom: auto;
+        width: auto;
+        max-width: none;
     }
 }
 
@@ -3045,11 +3112,6 @@ select:focus {
         gap: 0.5rem;
     }
 
-    /* 手机端隐藏下载管理按钮 */
-    #netease-download-floating {
-        display: none !important;
-    }
-
     /* 缩小一下移动端的按钮尺寸，避免挤占 */
     .netease-user-display {
         padding: 0.2rem 0.6rem;
@@ -3328,6 +3390,26 @@ select:focus {
     color: white;
     padding: 0.6rem;
     border-radius: 0.4rem;
+}
+
+.setting-inline {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.setting-inline select {
+    flex: 1;
+}
+
+.setting-inline input {
+    width: 8rem;
+}
+
+.setting-hint {
+    margin-top: 0.35rem;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.65);
 }
 
 .setting-actions {

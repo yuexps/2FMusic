@@ -192,6 +192,20 @@
                                 <button id="netease-download-toggle" class="icon-btn" title="关闭"><i
                                         class="fas fa-times"></i></button>
                             </div>
+                            <div class="netease-download-controls">
+                                <label for="netease-download-limit">同时下载数量</label>
+                                <div class="netease-download-limit-row">
+                                    <select id="netease-download-limit">
+                                        <option value="5">5</option>
+                                        <option value="10">10</option>
+                                        <option value="15">15</option>
+                                        <option value="20">20</option>
+                                        <option value="custom">自定义</option>
+                                    </select>
+                                    <input type="number" id="netease-download-limit-custom" class="hidden" min="1" placeholder="输入数量">
+                                </div>
+                                <div class="setting-hint">超过上限会自动排队</div>
+                            </div>
                             <div class="netease-download-list" id="netease-download-list">
                                 <div class="loading-text">暂无下载</div>
                             </div>

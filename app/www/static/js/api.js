@@ -128,6 +128,10 @@ export const api = {
     async getInstallStatus() {
       const res = await fetch('/api/netease/install/status');
       return jsonOrThrow(res);
+    },
+    async recommend() {
+      const res = await fetch('/api/netease/recommend');
+      return jsonOrThrow(res);
     }
   }
 };

@@ -24,4 +24,4 @@ python app/server/app.py --music-library-path ./Music --log-path ./app.log --por
 *   **图标库**: [Font Awesome](https://fontawesome.com/)
 *   **取色库**: [ColorThief](https://lokeshdhakar.com/projects/color-thief/)
 *   **歌词/封面 API**: [LrcApi](https://github.com/HisAtri/LrcApi)
-*   **网易云 API**: [NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi)
+*   **网易云 API**: [Api Enhanced](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced)

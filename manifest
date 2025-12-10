@@ -1,9 +1,9 @@
 appname               = 2fmusic
-version               = 0.0.5
+version               = 0.0.6
 display_name          = 2FMusic
 desc                  = """
 <p><b>2FMusic</b> —— 一款简洁高效的本地音乐播放器，专为FNOS而设计。</p>
-<li>🧪 <b style='color:#d32f2f;'>测试版</b>功能暂不稳定，仅供测试！</li>
+<li>🧪 <b style='color:#d32f2f;'>测试版</b>-功能暂不稳定，仅供测试！</li>
 <ul>
     <li>⚡ 界面简洁，操作高效</li>
     <li>🎵 自动获取歌词与专辑封面</li>

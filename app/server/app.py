@@ -596,6 +596,7 @@ NETEASE_API_BASE_DEFAULT = os.environ.get('NETEASE_API_BASE', 'http://localhost:
 NETEASE_API_BASE = NETEASE_API_BASE_DEFAULT
 NETEASE_DOWNLOAD_DIR = os.environ.get('NETEASE_DOWNLOAD_PATH', MUSIC_LIBRARY_PATH)
 NETEASE_COOKIE = None
+NETEASE_MAX_CONCURRENT = int(os.environ.get('NETEASE_MAX_CONCURRENT', 5))
 
 def parse_cookie_string(cookie_str: str):
     """将 Set-Cookie 字符串解析为 requests 兼容的字典。"""
@@ -658,7 +659,7 @@ def save_netease_cookie(cookie_str: str):
         logger.warning(f"保存网易云 cookie 失败: {e}")
 
 def load_netease_config():
-    global NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE
+    global NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE, NETEASE_MAX_CONCURRENT
     try:
         with get_db() as conn:
             # Download Dir
@@ -668,14 +669,27 @@ def load_netease_config():
             # API Base
             row = conn.execute("SELECT value FROM system_settings WHERE key='netease_api_base'").fetchone()
             if row and row['value']: NETEASE_API_BASE = row['value']
+
+            # Max concurrent downloads
+            row = conn.execute("SELECT value FROM system_settings WHERE key='netease_max_concurrent'").fetchone()
+            if row and row['value']:
+                try:
+                    NETEASE_MAX_CONCURRENT = max(1, int(row['value']))
+                except Exception as e:
+                    logger.warning(f"读取网易云并发配置失败，使用默认值: {e}")
             
     except Exception as e:
         logger.warning(f"读取网易云配置失败: {e}")
 
-def save_netease_config(download_dir: str = None, api_base: str = None):
-    global NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE
+def save_netease_config(download_dir: str = None, api_base: str = None, max_concurrent: int = None):
+    global NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE, NETEASE_MAX_CONCURRENT
     if download_dir: NETEASE_DOWNLOAD_DIR = download_dir
     if api_base: NETEASE_API_BASE = api_base.rstrip('/') or NETEASE_API_BASE_DEFAULT
+    if max_concurrent is not None:
+        try:
+            NETEASE_MAX_CONCURRENT = max(1, int(max_concurrent))
+        except Exception as e:
+            logger.warning(f"保存并发配置失败，保持原值: {e}")
     
     try:
         with get_db() as conn:
@@ -683,6 +697,8 @@ def save_netease_config(download_dir: str = None, api_base: str = None):
                 conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)", ('netease_download_dir', NETEASE_DOWNLOAD_DIR))
             if api_base:
                 conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)", ('netease_api_base', NETEASE_API_BASE))
+            if max_concurrent is not None:
+                conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)", ('netease_max_concurrent', str(NETEASE_MAX_CONCURRENT)))
             conn.commit()
     except Exception as e:
         logger.warning(f"保存网易云配置失败: {e}")
@@ -1051,6 +1067,20 @@ def search_netease_music():
         logger.warning(f"网易云搜索失败: {e}")
         return jsonify({'success': False, 'error': '搜索失败，请检查网易云 API 服务'})
 
+@app.route('/api/netease/recommend')
+def netease_daily_recommend():
+    """获取每日推荐歌曲，需要已登录网易云账号。"""
+    try:
+        api_resp = call_netease_api('/recommend/songs', {'timestamp': int(time.time() * 1000)}, need_cookie=True)
+        if isinstance(api_resp, dict) and api_resp.get('code') == 301:
+            return jsonify({'success': False, 'error': '需要登录以获取每日推荐'})
+        daily = (api_resp.get('data') or {}).get('dailySongs', []) if isinstance(api_resp, dict) else []
+        songs = _format_netease_songs(daily)
+        return jsonify({'success': True, 'data': songs})
+    except Exception as e:
+        logger.warning(f"获取每日推荐失败: {e}")
+        return jsonify({'success': False, 'error': '获取每日推荐失败，请检查登录状态或 API 服务'})
+
 @app.route('/api/netease/login/status')
 def netease_login_status():
     """检测当前 cookie 是否已登录。"""
@@ -1145,10 +1175,11 @@ def netease_config():
     """获取或更新网易云下载配置。"""
     try:
         if request.method == 'GET':
-            return jsonify({'success': True, 'download_dir': NETEASE_DOWNLOAD_DIR, 'api_base': NETEASE_API_BASE})
+            return jsonify({'success': True, 'download_dir': NETEASE_DOWNLOAD_DIR, 'api_base': NETEASE_API_BASE, 'max_concurrent': NETEASE_MAX_CONCURRENT})
         data = request.json or {}
         target_dir = data.get('download_dir')
         api_base = (data.get('api_base') or '').strip()
+        max_concurrent = data.get('max_concurrent')
         if target_dir:
             target_dir = os.path.abspath(target_dir)
             os.makedirs(target_dir, exist_ok=True)
@@ -1156,10 +1187,15 @@ def netease_config():
             target_dir = None
         if api_base:
             api_base = api_base.rstrip('/')
+        if max_concurrent is not None:
+            try:
+                max_concurrent = max(1, int(max_concurrent))
+            except Exception:
+                return jsonify({'success': False, 'error': '并发上限需要是数字'})
         if not target_dir and not api_base:
             return jsonify({'success': False, 'error': '缺少下载目录或API地址'})
-        save_netease_config(target_dir or NETEASE_DOWNLOAD_DIR, api_base or NETEASE_API_BASE)
-        return jsonify({'success': True, 'download_dir': NETEASE_DOWNLOAD_DIR, 'api_base': NETEASE_API_BASE})
+        save_netease_config(target_dir or NETEASE_DOWNLOAD_DIR, api_base or NETEASE_API_BASE, max_concurrent)
+        return jsonify({'success': True, 'download_dir': NETEASE_DOWNLOAD_DIR, 'api_base': NETEASE_API_BASE, 'max_concurrent': NETEASE_MAX_CONCURRENT})
     except Exception as e:
         logger.warning(f"更新网易云配置失败: {e}")
         return jsonify({'success': False, 'error': '保存失败'})
@@ -1173,6 +1209,7 @@ def netease_debug():
         'cookie_source': 'database',
         'download_dir': NETEASE_DOWNLOAD_DIR,
         'api_base': NETEASE_API_BASE,
+        'max_concurrent': NETEASE_MAX_CONCURRENT,
     }
     if NETEASE_COOKIE:
         parsed = parse_cookie_string(NETEASE_COOKIE)
@@ -1251,6 +1288,10 @@ def download_netease_music():
     song_id = payload.get('id')
     if not song_id:
         return jsonify({'success': False, 'error': '缺少歌曲ID'})
+
+    active = sum(1 for t in DOWNLOAD_TASKS.values() if t.get('status') in ('pending', 'preparing', 'downloading'))
+    if active >= NETEASE_MAX_CONCURRENT:
+        return jsonify({'success': False, 'error': f'并发下载已达上限 ({NETEASE_MAX_CONCURRENT})，请稍后再试'})
     
     task_id = f"task_{int(time.time()*1000)}_{os.urandom(4).hex()}"
     DOWNLOAD_TASKS[task_id] = {

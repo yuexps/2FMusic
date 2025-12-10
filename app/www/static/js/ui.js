@@ -52,6 +52,8 @@ export const ui = {
   neteaseLinkInput: null, // Merged
   neteaseIdDownloadBtn: null, // Merged
   neteaseDownloadDirInput: document.getElementById('netease-download-dir'),
+  neteaseDownloadLimitSelect: document.getElementById('netease-download-limit'),
+  neteaseDownloadLimitCustom: document.getElementById('netease-download-limit-custom'),
   neteaseSelectAll: document.getElementById('netease-select-all'),
   neteaseBulkDownloadBtn: document.getElementById('netease-bulk-download'),
   neteaseBulkActions: document.getElementById('netease-bulk-actions'),
