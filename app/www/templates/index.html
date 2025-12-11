@@ -54,7 +54,7 @@
                 <ul>
                     <li class="active" id="nav-local"><i class="fas fa-music"></i> <span>本地音乐</span></li>
                     <li id="nav-fav"><i class="fas fa-heart"></i> <span>我的收藏</span></li>
-                    <li id="nav-mount"><i class="fas fa-network-wired"></i> <span>挂载管理</span></li>
+                    <li id="nav-mount"><i class="fas fa-network-wired"></i> <span>目录管理</span></li>
                     <li id="nav-netease"><i class="fas fa-cloud-download-alt"></i> <span>网易下载</span></li>
                     <li id="nav-upload"><i class="fas fa-cloud-upload-alt"></i> <span>上传音乐</span></li>
                 </ul>
@@ -90,15 +90,15 @@
                     <div class="section-title">挂载目录管理</div>
 
                     <div class="mount-add-section glass-panel">
-                        <h3><i class="fas fa-folder-plus"></i> 添加挂载点</h3>
-                        <p class="mount-hint">输入服务器上的文件夹绝对路径（如 D:\Music 或 /mnt/music），系统将自动创建软链接并导入。</p>
+                        <h3><i class="fas fa-folder-plus"></i> 添加服务器目录</h3>
+                        <p class="mount-hint">输入服务器上的文件夹绝对路径（如：/vol1/1000/music），程序将自动监控并扫描导入。</p>
                         <div class="mount-input-group">
                             <input type="text" id="mount-path-input" placeholder="输入绝对路径...">
                             <button id="btn-add-mount" class="btn-primary">添加</button>
                         </div>
                     </div>
 
-                    <div class="section-subtitle">已挂载目录</div>
+                    <div class="section-subtitle">已添加目录</div>
                     <div id="mount-list-container">
                         <div class="loading">
                             <div class="loading-spinner"></div>
@@ -119,7 +119,7 @@
                                 <div class="option-icon-box"><i class="fab fa-docker"></i></div>
                                 <div class="option-content">
                                     <div class="option-title">自动安装 (推荐)</div>
-                                    <div class="option-desc">服务器必须已安装 Docker Desktop。我们将自动为您拉取镜像并启动服务。<br>无需手动操作，自动完成
+                                    <div class="option-desc">服务器必须已安装 Docker 服务。我们将自动为您拉取镜像并启动服务。<br>无需手动操作，自动完成安装
                                     </div>
                                 </div>
                                 <button id="netease-api-install-btn" class="btn-primary full-width-btn">
@@ -147,8 +147,8 @@
                                 <div class="option-icon-box"><i class="fas fa-network-wired"></i></div>
                                 <div class="option-content">
                                     <div class="option-title">手动连接</div>
-                                    <div class="option-desc">请在 FnDepot 添加源 https://github.com/yuexps/FnDepot <br>下载
-                                        网易云API应用，然后输入地址连接。</div>
+                                    <div class="option-desc">如果无法自动安装，请在 FnDepot 添加源 https://github.com/yuexps/FnDepot <br>手动下载
+                                        网易云API 应用，然后输入地址连接。</div>
                                 </div>
                                 <div class="gate-manual-form">
                                     <input type="text" id="netease-api-gate-input" placeholder="http://localhost:23236"
