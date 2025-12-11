@@ -142,6 +142,8 @@ export async function handleExternalFile() {
   const params = new URLSearchParams(window.location.search);
   const externalPath = params.get('path');
   const isImportMode = window.location.pathname === '/import_mode';
+  const isPreviewMode = window.location.pathname === '/preview';
+
   if (!externalPath) return;
   if (isImportMode) {
     ui.uploadModal?.classList.add('active');
@@ -161,6 +163,7 @@ export async function handleExternalFile() {
       } else { throw new Error(data.error); }
     } catch (err) { if (ui.uploadMsg) ui.uploadMsg.innerText = '失败: ' + err.message; if (ui.closeUploadBtn) ui.closeUploadBtn.style.display = 'inline-block'; }
   } else {
+    // Preview Mode or Direct Play
     try {
       const json = await api.library.externalMeta(externalPath);
       if (json.success && json.data) {
@@ -291,6 +294,13 @@ async function initPlayerState() {
   const preferredTab = allowedTabs.includes(state.currentTab) ? state.currentTab : null;
   const savedTab = allowedTabs.includes(state.savedState.tab) ? state.savedState.tab : 'local';
   const targetTab = preferredTab || savedTab;
+
+  // Preview Mode: Force fullscreen immediately
+  const isPreview = window.location.pathname === '/preview';
+  if (isPreview) {
+    ui.overlay?.classList.add('active');
+  }
+
   switchTab(targetTab);
   if (state.savedState.volume !== undefined) { ui.audio.volume = state.savedState.volume; updateVolumeUI(ui.audio.volume); }
   if (state.savedState.playMode !== undefined) { state.playMode = state.savedState.playMode; updatePlayModeUI(); }

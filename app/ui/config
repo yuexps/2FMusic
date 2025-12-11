@@ -16,9 +16,15 @@
             "type": "iframe",
             "protocol": "http",
             "port": "23237",
-            "url": "/",
+            "url": "/preview",
             "allUsers": false,
-            "fileTypes": ["mp3", "flac", "wav", "ogg", "m4a", "wma", "ape"],
+            "fileTypes": [
+                "mp3",
+                "flac",
+                "wav",
+                "ogg",
+                "m4a"
+            ],
             "noDisplay": true
         },
         "2fmusic.import": {
@@ -29,7 +35,13 @@
             "port": "23237",
             "url": "/import_mode",
             "allUsers": false,
-            "fileTypes": ["mp3", "flac", "wav", "ogg", "m4a", "wma", "ape"],
+            "fileTypes": [
+                "mp3",
+                "flac",
+                "wav",
+                "ogg",
+                "m4a"
+            ],
             "noDisplay": true
         }
     }

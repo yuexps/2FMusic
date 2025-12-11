@@ -280,7 +280,8 @@ def init_db():
             
             # 清理错误索引的非音频文件
             try:
-                conn.execute("DELETE FROM songs WHERE filename NOT LIKE '%.mp3' AND filename NOT LIKE '%.wav' AND filename NOT LIKE '%.ogg' AND filename NOT LIKE '%.flac' AND filename NOT LIKE '%.aac' AND filename NOT LIKE '%.m4a' AND filename NOT LIKE '%.wma'")
+                placeholders = ' OR '.join([f"filename NOT LIKE '%{ext}'" for ext in AUDIO_EXTS])
+                conn.execute(f"DELETE FROM songs WHERE {placeholders}")
             except: pass
             
             conn.commit()
@@ -325,7 +326,7 @@ def get_metadata(file_path):
     logger.debug(f"文件 {file_path} 元数据: {metadata}")
     return metadata
 
-AUDIO_EXTS = ('.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a', '.wma')
+AUDIO_EXTS = ('.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a')
 
 def index_single_file(file_path):
     """单独索引一个文件。"""
@@ -384,7 +385,7 @@ def scan_library_incremental():
         except Exception: pass
         
         disk_files = {} # path -> info
-        supported_exts = ('.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a', '.wma')
+        supported_exts = AUDIO_EXTS
         
         # 2. 遍历所有目录
         for root_dir in scan_roots:
@@ -478,6 +479,7 @@ threading.Thread(target=init_watchdog, daemon=True).start()
 # --- 路由定义 ---
 @app.route('/')
 @app.route('/import_mode')
+@app.route('/preview')
 def index(): return render_template('index.html')
 
 # --- 系统状态接口 ---
