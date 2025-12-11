@@ -29,7 +29,7 @@ try:
     import requests
     from mutagen import File
     from mutagen.easyid3 import EasyID3
-    from mutagen.id3 import ID3, APIC
+    from mutagen.id3 import ID3, APIC, USLT
     from mutagen.flac import FLAC, Picture
     from mutagen.mp4 import MP4, MP4Cover
     from watchdog.observers import Observer
@@ -442,6 +442,59 @@ def save_cover_file(cover_bytes: bytes, base_name: str):
         logger.warning(f"封面保存失败: {base_name}, 错误: {e}")
         return None
 
+def fetch_netease_lyrics(song_id: str):
+    """返回 (lrc, yrc) 字符串；若无则为 None。"""
+    if not song_id:
+        return None, None
+    lrc_text = None
+    yrc_text = None
+    try:
+        lyr_resp = call_netease_api('/lyric/new', {'id': song_id}, need_cookie=False)
+        if isinstance(lyr_resp, dict):
+            yrc_text = (lyr_resp.get('yrc') or {}).get('lyric')
+            lrc_text = (lyr_resp.get('lrc') or {}).get('lyric')
+        if not lrc_text:
+            old_resp = call_netease_api('/lyric', {'id': song_id}, need_cookie=False)
+            if isinstance(old_resp, dict):
+                lrc_text = (old_resp.get('lrc') or {}).get('lyric') or lrc_text
+                if not yrc_text:
+                    yrc_text = (old_resp.get('yrc') or {}).get('lyric')
+    except Exception as e:
+        logger.warning(f"获取网易歌词失败: {e}")
+    return lrc_text, yrc_text
+
+def embed_lyrics_to_file(audio_path: str, lrc_text: str):
+    """将歌词嵌入音频（行级歌词）。"""
+    if not lrc_text or not os.path.exists(audio_path):
+        return
+    ext = os.path.splitext(audio_path)[1].lower()
+    try:
+        if ext == '.mp3':
+            try:
+                tags = ID3(audio_path)
+            except Exception:
+                tags = File(audio_path)
+                tags.add_tags()
+                tags.save()
+                tags = ID3(audio_path)
+            tags.delall('USLT')
+            tags.add(USLT(encoding=3, lang='chi', desc='Lyric', text=lrc_text))
+            tags.save()
+        elif ext == '.flac':
+            audio = FLAC(audio_path)
+            audio['LYRICS'] = lrc_text
+            audio.save()
+        elif ext in ('.m4a', '.m4b', '.m4p'):
+            audio = MP4(audio_path)
+            audio['\xa9lyr'] = lrc_text
+            audio.save()
+        elif ext in ('.ogg', '.oga'):
+            audio = File(audio_path)
+            audio['LYRICS'] = lrc_text
+            audio.save()
+    except Exception as e:
+        logger.warning(f"内嵌歌词失败: {audio_path}, 错误: {e}")
+
 AUDIO_EXTS = ('.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a')
 
 def index_single_file(file_path):
@@ -723,6 +776,9 @@ NETEASE_API_BASE = NETEASE_API_BASE_DEFAULT
 NETEASE_DOWNLOAD_DIR = os.environ.get('NETEASE_DOWNLOAD_PATH', MUSIC_LIBRARY_PATH)
 NETEASE_COOKIE = None
 NETEASE_MAX_CONCURRENT = 20
+LYRICS_DIR = os.path.join(MUSIC_LIBRARY_PATH, 'lyrics')
+
+os.makedirs(LYRICS_DIR, exist_ok=True)
 
 def parse_cookie_string(cookie_str: str):
     """将 Set-Cookie 字符串解析为 requests 兼容的字典。"""
@@ -1566,7 +1622,7 @@ def run_download_task(task_id, payload):
         DOWNLOAD_TASKS[task_id]['title'] = title
         DOWNLOAD_TASKS[task_id]['artist'] = artist
 
-        api_resp = call_netease_api('/song/url/v1', {'id': song_id, 'level': level})
+        api_resp = call_netease_api('/song/url/v1', {'id': song_id, 'level': level}, need_cookie=bool(NETEASE_COOKIE))
         data_list = api_resp.get('data') if isinstance(api_resp, dict) else None
         track_info = None
         if isinstance(data_list, list) and data_list:
@@ -1575,7 +1631,19 @@ def run_download_task(task_id, payload):
             track_info = data_list
 
         if not track_info or (not track_info.get('url') and not track_info.get('proxyUrl')):
-            raise Exception('暂无可用下载地址，可能需要切换音质或登录')
+            # 回退到标准音质再试一次
+            if level != 'standard':
+                try:
+                    api_resp_std = call_netease_api('/song/url/v1', {'id': song_id, 'level': 'standard'}, need_cookie=bool(NETEASE_COOKIE))
+                    data_list = api_resp_std.get('data') if isinstance(api_resp_std, dict) else None
+                    if isinstance(data_list, list) and data_list:
+                        track_info = data_list[0]
+                    elif isinstance(data_list, dict):
+                        track_info = data_list
+                except Exception:
+                    track_info = track_info
+            if not track_info or (not track_info.get('url') and not track_info.get('proxyUrl')):
+                raise Exception('暂无可用下载地址，可能需要切换音质或登录')
 
         download_url = track_info.get('url') or track_info.get('proxyUrl')
         ext = (track_info.get('type') or track_info.get('encodeType') or 'mp3').lower()
@@ -1616,6 +1684,23 @@ def run_download_task(task_id, payload):
         if cover_bytes:
             embed_cover_to_file(target_path, cover_bytes)
             save_cover_file(cover_bytes, base_name_for_cover)
+        # 保存并内嵌歌词（无需登录）
+        lrc_text, yrc_text = fetch_netease_lyrics(song_id)
+        if lrc_text:
+            try:
+                os.makedirs(LYRICS_DIR, exist_ok=True)
+                lrc_path = os.path.join(LYRICS_DIR, f"{base_name_for_cover}.lrc")
+                with open(lrc_path, 'w', encoding='utf-8') as f:
+                    f.write(lrc_text)
+            except Exception as e:
+                logger.warning(f"保存歌词失败: {e}")
+            embed_lyrics_to_file(target_path, lrc_text)
+        if yrc_text:
+            try:
+                with open(os.path.join(LYRICS_DIR, f"{base_name_for_cover}.yrc"), 'w', encoding='utf-8') as f:
+                    f.write(yrc_text)
+            except Exception as e:
+                logger.warning(f"保存逐字歌词失败: {e}")
         index_single_file(target_path)
         
         DOWNLOAD_TASKS[task_id]['status'] = 'success'

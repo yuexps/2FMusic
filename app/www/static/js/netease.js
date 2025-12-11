@@ -427,7 +427,8 @@ async function downloadNeteaseSong(song, btnEl) {
     return;
   }
   const preferredLevel = song.download_level || song.downloadLevel || song.level;
-  const level = ui.neteaseQualitySelect ? ui.neteaseQualitySelect.value : (preferredLevel || 'exhigh');
+  const selected = ui.neteaseQualitySelect ? ui.neteaseQualitySelect.value : (preferredLevel || 'exhigh');
+  const level = (!state.neteaseIsVip && !state.neteaseUser) ? 'standard' : selected;
 
   // 检查是否有正在进行的相同任务
   const existingTask = state.neteaseDownloadTasks.find(t => String(t.songId) === String(song.id)
