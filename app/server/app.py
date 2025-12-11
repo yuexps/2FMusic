@@ -1099,11 +1099,12 @@ def netease_login_status():
                     now_ms = int(time.time() * 1000)
 
                     def _active(pkg: dict):
+                        """vipCode>0 且未过期的套餐视为有效；expireTime 为空默认为有效。"""
                         if not pkg:
                             return False
-                        code = pkg.get('vipCode')
+                        code = pkg.get('vipCode') or 0
                         exp = pkg.get('expireTime') or pkg.get('expiretime')
-                        if code != 1:
+                        if code <= 0:
                             return False
                         if exp is None:
                             return True
@@ -1112,10 +1113,16 @@ def netease_login_status():
                         except Exception:
                             return False
 
-                    # 优先使用 isVip 明确标记，其次判定未过期的 vipCode=1 套餐
+                    # 综合判断：isVip 明确标记 > 任一未过期套餐/标识 > redVipLevel>0
                     is_vip = bool(data.get('isVip'))
                     if not is_vip:
-                        is_vip = _active(data.get('associator')) or _active(data.get('musicPackage'))
+                        is_vip = any([
+                            _active(data.get('associator')),
+                            _active(data.get('musicPackage')),
+                            _active(data.get('redplus')),
+                            _active(data.get('familyVip')),
+                            (data.get('redVipLevel') or 0) > 0
+                        ])
             except Exception as e:
                 logger.warning(f"获取VIP信息失败: {e}")
             return jsonify({
