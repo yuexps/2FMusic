@@ -898,20 +898,41 @@ def call_netease_api(path: str, params: dict, method: str = 'GET', need_cookie: 
 def _extract_song_level(privilege: dict):
     """返回(用户可下载的最高音质, 曲目最高音质)。"""
     privilege = privilege or {}
-    max_level = privilege.get('maxBrLevel') or privilege.get('maxbr') or privilege.get('maxLevel')
-    user_level = privilege.get('dlLevel') or privilege.get('plLevel') or max_level
+    def _norm(val):
+        if not val:
+            return 'standard'
+        v = str(val).lower()
+        return 'standard' if v == 'none' else val
+    max_level = _norm(privilege.get('maxBrLevel') or privilege.get('maxbr') or privilege.get('maxLevel'))
+    user_level = _norm(privilege.get('dlLevel') or privilege.get('plLevel') or max_level)
     return (user_level or 'standard', max_level or user_level or 'standard')
 
-def _extract_song_size(track: dict):
-    """优先取最高音质的文件大小（字节）。"""
-    for key in ('hr', 'sq', 'h', 'm', 'l'):
+def _extract_song_size(track: dict, preferred: str = None):
+    """根据期望音质优先取对应大小（字节），找不到再按从低到高回退。"""
+    if not track:
+        return None
+    level = (preferred or '').lower()
+    # 映射期望音质到字段优先级（标准优先用 l）
+    prefer_map = {
+        'standard': ('l', 'm', 'h', 'sq', 'hr'),
+        'higher': ('m', 'h', 'sq', 'hr'),
+        'exhigh': ('h', 'sq', 'hr', 'm'),
+        'lossless': ('sq', 'hr', 'h', 'm'),
+        'hires': ('hr', 'sq', 'h', 'm'),
+        'jyeffect': ('sq', 'h', 'm'),
+        'sky': ('hr', 'sq', 'h', 'm'),
+        'dolby': ('hr', 'sq', 'h', 'm'),
+        'jymaster': ('hr', 'sq', 'h', 'm')
+    }
+    orders = prefer_map.get(level) or ('l', 'm', 'h', 'sq', 'hr')
+    for key in orders:
         data = track.get(key) or {}
         size = data.get('size')
         if size:
             try:
                 return int(size)
             except Exception:
-                pass
+                continue
     return None
 
 def _format_netease_songs(source_tracks):
@@ -929,7 +950,7 @@ def _format_netease_songs(source_tracks):
         user_level, max_level = _extract_song_level(privilege)
         artists = ' / '.join([a.get('name') for a in item.get('ar', []) if a.get('name')]) or '未知艺术家'
         album_info = item.get('al') or {}
-        size_bytes = _extract_song_size(item)
+        size_bytes = _extract_song_size(item, user_level)
         songs.append({
             'id': sid,
             'title': item.get('name') or f"未命名 {sid}",
@@ -1287,7 +1308,7 @@ def search_netease_music():
                 'duration': (item.get('dt') or 0) / 1000,
                 'level': user_level,
                 'max_level': max_level,
-                'size': _extract_song_size(item),
+                'size': _extract_song_size(item, user_level),
                 'is_vip': is_vip
             })
         return jsonify({'success': True, 'data': songs})

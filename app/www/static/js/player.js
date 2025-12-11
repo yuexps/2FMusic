@@ -438,7 +438,19 @@ function prevTrack() {
 // 滑动状态
 let isDragging = false;
 
-ui.audio.addEventListener('ended', () => { if (state.playMode === 2) { ui.audio.currentTime = 0; ui.audio.play(); } else nextTrack(); });
+ui.audio.addEventListener('ended', () => {
+  // 结束时将最后一句歌词居中显示
+  if (state.lyricsData.length && ui.lyricsContainer) {
+    const lastIdx = state.lyricsData.length - 1;
+    document.querySelectorAll('.lyric-line.active').forEach(l => l.classList.remove('active'));
+    const lastLine = ui.lyricsContainer.querySelector(`.lyric-line[data-index="${lastIdx}"]`);
+    if (lastLine) {
+      lastLine.classList.add('active');
+      lastLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+  if (state.playMode === 2) { ui.audio.currentTime = 0; ui.audio.play(); } else nextTrack();
+});
 
 let lastVolume = 1.0;
 function updateVolumeUI(val) {
@@ -576,6 +588,13 @@ function parseAndRenderLyrics(lrc) {
         }
       });
     });
+    // 前奏阶段预先将第一句居中显示
+    const firstLine = ui.lyricsContainer.querySelector('.lyric-line[data-index="0"]');
+    if (firstLine) {
+      document.querySelectorAll('.lyric-line.active').forEach(l => l.classList.remove('active'));
+      firstLine.classList.add('active');
+      firstLine.scrollIntoView({ behavior: 'auto', block: 'center' });
+    }
   }
 }
 

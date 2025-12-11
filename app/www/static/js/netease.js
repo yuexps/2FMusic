@@ -223,7 +223,7 @@ function renderNeteaseResults() {
       dolby: 'lvl-dolby',
       jymaster: 'lvl-jymaster'
     };
-    const levelValue = (song.level || 'standard').toLowerCase();
+    const levelValue = normalizeLevel(song.level || 'standard');
     const levelText = levelLabelMap[levelValue] || levelValue.toUpperCase();
     const levelClass = levelClassMap[levelValue] || 'lvl-standard';
 
@@ -1035,3 +1035,8 @@ export async function initNetease(onRefreshSongs) {
   renderDownloadTasks();
   loadDailyRecommendations();
 }
+const normalizeLevel = (val) => {
+  const v = (val || '').toLowerCase();
+  if (!v || v === 'none') return 'standard';
+  return v;
+};

@@ -834,7 +834,8 @@ input[type=range]::-webkit-slider-thumb {
     text-align: center;
     mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
-    padding: 2rem 0;
+    padding: 30vh 0 4rem;
+    box-sizing: border-box;
     scrollbar-width: none;
 }
 
@@ -850,6 +851,13 @@ input[type=range]::-webkit-slider-thumb {
     font-size: 1.2rem;
     transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     cursor: pointer;
+    text-align: center;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    max-width: 90vw;
+    width: 100%;
+    margin: 0 auto;
 
     /* 默认状态 (远距离) */
     opacity: 0.4;
@@ -878,7 +886,7 @@ input[type=range]::-webkit-slider-thumb {
     color: white;
     font-weight: bold;
     text-shadow: 0 0 20px rgba(255, 255, 255, 0.6);
-    transform: scale(1.35);
+    transform: scale(1.1);
     opacity: 1;
     filter: blur(0);
     z-index: 10;
@@ -1778,7 +1786,7 @@ select:focus {
         min-height: 0;
         /* 关键：允许 flex 容器缩小以显示滚动条 */
         mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
-        padding: 0;
+        padding: 20vh 0 3rem;
         margin-bottom: 0.5rem;
     }
 
