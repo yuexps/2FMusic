@@ -1,5 +1,7 @@
 import { ui } from './ui.js';
 
+const cachedNeteaseUser = JSON.parse(localStorage.getItem('2fmusic_netease_user') || 'null');
+
 // 状态集中管理
 export const state = {
   fullPlaylist: JSON.parse(localStorage.getItem('2fmusic_playlist') || '[]'),
@@ -21,7 +23,8 @@ export const state = {
   neteaseDownloadDir: '',
   neteaseApiBase: '',
   neteaseSelected: new Set(),
-  neteaseUser: JSON.parse(localStorage.getItem('2fmusic_netease_user') || 'null'),
+  neteaseUser: cachedNeteaseUser,
+  neteaseIsVip: cachedNeteaseUser?.isVip || false,
   neteaseDownloadTasks: [],
   neteasePendingQueue: [],
   neteaseQueueToastShown: false,

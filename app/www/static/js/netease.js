@@ -7,6 +7,11 @@ import { showToast, showConfirmDialog, hideProgressToast, formatTime } from './u
 let songRefreshCallback = null;
 let recommendLoading = false;
 
+const canDownloadSong = (song) => {
+  if (!song) return false;
+  return !(song.is_vip && !state.neteaseIsVip);
+};
+
 function renderDownloadTasks() {
   const list = ui.neteaseDownloadList;
   const tasks = state.neteaseDownloadTasks;
@@ -93,8 +98,9 @@ function updateDownloadTask(id, status) {
 }
 
 function updateSelectAllState() {
-  const total = state.neteaseResults.length;
-  const selectedCount = Array.from(state.neteaseSelected).filter(id => state.neteaseResults.some(s => String(s.id) === id)).length;
+  const selectable = state.neteaseResults.filter(canDownloadSong);
+  const total = selectable.length;
+  const selectedCount = selectable.filter(s => state.neteaseSelected.has(String(s.id))).length;
   if (ui.neteaseSelectAll) {
     ui.neteaseSelectAll.indeterminate = selectedCount > 0 && selectedCount < total;
     ui.neteaseSelectAll.checked = total > 0 && selectedCount === total;
@@ -146,6 +152,8 @@ function renderNeteaseResults() {
   state.neteaseResults.forEach(song => {
     const card = document.createElement('div');
     card.className = 'netease-card';
+    const isVipSong = !!song.is_vip;
+    const canDownloadVip = isVipSong ? state.neteaseIsVip : true;
 
     const selectWrap = document.createElement('div');
     selectWrap.className = 'netease-select';
@@ -153,6 +161,10 @@ function renderNeteaseResults() {
     checkbox.type = 'checkbox';
     const sid = String(song.id);
     checkbox.checked = state.neteaseSelected.has(sid);
+    if (isVipSong && !canDownloadVip) {
+      checkbox.disabled = true;
+      state.neteaseSelected.delete(sid);
+    }
     checkbox.addEventListener('change', () => {
       if (checkbox.checked) state.neteaseSelected.add(sid);
       else state.neteaseSelected.delete(sid);
@@ -167,13 +179,13 @@ function renderNeteaseResults() {
     const meta = document.createElement('div');
     meta.className = 'netease-meta';
     const levelText = (song.level || 'standard').toUpperCase();
-    meta.innerHTML = `<div class="title">${song.title}</div>
+    const vipBadge = song.is_vip ? '<span class="netease-vip-badge">VIP</span>' : '';
+    meta.innerHTML = `<div class="title">${song.title}${vipBadge}</div>
         <div class="subtitle">${song.artist}</div>
         <div class="extra"><span class="netease-level-pill">${levelText}</span>${song.album || '未收录专辑'} · ${formatTime(song.duration || 0)}</div>`;
 
     const actions = document.createElement('div');
     actions.className = 'netease-actions';
-    const btn = document.createElement('button');
 
     // 检查是否已下载
     const isDownloaded = state.fullPlaylist && state.fullPlaylist.some(local =>
@@ -181,18 +193,26 @@ function renderNeteaseResults() {
       (local.artist || '').trim() === (song.artist || '').trim()
     );
 
-    if (isDownloaded) {
-      btn.className = 'btn-primary';
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-check"></i> 已下载';
-      btn.style.opacity = '0.7';
-      btn.style.cursor = 'default';
+    if (isVipSong && !canDownloadVip) {
+      const locked = document.createElement('div');
+      locked.className = 'vip-locked';
+      locked.innerHTML = '<i class="fas fa-lock"></i> VIP专享';
+      actions.appendChild(locked);
     } else {
-      btn.className = 'btn-primary';
-      btn.innerHTML = '<i class="fas fa-download"></i> 下载';
-      btn.addEventListener('click', () => downloadNeteaseSong(song, btn));
+      const btn = document.createElement('button');
+      if (isDownloaded) {
+        btn.className = 'btn-primary';
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-check"></i> 已下载';
+        btn.style.opacity = '0.7';
+        btn.style.cursor = 'default';
+      } else {
+        btn.className = 'btn-primary';
+        btn.innerHTML = '<i class="fas fa-download"></i> 下载';
+        btn.addEventListener('click', () => downloadNeteaseSong(song, btn));
+      }
+      actions.appendChild(btn);
     }
-    actions.appendChild(btn);
 
     card.appendChild(selectWrap);
     card.appendChild(cover);
@@ -342,6 +362,10 @@ async function startNeteaseDownload({ taskId, song, btnEl }) {
 
 async function downloadNeteaseSong(song, btnEl) {
   if (!song || !song.id) return;
+  if (!canDownloadSong(song)) {
+    showToast('VIP 歌曲仅登录会员可下载');
+    return;
+  }
   const level = ui.neteaseQualitySelect ? ui.neteaseQualitySelect.value : 'exhigh';
 
   // 检查是否有正在进行的相同任务
@@ -608,10 +632,26 @@ function renderLoginSuccessUI(user) {
   // Update Header User Display
   toggleLoginUI(true);
 
-  if (ui.neteaseUserDisplay) {
-    if (ui.neteaseUserName) ui.neteaseUserName.innerText = user.nickname || '用户';
-    if (ui.neteaseUserAvatar) ui.neteaseUserAvatar.src = user.avatar || '';
-  }
+    if (ui.neteaseUserDisplay) {
+      if (ui.neteaseUserName) ui.neteaseUserName.innerText = user.nickname || '用户';
+      if (ui.neteaseUserAvatar) ui.neteaseUserAvatar.src = user.avatar || '';
+      if (ui.neteaseUserTag) {
+        if (user.isVip) {
+          ui.neteaseUserTag.innerText = 'VIP';
+          ui.neteaseUserTag.classList.remove('hidden');
+        } else {
+          ui.neteaseUserTag.innerText = '普通';
+          ui.neteaseUserTag.classList.remove('hidden');
+        }
+      }
+      if (ui.neteaseAvatarWrapper) {
+        if (user.isVip) ui.neteaseAvatarWrapper.classList.add('vip-avatar-ring');
+        else ui.neteaseAvatarWrapper.classList.remove('vip-avatar-ring');
+      }
+      if (ui.neteaseVipBadge) {
+        ui.neteaseVipBadge.classList.toggle('hidden', !user.isVip);
+      }
+    }
 
   // Close QR Modal if open
   if (ui.neteaseQrImg) ui.neteaseQrImg.src = '';
@@ -623,21 +663,25 @@ async function refreshLoginStatus(showToastMsg = false) {
   try {
     const json = await api.netease.loginStatus();
     if (json.success && json.logged_in) {
-      const user = { nickname: json.nickname, avatar: json.avatar };
+      const user = { nickname: json.nickname, avatar: json.avatar, isVip: !!json.is_vip };
       state.neteaseUser = user;
+      state.neteaseIsVip = !!json.is_vip;
       localStorage.setItem('2fmusic_netease_user', JSON.stringify(user));
 
       renderLoginSuccessUI(user);
+      renderNeteaseResults();
       if (state.neteaseResultSource === 'recommend' || !state.neteaseResults.length) {
         loadDailyRecommendations(true);
       }
       if (showToastMsg) showToast('网易云已登录');
     } else {
       state.neteaseUser = null;
+      state.neteaseIsVip = false;
       localStorage.removeItem('2fmusic_netease_user');
 
       // Update UI for logged out state
       toggleLoginUI(false);
+      renderNeteaseResults();
 
       if (showToastMsg) showToast(json.error || '未登录');
     }
@@ -726,7 +770,7 @@ async function parseNeteaseLink() {
 
 async function bulkDownloadSelected() {
   const level = ui.neteaseQualitySelect ? ui.neteaseQualitySelect.value : 'exhigh';
-  const targets = state.neteaseResults.filter(s => state.neteaseSelected.has(String(s.id)));
+  const targets = state.neteaseResults.filter(s => state.neteaseSelected.has(String(s.id)) && canDownloadSong(s));
   if (!targets.length) { showToast('请先选择歌曲'); return; }
   for (const s of targets) {
     await downloadNeteaseSong({ ...s, level });
@@ -749,6 +793,7 @@ function logoutNetease() {
     .catch((err) => { console.error('logout api error', err); return { success: false }; })
     .finally(() => {
       state.neteaseUser = null;
+      state.neteaseIsVip = false;
       localStorage.removeItem('2fmusic_netease_user');
       state.neteaseRecommendations = [];
       state.neteaseResults = [];
@@ -793,8 +838,9 @@ function bindEvents() {
 
   ui.neteaseSaveDirBtn?.addEventListener('click', saveNeteaseConfig);
   if (ui.neteaseSelectAll) ui.neteaseSelectAll.addEventListener('change', (e) => {
-    if (e.target.checked) state.neteaseSelected = new Set(state.neteaseResults.map(s => String(s.id)));
-    else state.neteaseSelected.clear();
+    if (e.target.checked) {
+      state.neteaseSelected = new Set(state.neteaseResults.filter(canDownloadSong).map(s => String(s.id)));
+    } else state.neteaseSelected.clear();
     renderNeteaseResults();
   });
   ui.neteaseBulkDownloadBtn?.addEventListener('click', bulkDownloadSelected);
@@ -815,15 +861,10 @@ function bindEvents() {
   });
 
   // User menu
-  ui.neteaseUserDisplay?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleUserMenu();
-  });
-  ui.neteaseMenuSettings?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleUserMenu(false);
-    openSettingsModal();
-  });
+    ui.neteaseUserDisplay?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleUserMenu();
+    });
   ui.neteaseMenuLogout?.addEventListener('click', async (e) => {
     e.stopPropagation();
     toggleUserMenu(false);
@@ -920,6 +961,7 @@ export async function initNetease(onRefreshSongs) {
       const user = JSON.parse(saved);
       if (user && user.nickname) {
         state.neteaseUser = user;
+        state.neteaseIsVip = !!user.isVip;
         renderLoginSuccessUI(user);
         toggleNeteaseGate(true);
       }

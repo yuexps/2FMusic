@@ -2549,10 +2549,39 @@ select:focus {
     letter-spacing: 0.5px;
 }
 
+.netease-vip-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.15rem 0.5rem;
+    margin-left: 0.5rem;
+    border-radius: 0.45rem;
+    background: linear-gradient(135deg, #ffd54f, #ff9800);
+    color: #2d1b00;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
 .netease-actions {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+.vip-locked {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 0.5rem;
+    background: rgba(255, 215, 0, 0.15);
+    border: 1px dashed rgba(255, 215, 0, 0.5);
+    color: #fbc02d;
+    font-weight: 700;
+    letter-spacing: 0.4px;
 }
 
 .netease-bulk-row {
@@ -3163,6 +3192,45 @@ select:focus {
 
 .netease-user-menu.hidden {
     display: none;
+}
+
+.vip-avatar-ring {
+    position: relative;
+    padding: 0.18rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #e8c16b, #b8860b);
+    box-shadow: 0 0 12px rgba(232, 193, 107, 0.45);
+    display: inline-flex;
+}
+
+.vip-avatar-ring #netease-user-avatar {
+    border: 2px solid rgba(0, 0, 0, 0.25);
+    box-shadow: none;
+}
+
+.vip-badge-icon {
+    position: absolute;
+    top: -0.35rem;
+    right: -0.35rem;
+    background: linear-gradient(135deg, #ffd54f, #ff9800);
+    color: #2d1b00;
+    border-radius: 50%;
+    width: 1.05rem;
+    height: 1.05rem;
+    display: grid;
+    place-items: center;
+    font-size: 0.65rem;
+    font-weight: 800;
+    border: 1.6px solid rgba(0, 0, 0, 0.12);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+    z-index: 2;
+}
+
+.vip-avatar-ring-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .netease-user-menu .menu-btn {

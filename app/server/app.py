@@ -724,6 +724,10 @@ def _format_netease_songs(source_tracks):
         sid = item.get('id')
         if not sid:
             continue
+        fee = item.get('fee')
+        privilege_fee = (item.get('privilege') or {}).get('fee')
+        # 仅在明确 fee==1（VIP 曲目）时标记 VIP，避免 fee=8 的“会员高音质”误标
+        is_vip = (fee == 1) or (privilege_fee == 1)
         artists = ' / '.join([a.get('name') for a in item.get('ar', []) if a.get('name')]) or '未知艺术家'
         album_info = item.get('al') or {}
         songs.append({
@@ -732,7 +736,8 @@ def _format_netease_songs(source_tracks):
             'artist': artists,
             'album': album_info.get('name') or '',
             'cover': (album_info.get('picUrl') or '').replace('http://', 'https://'),
-            'duration': (item.get('dt') or 0) / 1000
+            'duration': (item.get('dt') or 0) / 1000,
+            'is_vip': is_vip
         })
     return songs
 
@@ -1042,6 +1047,10 @@ def search_netease_music():
             artists = ' / '.join([a.get('name') for a in item.get('ar', []) if a.get('name')]) or '未知艺术家'
             album_info = item.get('al') or {}
             privilege = item.get('privilege') or {}
+            fee = item.get('fee')
+            privilege_fee = privilege.get('fee')
+            # 仅 fee==1 视为 VIP；fee=8 只代表会员可享高音质，不强制标 VIP
+            is_vip = (fee == 1) or (privilege_fee == 1)
             songs.append({
                 'id': song_id,
                 'title': item.get('name') or f"未命名 {song_id}",
@@ -1049,7 +1058,8 @@ def search_netease_music():
                 'album': album_info.get('name') or '',
                 'cover': (album_info.get('picUrl') or '').replace('http://', 'https://'),
                 'duration': (item.get('dt') or 0) / 1000,
-                'level': privilege.get('maxBrLevel') or privilege.get('maxbr') or 'standard'
+                'level': privilege.get('maxBrLevel') or privilege.get('maxbr') or 'standard',
+                'is_vip': is_vip
             })
         return jsonify({'success': True, 'data': songs})
     except Exception as e:
@@ -1079,12 +1089,43 @@ def netease_login_status():
         api_resp = call_netease_api('/login/status', {'timestamp': int(time.time() * 1000)}, need_cookie=True)
         profile = api_resp.get('data', {}).get('profile') if isinstance(api_resp, dict) else None
         if profile:
+            is_vip = False
+            vip_info = {}
+            try:
+                vip_resp = call_netease_api('/vip/info', {'uid': profile.get('userId')})
+                if isinstance(vip_resp, dict):
+                    vip_info = vip_resp.get('data') or vip_resp
+                    data = vip_info or {}
+                    now_ms = int(time.time() * 1000)
+
+                    def _active(pkg: dict):
+                        if not pkg:
+                            return False
+                        code = pkg.get('vipCode')
+                        exp = pkg.get('expireTime') or pkg.get('expiretime')
+                        if code != 1:
+                            return False
+                        if exp is None:
+                            return True
+                        try:
+                            return int(exp) > now_ms
+                        except Exception:
+                            return False
+
+                    # 优先使用 isVip 明确标记，其次判定未过期的 vipCode=1 套餐
+                    is_vip = bool(data.get('isVip'))
+                    if not is_vip:
+                        is_vip = _active(data.get('associator')) or _active(data.get('musicPackage'))
+            except Exception as e:
+                logger.warning(f"获取VIP信息失败: {e}")
             return jsonify({
                 'success': True,
                 'logged_in': True,
                 'nickname': profile.get('nickname'),
                 'user_id': profile.get('userId'),
-                'avatar': profile.get('avatarUrl')
+                'avatar': profile.get('avatarUrl'),
+                'is_vip': is_vip,
+                'vip_info': vip_info
             })
         return jsonify({'success': True, 'logged_in': False, 'error': '未登录'})
     except Exception as e:
