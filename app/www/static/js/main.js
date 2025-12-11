@@ -1,6 +1,7 @@
 import { state, persistState } from './state.js';
 import { ui } from './ui.js';
 import { autoResizeUI, showToast, persistOnUnload } from './utils.js';
+import { api } from './api.js';
 import { initNetease } from './netease.js';
 import { initMounts, loadMountPoints, startScanPolling } from './mounts.js';
 import { initPlayer, loadSongs, performDelete, handleExternalFile, renderPlaylist } from './player.js';
@@ -27,42 +28,100 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // 上传
-  if (ui.navUpload && ui.fileUpload) {
+  // 上传页面
+  const uploadView = document.getElementById('view-upload');
+  const uploadTargetInput = document.getElementById('upload-target-input');
+  const uploadDropzone = document.getElementById('upload-dropzone');
+  const uploadChooseBtn = document.getElementById('upload-choose-btn');
+  const uploadStatus = document.getElementById('upload-status');
+  const views = ['view-player', 'view-mount', 'view-netease', 'view-upload'];
+
+  function switchView(targetId) {
+    views.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('hidden', id !== targetId);
+    });
+  }
+
+  function setActiveNav(targetEl) {
+    document.querySelectorAll('aside nav li').forEach(li => li.classList.remove('active'));
+    if (targetEl) targetEl.classList.add('active');
+  }
+
+  if (ui.navUpload && uploadView && ui.fileUpload) {
+    const populateUploadTargets = async () => {
+      try {
+        const res = await api.mount.list();
+        if (res.success && Array.isArray(res.data) && uploadTargetInput) {
+          // 清除旧项，保留默认
+          uploadTargetInput.innerHTML = '<option value="">默认音乐库</option>';
+          res.data.forEach(path => {
+            const opt = document.createElement('option');
+            opt.value = path;
+            opt.innerText = path;
+            uploadTargetInput.appendChild(opt);
+          });
+        }
+      } catch (e) { console.error('加载上传目录失败', e); }
+    };
+
     ui.navUpload.addEventListener('click', () => {
-      ui.fileUpload.click();
+      switchView('view-upload');
+      setActiveNav(ui.navUpload);
+      populateUploadTargets();
       if (window.innerWidth <= 768 && ui.sidebar?.classList.contains('open')) {
         ui.sidebar.classList.remove('open');
       }
     });
-    ui.fileUpload.addEventListener('change', () => {
-      const file = ui.fileUpload.files[0]; if (!file) return;
+
+    const handleFile = (file) => {
+      if (!file) return;
       if (!file.name.match(/\.(mp3|flac|wav|ogg|m4a)$/i)) { showToast('仅支持音频文件'); return; }
-      if (ui.uploadModal) ui.uploadModal.classList.add('active');
-      if (ui.uploadFileName) ui.uploadFileName.innerText = file.name;
-      if (ui.uploadFill) ui.uploadFill.style.width = '0%';
-      if (ui.uploadPercent) ui.uploadPercent.innerText = '0%';
-      if (ui.uploadMsg) ui.uploadMsg.innerText = '正在上传...';
-      if (ui.closeUploadBtn) ui.closeUploadBtn.style.display = 'none';
-      const formData = new FormData(); formData.append('file', file);
+      const formData = new FormData();
+      formData.append('file', file);
+      if (uploadTargetInput?.value) formData.append('target_dir', uploadTargetInput.value.trim());
+      uploadStatus.innerText = '上传中...';
       const xhr = new XMLHttpRequest();
-      xhr.upload.onprogress = (e) => { if (e.lengthComputable) { const percent = Math.round((e.loaded / e.total) * 100); if (ui.uploadFill) ui.uploadFill.style.width = `${percent}%`; if (ui.uploadPercent) ui.uploadPercent.innerText = `${percent}%`; } };
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && uploadStatus) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          uploadStatus.innerText = `上传中... ${percent}%`;
+        }
+      };
       xhr.onload = () => {
         if (xhr.status === 200) {
           const data = JSON.parse(xhr.responseText);
           if (data.success) {
-            if (ui.uploadFill) ui.uploadFill.style.width = '100%';
-            if (ui.uploadPercent) ui.uploadPercent.innerText = '100%';
-            if (ui.uploadMsg) ui.uploadMsg.innerText = '上传成功!';
-            setTimeout(() => { ui.uploadModal?.classList.remove('active'); loadSongs(); }, 1000);
-          } else { if (ui.uploadMsg) ui.uploadMsg.innerText = '失败: ' + (data.error || '未知错误'); if (ui.closeUploadBtn) ui.closeUploadBtn.style.display = 'inline-block'; }
-        } else { if (ui.uploadMsg) ui.uploadMsg.innerText = '服务器错误'; if (ui.closeUploadBtn) ui.closeUploadBtn.style.display = 'inline-block'; }
+            uploadStatus.innerText = '上传成功';
+            const targetLabel = (uploadTargetInput && uploadTargetInput.value) ? uploadTargetInput.options[uploadTargetInput.selectedIndex].text || uploadTargetInput.value : '默认音乐库';
+            showToast(`已上传 1 首音乐至 ${targetLabel}`);
+            loadSongs();
+          } else uploadStatus.innerText = '失败: ' + (data.error || '未知错误');
+        } else uploadStatus.innerText = '服务器错误';
+        ui.fileUpload.value = '';
       };
-      xhr.onerror = () => { if (ui.uploadMsg) ui.uploadMsg.innerText = '网络连接失败'; if (ui.closeUploadBtn) ui.closeUploadBtn.style.display = 'inline-block'; };
-      xhr.open('POST', '/api/music/upload', true); xhr.send(formData); ui.fileUpload.value = '';
+      xhr.onerror = () => { uploadStatus.innerText = '网络连接失败'; };
+      xhr.open('POST', '/api/music/upload', true);
+      xhr.send(formData);
+    };
+
+    uploadChooseBtn?.addEventListener('click', () => ui.fileUpload.click());
+    ui.fileUpload.addEventListener('change', () => handleFile(ui.fileUpload.files[0]));
+    uploadDropzone?.addEventListener('dragover', (e) => { e.preventDefault(); uploadDropzone.classList.add('dragging'); });
+    uploadDropzone?.addEventListener('dragleave', () => uploadDropzone.classList.remove('dragging'));
+    uploadDropzone?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadDropzone.classList.remove('dragging');
+      const file = e.dataTransfer.files[0];
+      handleFile(file);
     });
-    if (ui.closeUploadBtn) ui.closeUploadBtn.addEventListener('click', () => ui.uploadModal?.classList.remove('active'));
   }
+
+  // 其他导航：回到播放器或对应视图
+  if (ui.navLocal) ui.navLocal.addEventListener('click', () => { switchView('view-player'); setActiveNav(ui.navLocal); });
+  if (ui.navFav) ui.navFav.addEventListener('click', () => { switchView('view-player'); setActiveNav(ui.navFav); });
+  if (ui.navMount) ui.navMount.addEventListener('click', () => { switchView('view-mount'); setActiveNav(ui.navMount); });
+  if (ui.navNetease) ui.navNetease.addEventListener('click', () => { switchView('view-netease'); setActiveNav(ui.navNetease); });
 
   // 初始化模块
   initMounts(loadSongs);

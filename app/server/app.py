@@ -1249,13 +1249,27 @@ def upload_file():
     if file.filename == '': return jsonify({'success': False, 'error': '文件名为空'})
     if file:
         filename = file.filename
-        save_path = os.path.join(MUSIC_LIBRARY_PATH, filename)
+        target_dir = request.form.get('target_dir') or MUSIC_LIBRARY_PATH
+        target_dir = os.path.abspath(target_dir)
+        # 仅允许保存到音乐库或已添加的挂载目录（及其子目录）
+        allowed_roots = [os.path.abspath(MUSIC_LIBRARY_PATH)]
+        try:
+            with get_db() as conn:
+                rows = conn.execute("SELECT path FROM mount_points").fetchall()
+                allowed_roots.extend([os.path.abspath(r['path']) for r in rows])
+        except Exception:
+            pass
+        if not any(target_dir.startswith(root) for root in allowed_roots):
+            return jsonify({'success': False, 'error': '无效保存路径，请先在目录管理中添加'})
+        os.makedirs(target_dir, exist_ok=True)
+        save_path = os.path.join(target_dir, filename)
         try:
             file.save(save_path)
             # 使用单文件索引，不再全量扫描
             threading.Thread(target=index_single_file, args=(save_path,), daemon=True).start()
             return jsonify({'success': True})
-        except Exception as e: return jsonify({'success': False, 'error': str(e)})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
     return jsonify({'success': False, 'error': '未知错误'})
 
 @app.route('/api/music/import_path', methods=['POST'])
