@@ -25,7 +25,7 @@ else:
     sys.path.insert(0, os.path.join(BASE_DIR, 'lib'))
 
 try:
-    from flask import Flask, render_template, request, jsonify, send_file, redirect
+    from flask import Flask, render_template, request, jsonify, send_file, redirect, Response, session, url_for
     import requests
     from mutagen import File
     from mutagen.easyid3 import EasyID3
@@ -61,6 +61,8 @@ parser = argparse.ArgumentParser(description='2FMusic Server')
 parser.add_argument('--music-library-path', type=str, default=os.environ.get('MUSIC_LIBRARY_PATH'), help='Path to music library')
 parser.add_argument('--log-path', type=str, default=os.environ.get('LOG_PATH'), help='Path to log file')
 parser.add_argument('--port', type=int, default=int(os.environ.get('PORT', 23237)), help='Server port')
+parser.add_argument('--password', type=str, default=os.environ.get('APP_AUTH_PASSWORD') or os.environ.get('APP_PASSWORD'),
+                    help='Optional password for web access; leave empty to disable auth')
 args = parser.parse_args()
 
 # --- 路径初始化 ---
@@ -225,6 +227,26 @@ app = Flask(__name__, static_folder=STATIC_DIR, template_folder=TEMPLATE_DIR)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 # 配置静态文件缓存过期时间为 1 年 (31536000 秒)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000
+app.secret_key = os.environ.get('APP_SECRET_KEY', '2fmusic_secret')
+
+APP_AUTH_USER = os.environ.get('APP_AUTH_USER', 'admin')
+APP_AUTH_PASSWORD = args.password
+
+def _auth_failed():
+    if request.path.startswith('/api/'):
+        return jsonify({'success': False, 'error': 'unauthorized'}), 401
+    return redirect(url_for('login', next=request.path))
+
+@app.before_request
+def require_auth():
+    if not APP_AUTH_PASSWORD:
+        return
+    path = request.path or ''
+    if path.startswith('/static') or path.startswith('/login') or path == '/favicon.ico':
+        return
+    if session.get('authed'):
+        return
+    return _auth_failed()
 
 @app.after_request
 def add_cors_headers(response):
@@ -232,6 +254,21 @@ def add_cors_headers(response):
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
     response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
     return response
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if not APP_AUTH_PASSWORD:
+        return redirect(url_for('index'))
+    error = None
+    next_path = request.args.get('next') or '/'
+    if request.method == 'POST':
+        pwd = request.form.get('password') or ''
+        if pwd == APP_AUTH_PASSWORD:
+            session['authed'] = True
+            return redirect(next_path)
+        else:
+            error = '密码错误'
+    return render_template('login.html', error=error, next_path=next_path)
 
 # --- 数据库管理 ---
 def get_db():

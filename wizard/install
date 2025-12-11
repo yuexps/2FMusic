@@ -1,0 +1,22 @@
+[
+  {
+    "stepTitle": "访问密码设置",
+    "items": [
+      {
+        "type": "password",
+        "field": "wizard_password",
+        "label": "设置密码",
+        "rules": [
+          {
+            "required": true,
+            "message": "请输入密码"
+          },
+          {
+            "pattern": "^[a-zA-Z0-9_]+$",
+            "message": "用户名只能包含字母、数字和下划线"
+          }
+        ]
+      }
+    ]
+  }
+]

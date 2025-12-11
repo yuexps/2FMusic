@@ -22,7 +22,7 @@ MUSIC_LIBRARY_PATH="${TRIM_PKGVAR}/Music"
 BINARY_APP="${TRIM_APPDEST}/server/app"
 SOURCE_APP="${TRIM_APPDEST}/server/app.py"
 # 定义通用的启动参数
-APP_ARGS="--music-library-path ${MUSIC_LIBRARY_PATH} --log-path ${LOG_FILE} --port 23237"
+APP_ARGS="--music-library-path ${MUSIC_LIBRARY_PATH} --log-path ${LOG_FILE} --port 23237 --password ${wizard_password}"
 
 if [ -f "${BINARY_APP}" ]; then
     # 🔹 Case 1: 发现二进制文件 (Auto Build Binary Version)
