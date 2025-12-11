@@ -691,8 +691,10 @@ threading.Thread(target=init_watchdog, daemon=True).start()
 # --- 路由定义 ---
 @app.route('/')
 @app.route('/import_mode')
-@app.route('/preview')
 def index(): return render_template('index.html')
+
+@app.route('/preview')
+def preview(): return render_template('preview.html')
 
 # --- 系统状态接口 ---
 @app.route('/api/system/status')

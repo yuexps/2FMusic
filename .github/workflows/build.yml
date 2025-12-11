@@ -170,6 +170,29 @@ jobs:
         echo "binary_pkg=${BINARY_FPK_NAME}" >> $GITHUB_OUTPUT
         echo "✅ Generated: $BINARY_FPK_NAME"
 
+    # ==========================================
+    # 7.1 构建扩展包：预览功能 (Preview Extension)
+    # ==========================================
+    - name: Build Preview Extension
+      id: build_preview
+      run: |
+        echo "📦 Building Preview Extension..."
+        cd extensions/preview
+        fnpack build
+        
+        PREVIEW_FPK_NAME="2fmusic-preview-${{ steps.version.outputs.version }}.fpk"
+        
+        if [ -f "2fmusic-preview.fpk" ]; then
+          mv 2fmusic-preview.fpk "../../$PREVIEW_FPK_NAME"
+        else
+          # Fallback: fnpack might name it based on appname
+          mv *.fpk "../../$PREVIEW_FPK_NAME" || echo "Warning: No fpk found in $(pwd)"
+        fi
+        
+        cd ../..
+        echo "preview_pkg=${PREVIEW_FPK_NAME}" >> $GITHUB_OUTPUT
+        echo "✅ Generated: $PREVIEW_FPK_NAME"
+
     # 8. 删除旧的同版本 Release
     - name: Delete old Pre-release
       run: |
@@ -206,9 +229,14 @@ jobs:
           - **文件**: `${{ steps.build_binary.outputs.binary_pkg }}`
           - **依赖**: **无需** Python 环境，开箱即用。
 
+          ### 3. 🧩 预览功能扩展包 (可选)
+          - **文件**: `${{ steps.build_preview.outputs.preview_pkg }}`
+          - **说明**: 安装此包以启用系统文件预览功能（需先安装主应用）。
+
         files: |
           ${{ steps.build_source.outputs.source_pkg }}
           ${{ steps.build_binary.outputs.binary_pkg }}
+          ${{ steps.build_preview.outputs.preview_pkg }}
         prerelease: true
         make_latest: true
         draft: false

@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>2FMusic Preview</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/ICON_256.PNG') }}">
+    <script src="{{ url_for('static', filename='js/lib/color-thief.umd.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome/all.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <script>
+        (function () {
+            function setScale() {
+                if (window.innerWidth > 768) {
+                    let scale = Math.min(Math.max(window.innerWidth / 1440, 0.8), 1.2);
+                    document.documentElement.style.setProperty('--ui-scale', scale.toFixed(3));
+                } else {
+                    document.documentElement.style.setProperty('--ui-scale', '1.0');
+                }
+            }
+            setScale();
+            window.addEventListener('resize', setScale);
+        })();
+    </script>
+    <style>
+        :root {
+            --preview-padding: max(2rem, env(safe-area-inset-top));
+            --bottom-safe: max(1.5rem, env(safe-area-inset-bottom));
+        }
+
+        body {
+            background-color: #1a1a1a;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+        }
+
+        #full-player-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, #2c3e50, #000);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .preview-header {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 4rem;
+            padding-top: env(safe-area-inset-top);
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.5);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .preview-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            padding-bottom: 2rem;
+            min-height: 0;
+        }
+
+        .track-display {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            max-width: 30rem;
+            padding: 2rem;
+            z-index: 2;
+        }
+
+        .cover-wrapper {
+            width: 20rem;
+            height: 20rem;
+            margin-bottom: 2rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 1.25rem 3.125rem rgba(0, 0, 0, 0.5);
+            transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            background: rgba(255, 255, 255, 0.05);
+            position: relative;
+        }
+
+        .playing .cover-wrapper {
+            transform: scale(1.02);
+        }
+
+        .cover-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 0.75rem;
+        }
+
+        .track-info {
+            text-align: center;
+        }
+
+        .track-info h2 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            line-height: 1.2;
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 25rem;
+        }
+
+        .track-info p {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.7);
+            max-width: 20rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin: 0 auto;
+        }
+
+        .lyrics-panel {
+            flex: 1;
+            height: 100%;
+            max-height: 60vh;
+            max-width: 38rem;
+            overflow-y: auto;
+            mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+            text-align: center;
+            scrollbar-width: none;
+            display: flex;
+            flex-direction: column;
+            padding: 4rem 0;
+        }
+
+        .lyrics-panel::-webkit-scrollbar {
+            display: none;
+        }
+
+        .lyric-line {
+            padding: 0.8rem 0;
+            font-size: 1.4rem;
+            color: rgba(255, 255, 255, 0.4);
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            cursor: pointer;
+            transform-origin: center center;
+            margin: 0 auto;
+            width: 100%;
+            max-width: 90vw;
+            filter: blur(1.2px);
+            transform: scale(0.95);
+        }
+
+        .lyric-line.active {
+            color: #fff;
+            transform: scale(1.6);
+            font-weight: bold;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.6);
+            opacity: 1;
+            filter: blur(0);
+        }
+
+        .lyric-line:hover:not(.active) {
+            opacity: 0.8;
+            filter: blur(0);
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+
+        /* 底部控制栏 */
+        .bottom-controls-container {
+            flex: 0 0 auto;
+            width: 100%;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem 3rem max(2rem, env(safe-area-inset-bottom)) 3rem;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.3) 60%, transparent 100%);
+            gap: 2.5rem;
+            z-index: 20;
+        }
+
+        .progress-wrapper {
+            flex: 1;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+
+        .progress-times {
+            display: flex;
+            justify-content: space-between;
+            font-family: 'Roboto Mono', 'Consolas', monospace;
+            font-variant-numeric: tabular-nums;
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.6);
+            padding: 0 0.2rem;
+            font-weight: normal;
+        }
+
+        .progress-times span {
+            font-size: 1.1rem;
+        }
+
+        /* Progress Bar - Input Only Implementation */
+        .progress-bar-area {
+            position: relative;
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+
+        .progress-bar-area:hover {
+            height: 6px;
+        }
+
+        input[type=range] {
+            width: 100%;
+            opacity: 1;
+            margin: 0;
+            -webkit-appearance: none;
+            appearance: none;
+            cursor: pointer;
+
+            background-color: rgba(255, 255, 255, 0.15);
+            background-image: linear-gradient(#fff, #fff);
+            background-size: 0% 100%;
+            background-repeat: no-repeat;
+            border-radius: 2px;
+            transition: height 0.1s;
+            height: 100%;
+        }
+
+
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+            transform: scale(0);
+            transition: transform 0.1s;
+        }
+
+        /* 悬停显示滑块 */
+        .progress-bar-area:hover input[type=range]::-webkit-slider-thumb {
+            transform: scale(1);
+        }
+
+        .play-btn-wrapper {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+        }
+
+        .play-btn {
+            width: 4.4rem;
+            height: 4.4rem;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .play-btn:hover {
+            background: #fff;
+            color: #000;
+
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+        }
+
+        .play-btn:active {
+            transform: scale(0.92);
+            transition-duration: 0.1s;
+        }
+
+
+        .play-btn .fa-play {
+            margin-left: 0.4rem;
+        }
+
+
+
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .preview-content {
+                flex-direction: column;
+                justify-content: flex-start;
+                padding-top: 2rem;
+                gap: 2rem;
+            }
+
+            .track-display {
+                flex: 0 0 auto;
+                padding: 0;
+                margin-bottom: 0rem;
+            }
+
+            .cover-wrapper {
+                width: 16rem;
+                height: 16rem;
+                margin-bottom: 1.5rem;
+            }
+
+            .track-info h2 {
+                font-size: 1.5rem;
+                max-width: 90vw;
+            }
+
+            .lyrics-panel {
+                flex: 1;
+                width: 100%;
+                max-width: none;
+                padding: 0 1.5rem;
+                mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+            }
+
+            .bottom-controls-container {
+                padding: 1rem 1.5rem max(1.5rem, env(safe-area-inset-bottom)) 1.5rem;
+                gap: 1.2rem;
+            }
+        }
+
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+
+        .toast {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            animation: info 0.3s;
+        }
+
+        @keyframes info {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="full-player-overlay">
+        <!-- Header -->
+        <div class="preview-header">
+            <span>2FMusic Preview</span>
+        </div>
+
+        <!-- Main Content -->
+        <div class="preview-content">
+            <div class="track-display">
+                <div class="cover-wrapper">
+                    <img src="{{ url_for('static', filename='images/ICON_256.PNG') }}" id="fp-cover" class="cover-image"
+                        alt="Cover">
+                </div>
+                <div class="track-info">
+                    <h2 id="fp-title">等待播放</h2>
+                    <p id="fp-artist">2FMusic</p>
+                </div>
+            </div>
+
+            <div class="lyrics-panel" id="lyrics-container">
+                <p class="lyric-line active" style="margin-top: 10%;">2FMusic</p>
+                <p class="lyric-line">系统级音频预览</p>
+            </div>
+        </div>
+
+        <!-- Bottom Controls -->
+        <div class="bottom-controls-container">
+            <!-- Left: Progress -->
+            <div class="progress-wrapper">
+                <div class="progress-times">
+                    <span id="fp-time-current">0:00</span>
+                    <span id="fp-time-total">0:00</span>
+                </div>
+                <div class="progress-bar-area">
+                    <input type="range" id="fp-progress-bar" value="0" min="0" max="100" step="0.1">
+                </div>
+            </div>
+
+            <!-- Right: Play Btn -->
+            <div class="play-btn-wrapper">
+                <button class="play-btn" id="fp-btn-play">
+                    <i class="fas fa-play"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+    <audio id="audio-player"></audio>
+
+    <!-- JS Imports -->
+    <script type="module" src="{{ url_for('static', filename='js/preview.js') }}"></script>
+</body>
+
+</html>

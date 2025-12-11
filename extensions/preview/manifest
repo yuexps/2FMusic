@@ -1,0 +1,20 @@
+appname               = 2fmusic-preview
+version               = 0.0.1
+display_name          = 2FMusic Preview
+desc                  = """
+<p><b>2FMusic 预览扩展</b></p>
+<p>为 2FMusic 提供预览播放音乐功能的系统集成扩展。</p>
+<ul>
+    <li>📂 支持在文件管理器中直接预览音频文件</li>
+    <li>🔌 依赖主应用 2FMusic 运行</li>
+</ul>
+ """
+arch                  = x86_64
+maintainer            = yuexps
+maintainer_url        = https://github.com/yuexps/2FMusic
+distributor           = yuexps
+distributor_url       = https://www.2fstore.cfd
+service_port          = 23235
+install_dep_apps      = python312
+source                = thirdparty
+desktop_uidir         = ui

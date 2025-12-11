@@ -1,0 +1,86 @@
+#!/bin/bash
+# 2FMusic 预览扩展启动脚本
+
+# 环境变量
+LOG_FILE="${TRIM_PKGVAR}/info.log"
+PID_FILE="${TRIM_PKGVAR}/app.pid"
+
+# 将 Python 添加到 Path (飞牛 OS 标准路径)
+export PATH=/var/apps/python312/target/bin:$PATH
+
+log_msg() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> ${LOG_FILE}
+}
+
+start_process() {
+    if status; then
+        return 0
+    fi
+
+    log_msg "正在启动预览扩展代理..."
+    
+    # 启动 Python 代理脚本
+    CMD="python3 ${TRIM_APPDEST}/server/proxy.py"
+    
+    # 后台运行
+    nohup $CMD >> ${LOG_FILE} 2>&1 & 
+    
+    printf "%s" "$!" > ${PID_FILE}
+    return 0
+}
+
+stop_process() {
+    log_msg "正在停止预览扩展..."
+    if [ -r "${PID_FILE}" ]; then
+        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+        if check_process "${pid}"; then
+            kill -TERM ${pid} >/dev/null 2>&1
+            sleep 1
+            if check_process "${pid}"; then
+                kill -KILL "${pid}" >/dev/null 2>&1
+            fi
+        fi
+        rm -f "${PID_FILE}"
+    fi
+    return 0
+}
+
+check_process() {
+    local pid=$1
+    if kill -0 "${pid}" 2>/dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+status() {
+    if [ -f "${PID_FILE}" ]; then
+        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+        if check_process "${pid}"; then
+            return 0
+        else
+            rm -f "${PID_FILE}"
+        fi    
+    fi
+    return 1
+}
+
+case $1 in
+start)
+    start_process
+    ;;
+stop)
+    stop_process
+    ;;
+status)
+    if status; then 
+        exit 0
+    else 
+        exit 3
+    fi
+    ;;
+*)
+    exit 1
+    ;;
+esac
