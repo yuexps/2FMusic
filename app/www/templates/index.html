@@ -252,6 +252,26 @@
                         </div>
                     </div>
                 </div>
+
+                <div id="view-upload" class="hidden">
+                    <div class="upload-page glass-panel">
+                        <h3>上传音乐</h3>
+                        <p class="upload-desc">点击或拖拽文件到下方区域，可选择保存目录。</p>
+                        <div class="upload-target">
+                            <label for="upload-target-input">保存目录（仅可选择已添加的目录或默认库）</label>
+                            <select id="upload-target-input">
+                                <option value="">默认音乐库</option>
+                            </select>
+                        </div>
+                        <div id="upload-dropzone" class="upload-dropzone">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <div>拖拽文件到此，或点击选择</div>
+                            <input type="file" id="file-upload" accept=".mp3,.flac,.wav,.ogg,.m4a" hidden>
+                            <button id="upload-choose-btn" class="btn-primary">选择文件</button>
+                        </div>
+                        <div id="upload-status" class="upload-status"></div>
+                    </div>
+                </div>
             </div>
         </main>
 
