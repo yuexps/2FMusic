@@ -596,7 +596,7 @@ NETEASE_API_BASE_DEFAULT = os.environ.get('NETEASE_API_BASE', 'http://localhost:
 NETEASE_API_BASE = NETEASE_API_BASE_DEFAULT
 NETEASE_DOWNLOAD_DIR = os.environ.get('NETEASE_DOWNLOAD_PATH', MUSIC_LIBRARY_PATH)
 NETEASE_COOKIE = None
-NETEASE_MAX_CONCURRENT = int(os.environ.get('NETEASE_MAX_CONCURRENT', 5))
+NETEASE_MAX_CONCURRENT = 20
 
 def parse_cookie_string(cookie_str: str):
     """将 Set-Cookie 字符串解析为 requests 兼容的字典。"""
@@ -659,7 +659,7 @@ def save_netease_cookie(cookie_str: str):
         logger.warning(f"保存网易云 cookie 失败: {e}")
 
 def load_netease_config():
-    global NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE, NETEASE_MAX_CONCURRENT
+    global NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE
     try:
         with get_db() as conn:
             # Download Dir
@@ -669,27 +669,14 @@ def load_netease_config():
             # API Base
             row = conn.execute("SELECT value FROM system_settings WHERE key='netease_api_base'").fetchone()
             if row and row['value']: NETEASE_API_BASE = row['value']
-
-            # Max concurrent downloads
-            row = conn.execute("SELECT value FROM system_settings WHERE key='netease_max_concurrent'").fetchone()
-            if row and row['value']:
-                try:
-                    NETEASE_MAX_CONCURRENT = max(1, int(row['value']))
-                except Exception as e:
-                    logger.warning(f"读取网易云并发配置失败，使用默认值: {e}")
             
     except Exception as e:
         logger.warning(f"读取网易云配置失败: {e}")
 
-def save_netease_config(download_dir: str = None, api_base: str = None, max_concurrent: int = None):
-    global NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE, NETEASE_MAX_CONCURRENT
+def save_netease_config(download_dir: str = None, api_base: str = None):
+    global NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE
     if download_dir: NETEASE_DOWNLOAD_DIR = download_dir
     if api_base: NETEASE_API_BASE = api_base.rstrip('/') or NETEASE_API_BASE_DEFAULT
-    if max_concurrent is not None:
-        try:
-            NETEASE_MAX_CONCURRENT = max(1, int(max_concurrent))
-        except Exception as e:
-            logger.warning(f"保存并发配置失败，保持原值: {e}")
     
     try:
         with get_db() as conn:
@@ -697,8 +684,6 @@ def save_netease_config(download_dir: str = None, api_base: str = None, max_conc
                 conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)", ('netease_download_dir', NETEASE_DOWNLOAD_DIR))
             if api_base:
                 conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)", ('netease_api_base', NETEASE_API_BASE))
-            if max_concurrent is not None:
-                conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)", ('netease_max_concurrent', str(NETEASE_MAX_CONCURRENT)))
             conn.commit()
     except Exception as e:
         logger.warning(f"保存网易云配置失败: {e}")
@@ -1179,7 +1164,6 @@ def netease_config():
         data = request.json or {}
         target_dir = data.get('download_dir')
         api_base = (data.get('api_base') or '').strip()
-        max_concurrent = data.get('max_concurrent')
         if target_dir:
             target_dir = os.path.abspath(target_dir)
             os.makedirs(target_dir, exist_ok=True)
@@ -1187,14 +1171,9 @@ def netease_config():
             target_dir = None
         if api_base:
             api_base = api_base.rstrip('/')
-        if max_concurrent is not None:
-            try:
-                max_concurrent = max(1, int(max_concurrent))
-            except Exception:
-                return jsonify({'success': False, 'error': '并发上限需要是数字'})
         if not target_dir and not api_base:
             return jsonify({'success': False, 'error': '缺少下载目录或API地址'})
-        save_netease_config(target_dir or NETEASE_DOWNLOAD_DIR, api_base or NETEASE_API_BASE, max_concurrent)
+        save_netease_config(target_dir or NETEASE_DOWNLOAD_DIR, api_base or NETEASE_API_BASE)
         return jsonify({'success': True, 'download_dir': NETEASE_DOWNLOAD_DIR, 'api_base': NETEASE_API_BASE, 'max_concurrent': NETEASE_MAX_CONCURRENT})
     except Exception as e:
         logger.warning(f"更新网易云配置失败: {e}")

@@ -7,29 +7,6 @@ import { showToast, showConfirmDialog, hideProgressToast, formatTime } from './u
 let songRefreshCallback = null;
 let recommendLoading = false;
 
-function syncDownloadLimitUI(value) {
-  const select = ui.neteaseDownloadLimitSelect;
-  const customInput = ui.neteaseDownloadLimitCustom;
-  const presets = ['5', '10', '15', '20'];
-  const valStr = String(value || '');
-
-  if (select) {
-    if (presets.includes(valStr)) {
-      select.value = valStr;
-      if (customInput) {
-        customInput.classList.add('hidden');
-        customInput.value = '';
-      }
-    } else {
-      select.value = 'custom';
-      if (customInput) {
-        customInput.classList.remove('hidden');
-        customInput.value = value || '';
-      }
-    }
-  }
-}
-
 function renderDownloadTasks() {
   const list = ui.neteaseDownloadList;
   const tasks = state.neteaseDownloadTasks;
@@ -233,7 +210,7 @@ function getActiveDownloadCount() {
 }
 
 function processDownloadQueue() {
-  const limit = state.neteaseMaxConcurrent || 5;
+  const limit = state.neteaseMaxConcurrent || 20;
   let available = limit - getActiveDownloadCount();
   let started = 0;
 
@@ -372,7 +349,7 @@ async function downloadNeteaseSong(song, btnEl) {
     && ['preparing', 'downloading', 'pending', 'queued'].includes(t.status));
   if (existingTask) { showToast('该任务正在进行中'); return; }
 
-  const limit = state.neteaseMaxConcurrent || 5;
+  const limit = state.neteaseMaxConcurrent || 20;
   const active = getActiveDownloadCount();
   const payload = { ...song, level };
 
@@ -391,7 +368,6 @@ async function downloadNeteaseSong(song, btnEl) {
     }
     state.neteasePendingQueue.push({ taskId, song: payload, btnEl });
     if (!state.neteaseQueueToastShown) {
-      showToast(`已加入队列，当前并发上限 ${limit}`);
       state.neteaseQueueToastShown = true;
     }
   }
@@ -517,10 +493,9 @@ async function loadNeteaseConfig() {
     if (json.success) {
       if (json.api_base) apiBase = json.api_base;
       state.neteaseDownloadDir = json.download_dir || '';
-      state.neteaseMaxConcurrent = json.max_concurrent || state.neteaseMaxConcurrent || 5;
+      state.neteaseMaxConcurrent = 20;
       if (ui.neteaseDownloadDirInput) ui.neteaseDownloadDirInput.value = state.neteaseDownloadDir;
       if (ui.neteaseApiSettingsInput) ui.neteaseApiSettingsInput.value = apiBase;
-      syncDownloadLimitUI(state.neteaseMaxConcurrent);
     }
   } catch (err) {
     console.warn('Config load failed, utilizing default:', err);
@@ -530,7 +505,6 @@ async function loadNeteaseConfig() {
   state.neteaseApiBase = apiBase;
   if (ui.neteaseApiGateInput) ui.neteaseApiGateInput.value = apiBase;
   if (ui.neteaseApiSettingsInput) ui.neteaseApiSettingsInput.value = apiBase;
-  syncDownloadLimitUI(state.neteaseMaxConcurrent);
 
   // Auto-Connect Attempt
   try {
@@ -557,34 +531,19 @@ async function saveNeteaseConfig() {
   const apiBaseVal = ui.neteaseApiSettingsInput
     ? ui.neteaseApiSettingsInput.value.trim()
     : (ui.neteaseApiGateInput ? ui.neteaseApiGateInput.value.trim() : state.neteaseApiBase);
-  const limitSelectVal = ui.neteaseDownloadLimitSelect ? ui.neteaseDownloadLimitSelect.value : '';
-  const customLimitVal = ui.neteaseDownloadLimitCustom ? ui.neteaseDownloadLimitCustom.value.trim() : '';
-  let maxConcurrent = null;
-
-  if (limitSelectVal) {
-    if (limitSelectVal === 'custom') {
-      if (!customLimitVal) { showToast('请输入自定义同时下载数量'); return; }
-      maxConcurrent = parseInt(customLimitVal, 10);
-    } else {
-      maxConcurrent = parseInt(limitSelectVal, 10);
-    }
-    if (!maxConcurrent || maxConcurrent < 1) { showToast('同时下载数量需为正整数'); return; }
-  }
 
   const payload = {};
   if (dir || state.neteaseDownloadDir) payload.download_dir = dir || state.neteaseDownloadDir;
   if (apiBaseVal) payload.api_base = apiBaseVal;
-  if (maxConcurrent !== null) payload.max_concurrent = maxConcurrent;
-  if (!payload.download_dir && !payload.api_base && maxConcurrent === null) { showToast('请输入下载目录或API地址'); return; }
+  if (!payload.download_dir && !payload.api_base) { showToast('请输入下载目录或API地址'); return; }
   try {
     const json = await api.netease.configSave(payload);
     if (json.success) {
       state.neteaseDownloadDir = json.download_dir;
       state.neteaseApiBase = json.api_base || '';
-      state.neteaseMaxConcurrent = json.max_concurrent || maxConcurrent || state.neteaseMaxConcurrent;
+      state.neteaseMaxConcurrent = 20;
       if (ui.neteaseApiGateInput) ui.neteaseApiGateInput.value = state.neteaseApiBase || 'http://localhost:23236';
       if (ui.neteaseApiSettingsInput) ui.neteaseApiSettingsInput.value = state.neteaseApiBase || 'http://localhost:23236';
-      syncDownloadLimitUI(state.neteaseMaxConcurrent);
       processDownloadQueue();
       toggleNeteaseGate(!!state.neteaseApiBase);
       showToast('保存成功');
@@ -803,7 +762,6 @@ function logoutNetease() {
 function openSettingsModal() {
   if (ui.neteaseApiSettingsInput) ui.neteaseApiSettingsInput.value = state.neteaseApiBase || '';
   if (ui.neteaseDownloadDirInput) ui.neteaseDownloadDirInput.value = state.neteaseDownloadDir || '';
-  syncDownloadLimitUI(state.neteaseMaxConcurrent);
   if (ui.neteaseSettingsModal) {
     ui.neteaseSettingsModal.classList.remove('hidden');
     ui.neteaseSettingsModal.classList.add('active');
@@ -814,17 +772,6 @@ function closeSettingsModal() {
   if (ui.neteaseSettingsModal) {
     ui.neteaseSettingsModal.classList.add('hidden');
     ui.neteaseSettingsModal.classList.remove('active');
-  }
-}
-
-function handleLimitSelectChange() {
-  if (!ui.neteaseDownloadLimitSelect || !ui.neteaseDownloadLimitCustom) return;
-  const isCustom = ui.neteaseDownloadLimitSelect.value === 'custom';
-  ui.neteaseDownloadLimitCustom.classList.toggle('hidden', !isCustom);
-  if (isCustom && !ui.neteaseDownloadLimitCustom.value) {
-    ui.neteaseDownloadLimitCustom.focus();
-  } else if (!isCustom) {
-    ui.neteaseDownloadLimitCustom.value = '';
   }
 }
 
@@ -843,7 +790,6 @@ function bindEvents() {
   // Settings Modal
   ui.neteaseSettingsBtn?.addEventListener('click', openSettingsModal);
   ui.neteaseCloseSettingsBtn?.addEventListener('click', closeSettingsModal);
-  ui.neteaseDownloadLimitSelect?.addEventListener('change', handleLimitSelectChange);
 
   ui.neteaseSaveDirBtn?.addEventListener('click', saveNeteaseConfig);
   if (ui.neteaseSelectAll) ui.neteaseSelectAll.addEventListener('change', (e) => {
@@ -966,7 +912,6 @@ if (installBtn) {
 export async function initNetease(onRefreshSongs) {
   songRefreshCallback = onRefreshSongs;
   bindEvents();
-  syncDownloadLimitUI(state.neteaseMaxConcurrent);
 
   // 1. Optimistic UI: Load from cache immediately
   try {

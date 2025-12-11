@@ -25,7 +25,7 @@ export const state = {
   neteaseDownloadTasks: [],
   neteasePendingQueue: [],
   neteaseQueueToastShown: false,
-  neteaseMaxConcurrent: 5,
+  neteaseMaxConcurrent: 20,
   isPolling: false,
   progressToastEl: null,
   currentConfirmAction: null,
