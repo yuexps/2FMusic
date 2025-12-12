@@ -14,7 +14,7 @@
         (function () {
             function setScale() {
                 if (window.innerWidth > 768) {
-                    let scale = Math.min(Math.max(window.innerWidth / 1440, 0.8), 1.0);
+                    let scale = Math.min(Math.max(window.innerWidth / 1440, 0.8), 1.2);
                     document.documentElement.style.setProperty('--ui-scale', scale.toFixed(3));
                 } else {
                     document.documentElement.style.setProperty('--ui-scale', '1.0');
