@@ -85,8 +85,14 @@ function bindEvents() {
         if (!state.track || !state.track.filename) return;
 
         try {
-            await api.library.clearMetadata(state.track.filename);
-            showToast('已清除缓存，正在重新获取...');
+            // filename 先尝试 ID 再尝试路径，调用后端清理
+            if (/^\d+$/.test(state.track.filename)) {
+                await api.library.clearMetadata(state.track.filename);
+            } else {
+                await api.library.clearMetadataExternal(state.track.filename);
+            }
+
+            showToast('正在刷新数据...');
 
             // 先重置本地显示
             state.track.cover = `${api.API_BASE}/images/icon_256.png`;

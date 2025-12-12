@@ -27,12 +27,28 @@ export const api = {
             const res = await fetch(`${API_BASE}/api/music/clear_metadata/${encodeURIComponent(id)}`, { method: 'POST' });
             return jsonOrThrow(res);
         },
+        async clearMetadataExternal(path) {
+            const res = await fetch(`${API_BASE}/api/music/clear_metadata_external`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path })
+            });
+            return jsonOrThrow(res);
+        },
         async lyrics(query) {
             const res = await fetch(`${API_BASE}/api/music/lyrics${query}`);
             return jsonOrThrow(res);
         },
         async albumArt(query) {
             const res = await fetch(`${API_BASE}/api/music/album-art${query}`);
+            return jsonOrThrow(res);
+        },
+        async importPath(path) {
+            const res = await fetch(`${API_BASE}/import_mode`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: path })
+            });
             return jsonOrThrow(res);
         }
     },
