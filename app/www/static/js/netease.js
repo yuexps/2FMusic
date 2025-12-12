@@ -441,9 +441,7 @@ async function downloadNeteaseSong(song, btnEl) {
     showToast('VIP 歌曲仅登录会员可下载');
     return;
   }
-  const preferredLevel = song.download_level || song.downloadLevel || song.level;
-  const selected = ui.neteaseQualitySelect ? ui.neteaseQualitySelect.value : (preferredLevel || 'exhigh');
-  const level = (!state.neteaseIsVip && !state.neteaseUser) ? 'standard' : selected;
+  const level = 'exhigh';
 
   // 检查是否有正在进行的相同任务
   const existingTask = state.neteaseDownloadTasks.find(t => String(t.songId) === String(song.id)
@@ -595,11 +593,10 @@ async function loadNeteaseConfig() {
       if (json.api_base) apiBase = json.api_base;
       state.neteaseDownloadDir = json.download_dir || '';
       state.neteaseMaxConcurrent = 20;
-      state.neteaseQuality = json.quality || 'exhigh'; // Load quality
+      state.neteaseMaxConcurrent = 20;
 
       if (ui.neteaseDownloadDirInput) ui.neteaseDownloadDirInput.value = state.neteaseDownloadDir;
       if (ui.neteaseApiSettingsInput) ui.neteaseApiSettingsInput.value = apiBase;
-      if (ui.neteaseQualitySelect) ui.neteaseQualitySelect.value = state.neteaseQuality; // Set UI
     }
   } catch (err) {
     console.warn('Config load failed, utilizing default:', err);
@@ -635,12 +632,7 @@ async function saveNeteaseConfig() {
   const apiBaseVal = ui.neteaseApiSettingsInput
     ? ui.neteaseApiSettingsInput.value.trim()
     : (ui.neteaseApiGateInput ? ui.neteaseApiGateInput.value.trim() : state.neteaseApiBase);
-  const quality = ui.neteaseQualitySelect ? ui.neteaseQualitySelect.value : 'exhigh';
-
-  const payload = {};
-  if (dir || state.neteaseDownloadDir) payload.download_dir = dir || state.neteaseDownloadDir;
   if (apiBaseVal) payload.api_base = apiBaseVal;
-  if (quality) payload.quality = quality;
 
   if (!payload.download_dir && !payload.api_base && !payload.quality) { showToast('未修改任何配置'); return; }
   try {
@@ -649,7 +641,6 @@ async function saveNeteaseConfig() {
       state.neteaseDownloadDir = json.download_dir;
       state.neteaseApiBase = json.api_base || '';
       state.neteaseMaxConcurrent = 20;
-      state.neteaseQuality = json.quality;
 
       if (ui.neteaseApiGateInput) ui.neteaseApiGateInput.value = state.neteaseApiBase || 'http://localhost:23236';
       if (ui.neteaseApiSettingsInput) ui.neteaseApiSettingsInput.value = state.neteaseApiBase || 'http://localhost:23236';
@@ -855,7 +846,7 @@ async function parseNeteaseLink() {
 }
 
 async function bulkDownloadSelected() {
-  const level = ui.neteaseQualitySelect ? ui.neteaseQualitySelect.value : 'exhigh';
+  const level = 'exhigh';
   const targets = state.neteaseResults.filter(s => state.neteaseSelected.has(String(s.id)) && canDownloadSong(s));
   if (!targets.length) { showToast('请先选择歌曲'); return; }
   for (const s of targets) {

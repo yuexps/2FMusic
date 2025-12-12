@@ -239,7 +239,7 @@ NETEASE_API_BASE = None
 NETEASE_COOKIE = None
 NETEASE_MAX_CONCURRENT = 5
 NETEASE_QUALITY_DEFAULT = 'exhigh'
-NETEASE_QUALITY = None # Configured quality
+# NETEASE_QUALITY = None # Configured quality - REMOVED
 
 DOWNLOAD_TASKS = {} # task_id -> {status, progress, message, filename}
 
@@ -949,7 +949,7 @@ def save_netease_cookie(cookie_str: str):
         logger.warning(f"保存网易云 cookie 失败: {e}")
 
 def load_netease_config():
-    global NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE, NETEASE_QUALITY
+    global NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE
     try:
         with get_db() as conn:
             # Download Dir
@@ -960,18 +960,16 @@ def load_netease_config():
             row = conn.execute("SELECT value FROM system_settings WHERE key='netease_api_base'").fetchone()
             if row and row['value']: NETEASE_API_BASE = row['value']
             
-            # Quality
-            row = conn.execute("SELECT value FROM system_settings WHERE key='netease_quality'").fetchone()
-            if row and row['value']: NETEASE_QUALITY = row['value']
+            # Quality - REMOVED
             
     except Exception as e:
         logger.warning(f"读取网易云配置失败: {e}")
 
-def save_netease_config(download_dir: str = None, api_base: str = None, quality: str = None):
-    global NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE, NETEASE_QUALITY
+def save_netease_config(download_dir: str = None, api_base: str = None): # Removed quality parameter
+    global NETEASE_DOWNLOAD_DIR, NETEASE_API_BASE
     if download_dir: NETEASE_DOWNLOAD_DIR = download_dir
     if api_base: NETEASE_API_BASE = api_base.rstrip('/') or NETEASE_API_BASE_DEFAULT
-    if quality: NETEASE_QUALITY = quality
+    # if quality: NETEASE_QUALITY = quality # Removed quality processing
     
     try:
         with get_db() as conn:
@@ -979,8 +977,8 @@ def save_netease_config(download_dir: str = None, api_base: str = None, quality:
                 conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)", ('netease_download_dir', NETEASE_DOWNLOAD_DIR))
             if api_base:
                 conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)", ('netease_api_base', NETEASE_API_BASE))
-            if quality:
-                conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)", ('netease_quality', NETEASE_QUALITY))
+            # if quality: # Removed quality processing
+            #     conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)", ('netease_quality', NETEASE_QUALITY))
             conn.commit()
     except Exception as e:
         logger.warning(f"保存网易云配置失败: {e}")
@@ -1017,16 +1015,26 @@ def _extract_song_level(privilege: dict):
         if not val:
             return 'standard'
         v = str(val).lower()
-        return 'standard' if v == 'none' else val
-    max_level = _norm(privilege.get('maxBrLevel') or privilege.get('maxbr') or privilege.get('maxLevel'))
+        if v == 'none': return 'standard'
+        # Map numeric maxbr to levels
+        if v.isdigit():
+            br = int(v)
+            if br >= 999000: return 'lossless'
+            if br >= 320000: return 'exhigh'
+            if br >= 192000: return 'higher'
+            return 'standard'
+        return v
+    
+    max_br = privilege.get('maxBrLevel') or privilege.get('maxbr') or privilege.get('maxLevel')
+    max_level = _norm(max_br)
     user_level = _norm(privilege.get('dlLevel') or privilege.get('plLevel') or max_level)
     return (user_level or 'standard', max_level or user_level or 'standard')
 
-def _extract_song_size(track: dict, preferred: str = None):
+def _extract_song_size(track: dict): # Removed preferred parameter
     """根据期望音质优先取对应大小（字节），找不到再按从低到高回退。"""
     if not track:
         return None
-    level = (preferred or '').lower()
+    level = 'exhigh' # Default to exhigh
     # 映射期望音质到字段优先级（标准优先用 l）
     prefer_map = {
         'standard': ('l', 'm', 'h', 'sq', 'hr'),
@@ -1061,11 +1069,12 @@ def _format_netease_songs(source_tracks):
         privilege = item.get('privilege') or {}
         privilege_fee = privilege.get('fee')
         # 仅在明确 fee==1（VIP 曲目）时标记 VIP，避免 fee=8 的“会员高音质”误标
+        # 仅在明确 fee==1（VIP 曲目）时标记 VIP，避免 fee=8 的“会员高音质”误标
         is_vip = (fee == 1) or (privilege_fee == 1)
         user_level, max_level = _extract_song_level(privilege)
         artists = ' / '.join([a.get('name') for a in item.get('ar', []) if a.get('name')]) or '未知艺术家'
         album_info = item.get('al') or {}
-        size_bytes = _extract_song_size(item, user_level)
+        size_bytes = _extract_song_size(item) # Removed user_level parameter
         songs.append({
             'id': sid,
             'title': item.get('name') or f"未命名 {sid}",
@@ -1536,6 +1545,7 @@ def search_netease_music():
             fee = item.get('fee')
             privilege_fee = privilege.get('fee')
             # 仅 fee==1 视为 VIP；fee=8 只代表会员可享高音质，不强制标 VIP
+            # 仅 fee==1 视为 VIP；fee=8 只代表会员可享高音质，不强制标 VIP
             is_vip = (fee == 1) or (privilege_fee == 1)
             user_level, max_level = _extract_song_level(privilege)
             songs.append({
@@ -1547,7 +1557,7 @@ def search_netease_music():
                 'duration': (item.get('dt') or 0) / 1000,
                 'level': user_level,
                 'max_level': max_level,
-                'size': _extract_song_size(item, user_level),
+                'size': _extract_song_size(item), # Removed user_level parameter
                 'is_vip': is_vip
             })
         return jsonify({'success': True, 'data': songs})
@@ -1596,7 +1606,7 @@ def netease_login_status():
                         if code <= 0:
                             return False
                         if exp is None:
-                            return True
+                            return False
                         try:
                             return int(exp) > now_ms
                         except Exception:
@@ -1609,8 +1619,7 @@ def netease_login_status():
                             _active(data.get('associator')),
                             _active(data.get('musicPackage')),
                             _active(data.get('redplus')),
-                            _active(data.get('familyVip')),
-                            (data.get('redVipLevel') or 0) > 0
+                            _active(data.get('familyVip'))
                         ])
             except Exception as e:
                 logger.warning(f"获取VIP信息失败: {e}")
@@ -1706,12 +1715,12 @@ def netease_config():
                 'download_dir': NETEASE_DOWNLOAD_DIR, 
                 'api_base': NETEASE_API_BASE, 
                 'max_concurrent': NETEASE_MAX_CONCURRENT,
-                'quality': NETEASE_QUALITY or NETEASE_QUALITY_DEFAULT
+                'quality': NETEASE_QUALITY_DEFAULT # Always return default quality
             })
         data = request.json or {}
         target_dir = data.get('download_dir')
         api_base = (data.get('api_base') or '').strip()
-        quality = data.get('quality')
+        # quality = data.get('quality') # Removed quality processing
         
         if target_dir:
             target_dir = os.path.abspath(target_dir)
@@ -1722,16 +1731,16 @@ def netease_config():
         if api_base:
             api_base = api_base.rstrip('/')
             
-        if not target_dir and not api_base and not quality:
+        if not target_dir and not api_base: # Removed quality check
             return jsonify({'success': False, 'error': '未提供任何配置项'})
             
-        save_netease_config(target_dir, api_base, quality)
+        save_netease_config(target_dir, api_base) # Removed quality parameter
         return jsonify({
             'success': True, 
             'download_dir': NETEASE_DOWNLOAD_DIR, 
             'api_base': NETEASE_API_BASE, 
             'max_concurrent': NETEASE_MAX_CONCURRENT,
-            'quality': NETEASE_QUALITY or NETEASE_QUALITY_DEFAULT
+            'quality': NETEASE_QUALITY_DEFAULT # Always return default quality
         })
     except Exception as e:
         logger.warning(f"更新网易云配置失败: {e}")
@@ -1743,8 +1752,7 @@ def netease_debug():
     info = {
         'cookie_loaded': bool(NETEASE_COOKIE),
         'api_base': NETEASE_API_BASE,
-        'download_dir': NETEASE_DOWNLOAD_DIR,
-        'quality': NETEASE_QUALITY
+        'download_dir': NETEASE_DOWNLOAD_DIR
     }
     return jsonify(info)
 
