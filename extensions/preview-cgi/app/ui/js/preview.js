@@ -8,7 +8,7 @@ const state = {
     track: null,
     duration: 0,
     playMode: 0, // 0: 循环播放, 1: 播完暂停
-    favorites: new Set(JSON.parse(localStorage.getItem('2fmusic_favs') || '[]')),
+    favorites: new Set(),
     lyricsData: []
 };
 
@@ -57,11 +57,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 同步收藏状态
     try {
-        const musicList = await api.library.list();
-        if (musicList && musicList.length) {
-            // 重建收藏集合（以服务器为准）
-            state.favorites = new Set(musicList.map(song => song.filename));
-            localStorage.setItem('2fmusic_favs', JSON.stringify([...state.favorites]));
+        const favList = await api.favorites.list(); // 使用 API 获取
+        if (favList.success && favList.data) {
+            state.favorites = new Set(favList.data);
+            if (state.track && state.track.filename) {
+                // 如果是数字ID，则直接判断；否则尝试匹配（预览模式通常已有ID或文件名）
+                // 这里暂简单判断
+                updateFavBtn(state.favorites.has(state.track.filename));
+            }
         }
     } catch (e) {
         console.warn('同步收藏失败:', e);
@@ -210,17 +213,8 @@ function bindEvents() {
     });
     state.audio.addEventListener('error', (e) => { console.error(e); showToast("播放出错"); });
 
-    // 实时同步收藏状态
     window.addEventListener('storage', (e) => {
-        if (e.key === '2fmusic_favs' && e.newValue) {
-            try {
-                const newFavs = JSON.parse(e.newValue);
-                state.favorites = new Set(newFavs);
-                if (state.track) {
-                    updateFavBtn(state.favorites.has(state.track.filename));
-                }
-            } catch (err) { console.error("Sync favs error", err); }
-        }
+        // 废弃：2fmusic_favs 不再使用，预览页暂取消 Storage 同步
     });
 }
 
@@ -244,7 +238,7 @@ async function loadPreviewTrack(path) {
             title: song.title || "未知标题",
             artist: song.artist || "未知艺术家",
             album: song.album || "未知专辑",
-            filename: song.filename || path, // 优先使用 ID，否则使用路径
+            filename: song.id || song.filename || path, // 优先使用 ID
             cover: toProxyUrl(song.album_art) || `${api.API_BASE}/images/icon_256.png`,
             src: `${api.API_BASE}/api/music/external/play?path=${encodeURIComponent(path)}`,
             duration: 0
@@ -450,20 +444,36 @@ function updateModeUI() {
 }
 
 async function toggleFavorite() {
-    if (!state.track) return;
-    const btn = ui.favBtn;
+    if (!state.track || !state.track.filename) return;
+    const songId = state.track.filename; // 这里 filename 实际上存储的是 ID 或者 路径(如果是外部)
 
     // 1. 检查是否已收藏
-    if (state.favorites.has(state.track.filename)) {
+    if (state.favorites.has(songId)) {
         // 移除收藏
-        state.favorites.delete(state.track.filename);
-        localStorage.setItem('2fmusic_favs', JSON.stringify([...state.favorites]));
-        updateFavBtn(false);
-        showToast("已取消收藏");
+        updateFavBtn(false); // 乐观更新
+        state.favorites.delete(songId);
+        try {
+            await api.favorites.remove(songId);
+            showToast("已取消收藏");
+        } catch (e) {
+            updateFavBtn(true); // 恢复
+            state.favorites.add(songId);
+            showToast("操作失败");
+        }
     } else {
         // 添加收藏
-        // 2. 检查来源：如果是外部文件
+        // 2. 检查来源：如果是外部文件 (ID 看起来像路径，或者 URL 指向 external)
         if (state.track.src && state.track.src.includes(`${api.API_BASE}/api/music/external/play`)) {
+            // 如果已经是纯数字ID，说明已经是库内文件
+            if (/^\d+$/.test(songId) || /^[0-9a-f]{32}$/.test(songId)) { // 简单的一级判断，实际 ID生成规则可能变
+                updateFavBtn(true);
+                state.favorites.add(songId);
+                try { await api.favorites.add(songId); showToast("已收藏"); }
+                catch (e) { updateFavBtn(false); state.favorites.delete(songId); }
+                return;
+            }
+
+            // 外部文件需导入
             showToast("正在导入并收藏...");
             try {
                 const params = new URLSearchParams(window.location.search);
@@ -472,11 +482,13 @@ async function toggleFavorite() {
                 if (!originPath) { throw new Error("无法获取源文件路径"); }
 
                 const res = await api.library.importPath(originPath);
-                if (res.success && res.filename) {
-                    // 更新为本地文件名
+                if (res.success && res.filename) { // res.filename 实际上是 ID
                     state.track.filename = res.filename;
                     state.favorites.add(res.filename);
-                    localStorage.setItem('2fmusic_favs', JSON.stringify([...state.favorites]));
+
+                    // 导入后自动添加到收藏
+                    await api.favorites.add(res.filename);
+
                     updateFavBtn(true);
                     showToast("已导入并收藏");
                 } else {
@@ -488,10 +500,14 @@ async function toggleFavorite() {
             }
         } else {
             // 内部文件
-            state.favorites.add(state.track.filename);
-            localStorage.setItem('2fmusic_favs', JSON.stringify([...state.favorites]));
             updateFavBtn(true);
-            showToast("已收藏");
+            state.favorites.add(songId);
+            try {
+                await api.favorites.add(songId);
+                showToast("已收藏");
+            } catch (e) {
+                updateFavBtn(false); state.favorites.delete(songId);
+            }
         }
     }
 }

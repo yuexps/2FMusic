@@ -476,7 +476,53 @@
                     }
                 }
 
-                // 5. Current Song Info
+                // 5. Pre-render Song List (Minimize Flicker)
+                if (tab === 'local' || tab === 'fav') {
+                    const container = document.getElementById('song-list-container');
+                    const playlist = JSON.parse(localStorage.getItem('2fmusic_playlist') || '[]');
+                    const favs = new Set(JSON.parse(localStorage.getItem('2fmusic_favs') || '[]'));
+
+                    if (container && playlist.length > 0) {
+                        let displayList = playlist;
+
+                        // If Tab is Favorite, filter it
+                        if (tab === 'fav') {
+                            displayList = playlist.filter(s => favs.has(s.id));
+                            const titleEl = document.getElementById('list-title');
+                            if (titleEl) titleEl.innerText = '收藏列表';
+                        } else {
+                            const titleEl = document.getElementById('list-title');
+                            if (titleEl) titleEl.innerText = '歌曲列表';
+                        }
+
+                        if (displayList.length > 0) {
+                            let html = '';
+                            displayList.forEach((song, index) => {
+                                const isFav = favs.has(song.id);
+                                const isExt = song.isExternal;
+                                let favHtml = `<button class="card-fav-btn ${isFav ? 'active' : ''}">${isFav ? '<i class="fas fa-heart"></i>' : '<i class="far fa-heart"></i>'}</button>`;
+                                if (isExt) favHtml = '';
+                                const borderStyle = isExt ? 'border:1px dashed var(--primary);' : '';
+
+                                html += `<div class="song-card" data-index="${index}" style="${borderStyle}">
+                                    ${favHtml}
+                                    <img src="${song.cover || '/static/images/ICON_256.PNG'}" loading="lazy">
+                                    <div class="card-info">
+                                        <div class="title">${song.title || song.filename}</div>
+                                        <div class="artist">${song.artist || '未知艺术家'}</div>
+                                    </div>
+                                </div>`;
+                            });
+                            container.innerHTML = html;
+                        } else if (tab === 'fav') {
+                            container.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">暂无收藏歌曲</div>`;
+                        } else {
+                            container.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">暂无歌曲</div>`;
+                        }
+                    }
+                }
+
+                // 6. Current Song Info
                 if (state.currentFilename) {
                     const playlist = JSON.parse(localStorage.getItem('2fmusic_playlist') || '[]');
                     const song = playlist.find(s => s.filename === state.currentFilename);

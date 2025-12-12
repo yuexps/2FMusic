@@ -5,21 +5,29 @@ import { showToast, showConfirmDialog, hideProgressToast, updateDetailFavButton,
 import { startScanPolling, loadMountPoints } from './mounts.js';
 
 // 收藏
-function toggleFavorite(song, btnEl) {
-  if (state.favorites.has(song.filename)) {
-    state.favorites.delete(song.filename);
+// 收藏 (Server Sync)
+async function toggleFavorite(song, btnEl) {
+  if (!song.id) return;
+  const isFav = state.favorites.has(song.id);
+
+  if (isFav) {
+    // 乐观 UI 更新
+    state.favorites.delete(song.id);
     if (btnEl) { btnEl.classList.remove('active'); btnEl.innerHTML = '<i class="far fa-heart"></i>'; }
+    try { await api.favorites.remove(song.id); } catch (e) { console.error(e); }
   } else {
-    state.favorites.add(song.filename);
+    // 乐观 UI 更新
+    state.favorites.add(song.id);
     if (btnEl) { btnEl.classList.add('active'); btnEl.innerHTML = '<i class="fas fa-heart"></i>'; }
+    try { await api.favorites.add(song.id); } catch (e) { console.error(e); }
   }
   saveFavorites();
+
   const currentPlaying = state.playQueue[state.currentTrackIndex];
-  if (currentPlaying && currentPlaying.filename === song.filename) {
-    updateDetailFavButton(state.favorites.has(song.filename));
+  if (currentPlaying && currentPlaying.id === song.id) {
+    updateDetailFavButton(state.favorites.has(song.id));
   }
-  if (state.currentTab === 'fav' && !state.favorites.has(song.filename)) renderPlaylist();
-  persistState(ui.audio);
+  if (state.currentTab === 'fav' && !state.favorites.has(song.id)) renderPlaylist();
 }
 
 const throttledPersist = throttle(() => persistState(ui.audio), 2000);
@@ -49,27 +57,33 @@ export async function loadSongs(retry = true) {
   if (state.fullPlaylist.length > 0 && state.playQueue.length === 0) {
     state.playQueue = [...state.fullPlaylist];
     if (state.currentTab === 'local' || state.currentTab === 'fav') renderPlaylist();
-    // 尝试立即恢复状态
     if (!ui.audio.src) { initPlayerState(); }
   }
 
   try {
-    const json = await api.library.list();
-    if (json.success && json.data) {
+    // 并行获取歌曲库和收藏列表
+    const [libJson, favJson] = await Promise.all([
+      api.library.list(),
+      api.favorites.list()
+    ]);
+
+    if (favJson.success && favJson.data) {
+      state.favorites = new Set(favJson.data);
+      saveFavorites();
+    }
+
+    if (libJson.success && libJson.data) {
       // 2. 合并数据：保留本地缓存的封面和歌词
       const oldMap = new Map(state.fullPlaylist.map(s => [s.filename, s]));
-      const newList = json.data.map(item => {
+      const newList = libJson.data.map(item => {
         const old = oldMap.get(item.filename);
         return {
           ...item,
           title: item.title || item.filename,
           artist: item.artist || '未知艺术家',
-          // 严格使用 ID 进行播放
           id: item.id,
           src: `/api/music/play/${encodeURIComponent(item.id)}`,
-          // 如果缓存中有非默认封面，则保留
           cover: (old && old.cover && !old.cover.includes('ICON_256')) ? old.cover : (item.album_art || '/static/images/ICON_256.PNG'),
-          // 如果缓存中有歌词，则保留
           lyrics: (old && old.lyrics) ? old.lyrics : item.lyrics
         };
       });
@@ -87,7 +101,6 @@ export async function loadSongs(retry = true) {
         }
         renderPlaylist();
       } else if (state.currentTab === 'fav') {
-        // 刷新收藏列表
         renderPlaylist();
       }
 
@@ -182,7 +195,7 @@ export async function handleExternalFile() {
 export function renderPlaylist() {
   if (!ui.songContainer) return;
   ui.songContainer.innerHTML = '';
-  if (state.currentTab === 'fav') { state.displayPlaylist = state.fullPlaylist.filter(s => state.favorites.has(s.filename)); } else { state.displayPlaylist = state.fullPlaylist; }
+  if (state.currentTab === 'fav') { state.displayPlaylist = state.fullPlaylist.filter(s => state.favorites.has(s.id)); } else { state.displayPlaylist = state.fullPlaylist; }
   if (state.displayPlaylist.length === 0) {
     ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">${state.currentTab === 'fav' ? '暂无收藏歌曲' : '暂无歌曲'}</div>`;
     return;
@@ -194,7 +207,9 @@ export function renderPlaylist() {
     card.className = 'song-card';
     card.dataset.index = index;
     if (song.isExternal) card.style.border = '1px dashed var(--primary)';
-    const isFav = state.favorites.has(song.filename);
+
+    // 使用 ID 判断收藏状态
+    const isFav = state.favorites.has(song.id);
 
     let favHtml = `<button class="card-fav-btn ${isFav ? 'active' : ''}" title="收藏"><i class="${isFav ? 'fas' : 'far'} fa-heart"></i></button>`;
     if (song.isExternal) favHtml = '';
@@ -374,7 +389,7 @@ function loadTrackInfo(track) {
   ['current-artist', 'fp-artist'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = track.artist; });
   const coverSrc = track.cover || '/static/images/ICON_256.PNG';
   ['current-cover', 'fp-cover'].forEach(id => { const el = document.getElementById(id); if (el) el.src = coverSrc; });
-  updateDetailFavButton(state.favorites.has(track.filename));
+  updateDetailFavButton(state.favorites.has(track.id));
   document.title = `${track.title} - 2FMusic`;
   if (ui.lyricsContainer) ui.lyricsContainer.innerHTML = '';
   if (track.lyrics) parseAndRenderLyrics(track.lyrics); else renderNoLyrics('正在搜索歌词...');
@@ -671,7 +686,7 @@ export function bindPlayerEvents() {
       const s = state.playQueue[state.currentTrackIndex];
       if (s && !s.isExternal) {
         toggleFavorite(s, null);
-        updateDetailFavButton(state.favorites.has(s.filename));
+        updateDetailFavButton(state.favorites.has(s.id));
         if (state.currentTab === 'fav') renderPlaylist();
       }
     });

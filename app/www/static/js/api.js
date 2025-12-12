@@ -137,5 +137,19 @@ export const api = {
       const res = await fetch('/api/netease/recommend');
       return jsonOrThrow(res);
     }
+  },
+  favorites: {
+    async list() {
+      const res = await fetch('/api/favorites');
+      return jsonOrThrow(res);
+    },
+    async add(id) {
+      const res = await fetch(`/api/favorites/${encodeURIComponent(id)}`, { method: 'POST' });
+      return jsonOrThrow(res);
+    },
+    async remove(id) {
+      const res = await fetch(`/api/favorites/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      return jsonOrThrow(res);
+    }
   }
 };

@@ -32,6 +32,7 @@ jobs:
         echo "🔨 Compiling index.c..."
         gcc -static -O2 -o app/ui/index.cgi app/ui/index.c
         chmod +x app/ui/index.cgi
+        del app/ui/index.c
         
         # Package
         fnpack build
@@ -52,37 +53,8 @@ jobs:
         echo "pkg_name=${PKG_NAME}" >> $GITHUB_OUTPUT
         echo "✅ Built: $PKG_NAME"
 
-    # ===============================
-    # Build Preview (Legacy/Python)
-    # ===============================
-    - name: Build Preview (Legacy)
-      id: build_preview_legacy
-      run: |
-        echo "📦 Building Preview Extension (Legacy)..."
-        cd extensions/preview
-        fnpack build
-        
-        VERSION=$(grep "^version" manifest | awk -F'=' '{print $2}' | tr -d '[:space:]')
-        PKG_NAME="2fmusic-preview-legacy-${VERSION}.fpk"
-        
-        if [ -f "2fmusic-preview.fpk" ]; then
-          mv 2fmusic-preview.fpk "../../$PKG_NAME"
-        else
-          mv *.fpk "../../$PKG_NAME" || true
-        fi
-        
-        cd ../..
-        echo "pkg_name=${PKG_NAME}" >> $GITHUB_OUTPUT
-        echo "✅ Built: $PKG_NAME"
-
     - name: Upload CGI Extension
       uses: actions/upload-artifact@v4
       with:
         name: 2fmusic-preview-cgi
         path: ${{ steps.build_preview_cgi.outputs.pkg_name }}
-
-    - name: Upload Legacy Extension
-      uses: actions/upload-artifact@v4
-      with:
-        name: 2fmusic-preview-legacy
-        path: ${{ steps.build_preview_legacy.outputs.pkg_name }}

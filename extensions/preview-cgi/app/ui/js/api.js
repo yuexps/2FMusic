@@ -60,5 +60,19 @@ export const api = {
             throw new Error("密码错误");
         }
         return true;
+    },
+    favorites: {
+        async list() {
+            const res = await fetch(`${API_BASE}/api/favorites`);
+            return jsonOrThrow(res);
+        },
+        async add(id) {
+            const res = await fetch(`${API_BASE}/api/favorites/${encodeURIComponent(id)}`, { method: 'POST' });
+            return jsonOrThrow(res);
+        },
+        async remove(id) {
+            const res = await fetch(`${API_BASE}/api/favorites/${encodeURIComponent(id)}`, { method: 'DELETE' });
+            return jsonOrThrow(res);
+        }
     }
 };

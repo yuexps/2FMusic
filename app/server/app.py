@@ -325,6 +325,12 @@ def init_db():
                 )
             ''')
             conn.execute('''
+                CREATE TABLE IF NOT EXISTS favorites (
+                   song_id TEXT PRIMARY KEY,
+                   created_at REAL
+                )
+            ''')
+            conn.execute('''
                 CREATE TABLE IF NOT EXISTS mount_points (
                     path TEXT PRIMARY KEY,
                     created_at REAL
@@ -1588,6 +1594,38 @@ def import_music_by_path():
             # 让 Watchdog 处理索引
         return jsonify({'success': True, 'filename': filename})
     except Exception as e: return jsonify({'success': False, 'error': str(e)})
+
+# --- 收藏夹接口 ---
+@app.route('/api/favorites', methods=['GET'])
+def get_favorites():
+    try:
+        with get_db() as conn:
+            rows = conn.execute("SELECT song_id FROM favorites").fetchall()
+            return jsonify({'success': True, 'data': [r['song_id'] for r in rows]})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/favorites/<song_id>', methods=['POST'])
+def add_favorite(song_id):
+    try:
+        with get_db() as conn:
+            conn.execute("INSERT OR IGNORE INTO favorites (song_id, created_at) VALUES (?, ?)", (song_id, time.time()))
+            conn.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.error(f"收藏失败: {e}")
+        return jsonify({'success': False, 'error': "添加失败"})
+
+@app.route('/api/favorites/<song_id>', methods=['DELETE'])
+def remove_favorite(song_id):
+    try:
+        with get_db() as conn:
+            conn.execute("DELETE FROM favorites WHERE song_id=?", (song_id,))
+            conn.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.error(f"取消收藏失败: {e}")
+        return jsonify({'success': False, 'error': "移除失败"})
 
 @app.route('/api/netease/search')
 def search_netease_music():
