@@ -124,10 +124,10 @@
             width: 100%;
             height: 8px;
             border-radius: 4px;
-            background: rgba(255, 255, 255, 0.1);
             outline: none;
             -webkit-appearance: none;
             cursor: pointer;
+            background: rgba(255, 255, 255, 0.1);
         }
         
         #ui-scale-slider::-webkit-slider-thumb {
@@ -143,6 +143,32 @@
         }
         
         #ui-scale-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+        
+        #default-volume-slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        #default-volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+        }
+        
+        #default-volume-slider::-webkit-slider-thumb:hover {
             transform: scale(1.1);
         }
         
@@ -894,6 +920,7 @@
                     this.bindEvents();
                     this.updateUI();
                     this.initKeyboardShortcuts();
+                    this.initNavigation();
                 }
                 
                 loadSettings() {
@@ -909,11 +936,15 @@
                         console.error('Failed to load settings:', e);
                         this.currentSettings = { ...this.defaultSettings };
                     }
+                    
+                    // 应用加载的设置
+                    this.applyAllSettings();
                 }
                 
                 saveToStorage() {
                     try {
                         localStorage.setItem('2fmusic_settings', JSON.stringify(this.currentSettings));
+                        console.log('Settings saved:', this.currentSettings);
                     } catch (e) {
                         console.error('Failed to save settings:', e);
                     }
@@ -942,6 +973,7 @@
                 }
                 
                 applyUIScale(scale) {
+                    console.log('Applying UI scale:', scale);
                     // 如果启用了响应式缩放且这是用户设置
                     if (this.currentSettings.autoResponsiveScale && 
                         localStorage.getItem('2fmusic_ui_scale') !== null) {
@@ -971,6 +1003,16 @@
                     const volumeSlider = document.getElementById('volume-slider');
                     if (volumeSlider) {
                         volumeSlider.value = volume;
+                        volumeSlider.style.backgroundSize = (volume * 100) + '% 100%';
+                    }
+                    
+                    // 保存到全局状态
+                    try {
+                        const state = JSON.parse(localStorage.getItem('2fmusic_state') || '{}');
+                        state.volume = volume;
+                        localStorage.setItem('2fmusic_state', JSON.stringify(state));
+                    } catch (e) {
+                        console.error('Failed to save volume to state:', e);
                     }
                 }
                 
@@ -1062,11 +1104,13 @@
                     if (volumeSlider) {
                         volumeSlider.value = this.currentSettings.defaultVolume;
                         this.updateVolumeDisplay(this.currentSettings.defaultVolume);
+                        this.updateSliderBackground(volumeSlider, this.currentSettings.defaultVolume);
                         
                         volumeSlider.addEventListener('input', (e) => {
                             const volume = parseFloat(e.target.value);
                             this.updateSetting('defaultVolume', volume);
                             this.updateVolumeDisplay(volume);
+                            this.updateSliderBackground(volumeSlider, volume);
                         });
                     }
                     
@@ -1115,11 +1159,15 @@
                             e.target.value = ''; // 清除选择
                         }
                     });
-                    
-                    // 导航到设置页面
-                    document.getElementById('nav-settings')?.addEventListener('click', () => {
-                        this.navigateToSettings();
-                    });
+                }
+                
+                updateSliderBackground(slider, value) {
+                    const percent = value * 100;
+                    slider.style.background = `linear-gradient(to right, 
+                        var(--primary) 0%, 
+                        var(--primary) ${percent}%, 
+                        rgba(255, 255, 255, 0.1) ${percent}%, 
+                        rgba(255, 255, 255, 0.1) 100%)`;
                 }
                 
                 updateScaleDisplay(scale) {
@@ -1137,11 +1185,7 @@
                         const max = parseFloat(slider.max);
                         const percentPos = ((scale - min) / (max - min)) * 100;
                         
-                        slider.style.background = `linear-gradient(to right, 
-                            var(--primary) 0%, 
-                            var(--primary) ${percentPos}%, 
-                            rgba(255, 255, 255, 0.1) ${percentPos}%, 
-                            rgba(255, 255, 255, 0.1) 100%)`;
+                        this.updateSliderBackground(slider, (percentPos / 100));
                     }
                 }
                 
@@ -1163,11 +1207,25 @@
                     this.updateScaleDisplay(this.currentSettings.uiScale);
                     this.updateVolumeDisplay(this.currentSettings.defaultVolume);
                     this.updatePresetButtons(this.currentSettings.uiScale);
+                    
+                    // 更新滑块背景
+                    const scaleSlider = document.getElementById('ui-scale-slider');
+                    if (scaleSlider) {
+                        const min = parseFloat(scaleSlider.min);
+                        const max = parseFloat(scaleSlider.max);
+                        const percentPos = ((this.currentSettings.uiScale - min) / (max - min)) * 100;
+                        this.updateSliderBackground(scaleSlider, (percentPos / 100));
+                    }
+                    
+                    const volumeSlider = document.getElementById('default-volume-slider');
+                    if (volumeSlider) {
+                        this.updateSliderBackground(volumeSlider, this.currentSettings.defaultVolume);
+                    }
                 }
                 
                 clearCache() {
                     // 清除播放列表等临时数据，但保留设置和收藏
-                    const keysToKeep = ['2fmusic_settings', '2fmusic_ui_scale', '2fmusic_favorites'];
+                    const keysToKeep = ['2fmusic_settings', '2fmusic_ui_scale', '2fmusic_favorites', '2fmusic_state'];
                     const keysToRemove = [];
                     
                     for (let i = 0; i < localStorage.length; i++) {
@@ -1181,6 +1239,69 @@
                     
                     // 重新加载页面以应用更改
                     setTimeout(() => location.reload(), 1000);
+                }
+                
+                initNavigation() {
+                    // 监听所有导航项点击
+                    document.querySelectorAll('nav li').forEach(navItem => {
+                        navItem.addEventListener('click', (e) => {
+                            const targetId = navItem.id;
+                            const tab = targetId.replace('nav-', '');
+                            
+                            // 更新导航激活状态
+                            document.querySelectorAll('nav li').forEach(el => el.classList.remove('active'));
+                            navItem.classList.add('active');
+                            
+                            // 隐藏所有视图
+                            const allViews = ['view-player', 'view-mount', 'view-netease', 'view-upload', 'view-settings'];
+                            allViews.forEach(viewId => {
+                                const view = document.getElementById(viewId);
+                                if (view) view.classList.add('hidden');
+                            });
+                            
+                            // 显示目标视图
+                            const targetView = document.getElementById(`view-${tab}`);
+                            if (targetView) {
+                                targetView.classList.remove('hidden');
+                            }
+                            
+                            // 更新移动端标题
+                            const pageTitles = {
+                                'local': '本地音乐',
+                                'fav': '我的收藏',
+                                'mount': '目录管理',
+                                'netease': '网易下载',
+                                'upload': '上传音乐',
+                                'settings': '设置'
+                            };
+                            
+                            const pageTitle = document.getElementById('mobile-page-title');
+                            if (pageTitle && pageTitles[tab]) {
+                                pageTitle.textContent = pageTitles[tab];
+                            }
+                            
+                            // 搜索框逻辑
+                            const searchBox = document.querySelector('.search-box');
+                            if (searchBox) {
+                                if (tab === 'local') {
+                                    searchBox.style.display = 'flex';
+                                    searchBox.style.opacity = '1';
+                                } else {
+                                    searchBox.style.display = 'none';
+                                    searchBox.style.opacity = '0';
+                                }
+                            }
+                            
+                            // 保存当前标签页状态
+                            try {
+                                const state = JSON.parse(localStorage.getItem('2fmusic_state') || '{}');
+                                state.tab = tab;
+                                localStorage.setItem('2fmusic_state', JSON.stringify(state));
+                            } catch (e) {
+                                console.error('Failed to save tab state:', e);
+                            }
+                        });
+                    });
                 }
                 
                 navigateToSettings() {
