@@ -30,11 +30,10 @@ void error_response(int status, const char *msg) {
 // --- 路径解析Path Parsing ---
 
 // 如果 PATH_INFO 缺失或不可靠，通过 REQUEST_URI 解析
-// 逻辑模仿 fndepot: REQUEST_URI.split("index.cgi", 1)[1]
 void get_relative_path(char *buffer, size_t size) {
     char *path_info = getenv("PATH_INFO");
-    // Fix: 某些服务器会将 script path 放入 PATH_INFO，例如 /cgi/.../index.cgi
-    // 如果 PATH_INFO 包含 index.cgi，我们忽略它，转而使用更可靠的 REQUEST_URI 解析
+
+    // 如果 PATH_INFO 包含 index.cgi，转而使用更可靠的 REQUEST_URI 解析
     if (path_info && strlen(path_info) > 0 && strstr(path_info, CGI_NAME) == NULL) {
         strncpy(buffer, path_info, size - 1);
         return;
@@ -63,7 +62,6 @@ void get_relative_path(char *buffer, size_t size) {
 }
 
 // --- 静态文件服务Static File Server ---
-
 const char* get_mime_type(const char *path) {
     const char *ext = strrchr(path, '.');
     if (!ext) return "application/octet-stream";
@@ -271,7 +269,7 @@ int main() {
     get_relative_path(rel_path, sizeof(rel_path));
     
     // 2. 路由 (Route)
-    if (strncmp(rel_path, "/api/", 5) == 0) {
+    if (strncmp(rel_path, "/api/", 5) == 0 || strncmp(rel_path, "/login", 6) == 0) {
         proxy_request(rel_path);
     } else {
         serve_static_file(rel_path);

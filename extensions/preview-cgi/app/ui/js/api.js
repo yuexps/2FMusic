@@ -5,8 +5,6 @@ const jsonOrThrow = async (resp) => {
     const data = await resp.json();
     return data;
 };
-
-// 核心修改：使用 index.cgi 作为反向代理的入口
 // 前端 fetch('index.cgi/api/...') 会被 index.cgi 拦截并转发到 localhost:23237
 const API_BASE = "index.cgi";
 
@@ -35,19 +33,19 @@ export const api = {
         async albumArt(query) {
             const res = await fetch(`${API_BASE}/api/music/album-art${query}`);
             return jsonOrThrow(res);
-        },
-        async login(password) {
-            const formData = new URLSearchParams();
-            formData.append('password', password);
-            const res = await fetch('login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: formData
-            });
-            if (res.url.includes('/login') || res.status === 401) {
-                throw new Error("密码错误");
-            }
-            return true;
         }
+    },
+    async login(password) {
+        const formData = new URLSearchParams();
+        formData.append('password', password);
+        const res = await fetch('login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData
+        });
+        if (res.url.includes('/login') || res.status === 401) {
+            throw new Error("密码错误");
+        }
+        return true;
     }
 };
