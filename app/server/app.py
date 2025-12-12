@@ -617,6 +617,12 @@ def index_single_file(file_path):
                 has_cover = 1
         
         with get_db() as conn:
+            # 全局去重检测
+            dup = conn.execute("SELECT path FROM songs WHERE filename=? AND size=? AND path!=?", (os.path.basename(file_path), stat.st_size, file_path)).fetchone()
+            if dup:
+                logger.info(f"索引: 跳过重复文件 {file_path} (已存在: {dup['path']})")
+                return
+
             conn.execute('''
                 INSERT OR REPLACE INTO songs (id, path, filename, title, artist, album, mtime, size, has_cover)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -726,7 +732,37 @@ def scan_library_incremental():
                         if SCAN_STATUS['processed'] % 10 == 0:
                             SCAN_STATUS['current_file'] = f"处理中... {int((SCAN_STATUS['processed']/total_files)*100)}%"
 
-                if to_update_db:
+                # 过滤重复文件 (批次内去重 + 数据库去重)
+                final_update_db = []
+                seen_in_batch = set() # (filename, size)
+
+                for item in to_update_db:
+                    # structure: (sid, path, filename, title, artist, album, mtime, size, has_cover)
+                    # item[1]=path, item[2]=filename, item[7]=size
+                    c_path, c_fname, c_size = item[1], item[2], item[7]
+                    
+                    # 1. 批次内查重
+                    if (c_fname, c_size) in seen_in_batch:
+                        logger.info(f"扫描: 跳过批次内重复文件 {c_path}")
+                        continue
+                        
+                    # 2. 数据库查重 (排除自己)
+                    # 注意: 这里使用 conn (外层已开启)
+                    # 需要确保 conn 线程安全? sqlite3 单线程模式下需要注意。
+                    # 但 Flask 这里的 conn 是 thread-local 还是? 
+                    # scan_library_incremental 是后台任务，单线程执行 (executor 是处理 metadata 的)。
+                    # "with get_db() as conn" 在上层。所以是安全的。
+                    try:
+                        dup = conn.execute("SELECT path FROM songs WHERE filename=? AND size=? AND path!=?", (c_fname, c_size, c_path)).fetchone()
+                        if dup:
+                            logger.info(f"扫描: 跳过全局重复文件 {c_path} (已存在: {dup['path']})")
+                            continue
+                    except Exception: pass
+                    
+                    seen_in_batch.add((c_fname, c_size))
+                    final_update_db.append(item)
+
+                if final_update_db:
                     cursor.executemany('''
                         INSERT OR REPLACE INTO songs (id, path, filename, title, artist, album, mtime, size, has_cover)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1494,58 +1530,6 @@ def clear_metadata(song_id=None):
         logger.warning(f"元数据清除失败: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-@app.route('/import_mode', methods=['POST'])
-def import_single_file():
-    """导入单个文件到数据库（收藏前置步骤）"""
-    try:
-        data = request.get_json()
-        target_path = data.get('path')
-        if not target_path or not os.path.exists(target_path):
-            return jsonify({'success': False, 'error': '文件未找到'})
-
-        # 安全检查
-        target_path = os.path.abspath(target_path)
-        allowed_roots = [os.path.abspath(MUSIC_LIBRARY_PATH)]
-        try:
-            with get_db() as conn:
-                rows = conn.execute("SELECT path FROM mount_points").fetchall()
-                allowed_roots.extend([os.path.abspath(r['path']) for r in rows])
-        except Exception: pass
-        if not any(target_path.startswith(root) for root in allowed_roots):
-            return jsonify({'success': False, 'error': '非法路径：仅允许操作音乐库内的文件'})
-
-        # 检查是否已存在
-        with get_db() as conn:
-            row = conn.execute("SELECT id FROM songs WHERE path=?", (target_path,)).fetchone()
-            if row:
-                return jsonify({'success': True, 'filename': str(row['id'])})
-
-        # 不存在则提取元数据并插入
-        meta = get_metadata(target_path)
-        song_id = generate_song_id(target_path)
-        
-        # 提取封面/歌词
-        has_cover = extract_embedded_cover(target_path, os.path.splitext(os.path.basename(target_path))[0])
-        extract_embedded_lyrics(target_path)
-
-        with get_db() as conn:
-            conn.execute("""
-                INSERT OR IGNORE INTO songs (id, path, title, artist, album, duration, size, mtime, has_cover)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                song_id, target_path, 
-                meta['title'], meta['artist'], meta['album'], 
-                meta['duration'], os.path.getsize(target_path), os.path.getmtime(target_path),
-                1 if has_cover else 0
-            ))
-            conn.commit()
-
-        return jsonify({'success': True, 'filename': str(song_id)})
-
-    except Exception as e:
-        logger.error(f"导入失败: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
 # --- 辅助接口 ---
 @app.route('/api/music/covers/<cover_name>')
 def get_cover(cover_name):
@@ -1575,6 +1559,27 @@ def upload_file():
             return jsonify({'success': False, 'error': '无效保存路径，请先在目录管理中添加'})
         os.makedirs(target_dir, exist_ok=True)
         save_path = os.path.join(target_dir, filename)
+
+        # 数据库查重
+        try:
+            with get_db() as conn:
+                exists = conn.execute("SELECT 1 FROM songs WHERE path=?", (save_path,)).fetchone()
+                if exists:
+                    return jsonify({'success': False, 'error': '该文件已存在于当前目录下'})
+                
+                # 全局查重 (文件名 + 大小)
+                file.seek(0, os.SEEK_END)
+                file_size = file.tell()
+                file.seek(0)
+                
+                dup = conn.execute("SELECT path FROM songs WHERE filename=? AND size=?", (filename, file_size)).fetchone()
+                if dup:
+                    return jsonify({'success': False, 'error': f'音乐库中已存在相同文件: {dup["path"]}'})
+
+        except Exception as e:
+            logger.error(f"查重失败: {e}")
+            pass
+
         try:
             file.save(save_path)
             # 让 Watchdog 处理索引
@@ -1591,10 +1596,33 @@ def import_music_by_path():
         if not src_path or not os.path.exists(src_path): return jsonify({'success': False, 'error': '无效路径'})
         filename = os.path.basename(src_path)
         dst_path = os.path.join(MUSIC_LIBRARY_PATH, filename)
+        # 查重 (与上传保持一致)
+        if os.path.exists(dst_path):
+             # 目标已存在 (文件名冲突)
+             # 虽然是同名，但这里我们覆盖检查
+             # TODO: 用户可能希望覆盖? 暂时保持原逻辑: 如果存在则跳过复制, 并返回 'filename' or 'id'
+             # 但为了去重，我们要检查内容是否也重复
+             pass
+
+        # 全局查重
+        src_size = os.path.getsize(src_path)
+        with get_db() as conn:
+             dup = conn.execute("SELECT path FROM songs WHERE filename=? AND size=?", (filename, src_size)).fetchone()
+             if dup:
+                 # 如果已存在的文件就是目标位置的文件（即重复导入自己），则是允许的（当作刷新）
+                 # 但 dst_path 还没复制过去。如果 exists(dst_path) 上面会处理。
+                 # 如果 duplicates path != dst_path -> 真正的异地重复 -> 报错
+                 if dup['path'] != os.path.abspath(dst_path):
+                     return jsonify({'success': False, 'error': f'音乐库中已存在相同文件: {dup["path"]}'})
+
         if not os.path.exists(dst_path):
             shutil.copy2(src_path, dst_path)
-            # 让 Watchdog 处理索引
-        return jsonify({'success': True, 'filename': filename})
+            # 立即索引，确保入库
+            index_single_file(dst_path)
+        
+        # 计算预期的 ID (与扫描逻辑一致)
+        song_id = generate_song_id(dst_path)
+        return jsonify({'success': True, 'id': song_id, 'filename': filename})
     except Exception as e: return jsonify({'success': False, 'error': str(e)})
 
 # --- 收藏夹接口 ---
@@ -1613,6 +1641,7 @@ def add_favorite(song_id):
         with get_db() as conn:
             conn.execute("INSERT OR IGNORE INTO favorites (song_id, created_at) VALUES (?, ?)", (song_id, time.time()))
             conn.commit()
+        logger.info(f"收藏成功: {song_id}")
         return jsonify({'success': True})
     except Exception as e:
         logger.error(f"收藏失败: {e}")
@@ -1624,6 +1653,7 @@ def remove_favorite(song_id):
         with get_db() as conn:
             conn.execute("DELETE FROM favorites WHERE song_id=?", (song_id,))
             conn.commit()
+        logger.info(f"取消收藏成功: {song_id}")
         return jsonify({'success': True})
     except Exception as e:
         logger.error(f"取消收藏失败: {e}")

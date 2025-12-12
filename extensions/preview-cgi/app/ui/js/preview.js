@@ -213,9 +213,26 @@ function bindEvents() {
     });
     state.audio.addEventListener('error', (e) => { console.error(e); showToast("播放出错"); });
 
-    window.addEventListener('storage', (e) => {
-        // 废弃：2fmusic_favs 不再使用，预览页暂取消 Storage 同步
-    });
+    // 启动轮询同步收藏 (兼容跨设备)
+    setInterval(syncFavorites, 3000);
+}
+
+async function syncFavorites() {
+    try {
+        const favList = await api.favorites.list();
+        if (favList.success && favList.data) {
+            const serverFavs = new Set(favList.data);
+            // 简单比较是否变更
+            if (serverFavs.size !== state.favorites.size || [...serverFavs].some(id => !state.favorites.has(id))) {
+                state.favorites = serverFavs;
+                if (state.track && state.track.filename) {
+                    updateFavBtn(state.favorites.has(state.track.filename));
+                }
+                // Update local storage for other tabs on same device
+                localStorage.setItem('2fmusic_favs', JSON.stringify([...state.favorites]));
+            }
+        }
+    } catch (e) { console.warn('Sync poll failed', e); }
 }
 
 function updateSliderFill(el) {
@@ -482,12 +499,14 @@ async function toggleFavorite() {
                 if (!originPath) { throw new Error("无法获取源文件路径"); }
 
                 const res = await api.library.importPath(originPath);
-                if (res.success && res.filename) { // res.filename 实际上是 ID
-                    state.track.filename = res.filename;
-                    state.favorites.add(res.filename);
+                if (res.success && (res.id || res.filename)) {
+                    const id = res.id || res.filename; // Prefer ID, fallback to filename (legacy)
+                    state.track.id = id; // Store ID
+                    state.track.filename = id; // CRITICAL: Update filename property as toggleFavorite uses this!
+                    state.favorites.add(id);
 
                     // 导入后自动添加到收藏
-                    await api.favorites.add(res.filename);
+                    await api.favorites.add(id);
 
                     updateFavBtn(true);
                     showToast("已导入并收藏");
@@ -510,6 +529,8 @@ async function toggleFavorite() {
             }
         }
     }
+    // Sync to localStorage
+    localStorage.setItem('2fmusic_favs', JSON.stringify([...state.favorites]));
 }
 
 function updateFavBtn(isFav) {

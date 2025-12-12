@@ -516,15 +516,23 @@ body::before {
     border: none;
     color: rgba(255, 255, 255, 0.5);
     border-radius: 50%;
-    width: 1.8rem;
-    height: 1.8rem;
+    width: 2.4rem;
+    /* Increased from 1.8rem */
+    height: 2.4rem;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: 0.2s;
+    transition: transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, opacity 0.2s;
     opacity: 0;
-    font-size: 0.8rem;
+    z-index: 10;
+    /* Ensure it's above card */
+    font-size: 1rem;
+}
+
+/* active scale effect for better feedback */
+.card-fav-btn:active {
+    transform: scale(0.8);
 }
 
 .song-card:hover .card-fav-btn {

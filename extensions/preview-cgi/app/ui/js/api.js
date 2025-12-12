@@ -40,7 +40,7 @@ export const api = {
             return jsonOrThrow(res);
         },
         async importPath(path) {
-            const res = await fetch(`${API_BASE}/import_mode`, {
+            const res = await fetch(`${API_BASE}/api/music/import_path`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ path: path })
