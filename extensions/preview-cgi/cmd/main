@@ -1,5 +1,8 @@
 #!/bin/bash
 
+APP_NAME="2FMusic Preview"
+LOG_FILE="${TRIM_PKGVAR}/info.log"
+
 # 启动应用（纯 CGI 模式）
 start_process() {
     log_msg "正在启动 ${APP_NAME}（纯 CGI 模式）..."

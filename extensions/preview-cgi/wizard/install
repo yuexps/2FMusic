@@ -1,0 +1,18 @@
+[
+  {
+    "stepTitle": "主程序认证配置",
+    "items": [
+      {
+        "type": "password",
+        "field": "wizard_password",
+        "label": "请输入 2FMusic 主程序的访问密码",
+        "rules": [
+          {
+            "required": true,
+            "message": "请输入密码"
+          }
+        ]
+      }
+    ]
+  }
+]

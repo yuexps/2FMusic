@@ -1,6 +1,8 @@
-CONFIG_FILE="${SYNOPKG_PKGDEST}/app/ui/js/config.js"
-if [ -n "${PKG_WIZARD_PASSWORD}" ]; then
-    echo "window.PRECONFIGURED_PASSWORD = \"${PKG_WIZARD_PASSWORD}\";" > "${CONFIG_FILE}"
+#!/bin/bash
+
+CONFIG_FILE="${TRIM_APPDEST}/ui/js/config.js"
+if [ -n "${wizard_password}" ]; then
+    echo "window.PRECONFIGURED_PASSWORD = \"${wizard_password}\";" > "${CONFIG_FILE}"
 fi
 chmod 644 "${CONFIG_FILE}"
 exit 0
