@@ -20,7 +20,29 @@
 
     <script>
         (function () {
-            function setScale() {
+            // 初始化缩放：优先读取用户设置，如果没有则使用响应式缩放
+            function initScale() {
+                // 从 localStorage 读取用户保存的缩放设置
+                const savedScale = localStorage.getItem('2fmusic_ui_scale');
+                
+                if (savedScale) {
+                    // 如果有用户设置，直接使用
+                    const userScale = parseFloat(savedScale);
+                    applyScale(userScale);
+                } else {
+                    // 否则使用响应式缩放
+                    setResponsiveScale();
+                }
+                
+                // 监听窗口大小变化（仅在没有用户设置时使用响应式）
+                window.addEventListener('resize', function() {
+                    if (!localStorage.getItem('2fmusic_ui_scale')) {
+                        setResponsiveScale();
+                    }
+                });
+            }
+            
+            function setResponsiveScale() {
                 if (window.innerWidth > 768) {
                     let scale = Math.min(Math.max(window.innerWidth / 1440, 0.8), 1.2);
                     document.documentElement.style.setProperty('--ui-scale', scale.toFixed(3));
@@ -28,8 +50,13 @@
                     document.documentElement.style.setProperty('--ui-scale', '1.0');
                 }
             }
-            setScale();
-            window.addEventListener('resize', setScale);
+            
+            function applyScale(scale) {
+                document.documentElement.style.setProperty('--ui-scale', scale.toFixed(3));
+            }
+            
+            // 立即执行初始化
+            initScale();
         })();
     </script>
 
@@ -37,6 +64,202 @@
     <script src="{{ url_for('static', filename='js/lib/color-thief.umd.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome/all.min.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <style>
+        /* 设置页面样式 */
+        .settings-page {
+            padding: 2rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .settings-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .settings-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .settings-title i {
+            color: var(--primary);
+        }
+        
+        .scale-control {
+            margin-top: 1rem;
+        }
+        
+        .scale-slider-container {
+            margin-bottom: 1rem;
+        }
+        
+        .scale-slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .scale-percent {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.1);
+            padding: 0.2rem 0.6rem;
+            border-radius: 1rem;
+        }
+        
+        #ui-scale-slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+        
+        #ui-scale-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+        }
+        
+        #ui-scale-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+        
+        .scale-presets {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .scale-preset-btn {
+            flex: 1;
+            padding: 0.6rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+        
+        .scale-preset-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+        }
+        
+        .scale-preset-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        .setting-item {
+            margin-bottom: 1.5rem;
+        }
+        
+        .setting-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-dim);
+            font-size: 0.95rem;
+        }
+        
+        .setting-hint {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-top: 0.3rem;
+            opacity: 0.8;
+        }
+        
+        .settings-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        
+        .settings-btn {
+            padding: 0.8rem 1.5rem;
+            border-radius: 0.75rem;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+        
+        .settings-btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .settings-btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        
+        .settings-btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .settings-btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        /* 键盘快捷键提示 */
+        .shortcut-hint {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.3rem;
+            font-size: 0.8rem;
+            font-family: 'Monaco', 'Courier New', monospace;
+            margin: 0 0.2rem;
+        }
+        
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .settings-page {
+                padding: 1rem;
+            }
+            
+            .settings-section {
+                padding: 1rem;
+                margin-bottom: 1rem;
+            }
+            
+            .scale-presets {
+                flex-wrap: wrap;
+            }
+            
+            .scale-preset-btn {
+                flex: calc(33.333% - 0.5rem);
+            }
+        }
+    </style>
 </head>
 
 <body>
@@ -57,6 +280,8 @@
                     <li id="nav-mount"><i class="fas fa-network-wired"></i> <span>目录管理</span></li>
                     <li id="nav-netease"><i class="fas fa-cloud-download-alt"></i> <span>网易下载</span></li>
                     <li id="nav-upload"><i class="fas fa-cloud-upload-alt"></i> <span>上传音乐</span></li>
+                    <!-- 新增设置选项 -->
+                    <li id="nav-settings"><i class="fas fa-cog"></i> <span>设置</span></li>
                 </ul>
             </nav>
         </aside>
@@ -68,6 +293,7 @@
             </header>
 
             <div class="content-scroll">
+                <!-- 原有页面内容保持不变 -->
                 <div id="view-player">
                     <div class="content-header">
                         <div class="section-title" id="list-title">歌曲列表</div>
@@ -277,6 +503,134 @@
                         <div id="upload-status" class="upload-status"></div>
                     </div>
                 </div>
+
+                <!-- 新增设置页面 -->
+                <div id="view-settings" class="hidden">
+                    <div class="settings-page">
+                        <div class="settings-section">
+                            <div class="settings-title">
+                                <i class="fas fa-desktop"></i>
+                                界面设置
+                            </div>
+                            
+                            <div class="setting-item">
+                                <div class="scale-slider-header">
+                                    <div class="setting-label">界面缩放</div>
+                                    <div class="scale-percent" id="scale-percent">100%</div>
+                                </div>
+                                <div class="scale-slider-container">
+                                    <input type="range" 
+                                           id="ui-scale-slider" 
+                                           min="0.6" 
+                                           max="1.4" 
+                                           step="0.05" 
+                                           value="1.0">
+                                </div>
+                                
+                                <div class="scale-presets">
+                                    <button class="scale-preset-btn" data-scale="0.8">小 (80%)</button>
+                                    <button class="scale-preset-btn active" data-scale="1.0">默认 (100%)</button>
+                                    <button class="scale-preset-btn" data-scale="1.2">大 (120%)</button>
+                                    <button class="scale-preset-btn" data-scale="1.4">最大 (140%)</button>
+                                </div>
+                                
+                                <div class="setting-hint">
+                                    当前缩放：<span id="current-scale-value">1.0</span> 
+                                    • 快捷键：<span class="shortcut-hint">Ctrl + +</span>放大， 
+                                    <span class="shortcut-hint">Ctrl + -</span>缩小， 
+                                    <span class="shortcut-hint">Ctrl + 0</span>重置
+                                </div>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <label class="setting-label">
+                                    <input type="checkbox" id="auto-responsive-scale">
+                                    启用响应式缩放
+                                </label>
+                                <div class="setting-hint">
+                                    根据屏幕宽度自动调整缩放比例（默认开启，用户设置优先）
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="settings-section">
+                            <div class="settings-title">
+                                <i class="fas fa-volume-up"></i>
+                                播放器设置
+                            </div>
+                            
+                            <div class="setting-item">
+                                <label class="setting-label">默认音量</label>
+                                <input type="range" 
+                                       id="default-volume-slider" 
+                                       min="0" 
+                                       max="1" 
+                                       step="0.05" 
+                                       value="1">
+                                <div class="setting-hint">
+                                    设置播放器启动时的默认音量：<span id="volume-percent">100%</span>
+                                </div>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <label class="setting-label">
+                                    <input type="checkbox" id="auto-play-next">
+                                    自动播放下一首
+                                </label>
+                                <div class="setting-hint">
+                                    当前歌曲播放完成后自动播放下一首
+                                </div>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <label class="setting-label">
+                                    <input type="checkbox" id="show-lyrics">
+                                    自动显示歌词
+                                </label>
+                                <div class="setting-hint">
+                                    播放歌曲时自动显示歌词面板
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="settings-section">
+                            <div class="settings-title">
+                                <i class="fas fa-database"></i>
+                                数据管理
+                            </div>
+                            
+                            <div class="setting-item">
+                                <button class="settings-btn settings-btn-secondary" id="clear-cache-btn">
+                                    <i class="fas fa-trash-alt"></i> 清除缓存数据
+                                </button>
+                                <div class="setting-hint">
+                                    清除本地缓存，但保留收藏和设置
+                                </div>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <button class="settings-btn settings-btn-secondary" id="export-settings-btn">
+                                    <i class="fas fa-download"></i> 导出设置
+                                </button>
+                                <button class="settings-btn settings-btn-secondary" id="import-settings-btn">
+                                    <i class="fas fa-upload"></i> 导入设置
+                                </button>
+                                <div class="setting-hint">
+                                    备份或恢复您的应用设置
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="settings-actions">
+                            <button class="settings-btn settings-btn-secondary" id="reset-settings-btn">
+                                <i class="fas fa-undo-alt"></i> 重置设置
+                            </button>
+                            <button class="settings-btn settings-btn-primary" id="save-settings-btn">
+                                <i class="fas fa-save"></i> 保存设置
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
 
@@ -422,6 +776,8 @@
 
         <div id="toast-container"></div>
         <input type="file" id="file-upload" accept=".mp3,.flac,.wav,.ogg,.m4a" style="display: none;">
+        <!-- 用于导入设置的隐藏文件输入 -->
+        <input type="file" id="import-settings-file" accept=".json" style="display: none;">
 
     </div>
 
@@ -444,16 +800,25 @@
                 const targetNav = document.getElementById('nav-' + tab);
                 if (targetNav) targetNav.classList.add('active');
 
-                const vp = document.getElementById('view-player');
-                const vm = document.getElementById('view-mount');
-                const vn = document.getElementById('view-netease');
-                if (vp) vp.classList.add('hidden');
-                if (vm) vm.classList.add('hidden');
-                if (vn) vn.classList.add('hidden');
+                // 隐藏所有视图
+                const allViews = ['view-player', 'view-mount', 'view-netease', 'view-upload', 'view-settings'];
+                allViews.forEach(viewId => {
+                    const view = document.getElementById(viewId);
+                    if (view) view.classList.add('hidden');
+                });
 
-                if (tab === 'mount') { if (vm) vm.classList.remove('hidden'); }
-                else if (tab === 'netease') { if (vn) vn.classList.remove('hidden'); }
-                else { if (vp) vp.classList.remove('hidden'); }
+                // 显示当前视图
+                if (tab === 'mount' && document.getElementById('view-mount')) {
+                    document.getElementById('view-mount').classList.remove('hidden');
+                } else if (tab === 'netease' && document.getElementById('view-netease')) {
+                    document.getElementById('view-netease').classList.remove('hidden');
+                } else if (tab === 'upload' && document.getElementById('view-upload')) {
+                    document.getElementById('view-upload').classList.remove('hidden');
+                } else if (tab === 'settings' && document.getElementById('view-settings')) {
+                    document.getElementById('view-settings').classList.remove('hidden');
+                } else if (document.getElementById('view-player')) {
+                    document.getElementById('view-player').classList.remove('hidden');
+                }
 
                 // 3. Search Box logic
                 const searchBox = document.querySelector('.search-box');
@@ -503,6 +868,489 @@
             } catch (e) { console.error('Fast init error', e); }
         })();
     </script>
+    
+    <script>
+        // 设置页面功能脚本
+        (function() {
+            // 设置管理类
+            class SettingsManager {
+                constructor() {
+                    this.defaultSettings = {
+                        uiScale: 1.0,
+                        autoResponsiveScale: true,
+                        defaultVolume: 1.0,
+                        autoPlayNext: true,
+                        showLyrics: true,
+                        theme: 'dark',
+                        language: 'zh-CN'
+                    };
+                    
+                    this.currentSettings = {};
+                    this.init();
+                }
+                
+                init() {
+                    this.loadSettings();
+                    this.bindEvents();
+                    this.updateUI();
+                    this.initKeyboardShortcuts();
+                }
+                
+                loadSettings() {
+                    try {
+                        const saved = localStorage.getItem('2fmusic_settings');
+                        if (saved) {
+                            this.currentSettings = JSON.parse(saved);
+                        } else {
+                            this.currentSettings = { ...this.defaultSettings };
+                            this.saveToStorage();
+                        }
+                    } catch (e) {
+                        console.error('Failed to load settings:', e);
+                        this.currentSettings = { ...this.defaultSettings };
+                    }
+                }
+                
+                saveToStorage() {
+                    try {
+                        localStorage.setItem('2fmusic_settings', JSON.stringify(this.currentSettings));
+                    } catch (e) {
+                        console.error('Failed to save settings:', e);
+                    }
+                }
+                
+                updateSetting(key, value) {
+                    this.currentSettings[key] = value;
+                    this.saveToStorage();
+                    
+                    // 立即应用某些设置
+                    this.applySetting(key, value);
+                    
+                    return this;
+                }
+                
+                applySetting(key, value) {
+                    switch(key) {
+                        case 'uiScale':
+                            this.applyUIScale(value);
+                            break;
+                        case 'defaultVolume':
+                            this.applyDefaultVolume(value);
+                            break;
+                        // 其他设置的应用逻辑
+                    }
+                }
+                
+                applyUIScale(scale) {
+                    // 如果启用了响应式缩放且这是用户设置
+                    if (this.currentSettings.autoResponsiveScale && 
+                        localStorage.getItem('2fmusic_ui_scale') !== null) {
+                        // 使用纯用户设置（不混合响应式）
+                        document.documentElement.style.setProperty('--ui-scale', scale.toFixed(3));
+                    } else if (this.currentSettings.autoResponsiveScale) {
+                        // 使用响应式缩放
+                        const baseScale = window.innerWidth > 768 ? 
+                            Math.min(Math.max(window.innerWidth / 1440, 0.8), 1.2) : 1.0;
+                        const finalScale = scale * baseScale;
+                        document.documentElement.style.setProperty('--ui-scale', finalScale.toFixed(3));
+                    } else {
+                        // 使用固定缩放
+                        document.documentElement.style.setProperty('--ui-scale', scale.toFixed(3));
+                    }
+                    
+                    // 单独保存缩放值到专用存储
+                    localStorage.setItem('2fmusic_ui_scale', scale.toString());
+                }
+                
+                applyDefaultVolume(volume) {
+                    const audioPlayer = document.getElementById('audio-player');
+                    if (audioPlayer) {
+                        audioPlayer.volume = volume;
+                    }
+                    
+                    const volumeSlider = document.getElementById('volume-slider');
+                    if (volumeSlider) {
+                        volumeSlider.value = volume;
+                    }
+                }
+                
+                resetToDefaults() {
+                    this.currentSettings = { ...this.defaultSettings };
+                    this.saveToStorage();
+                    this.updateUI();
+                    this.applyAllSettings();
+                    return this;
+                }
+                
+                applyAllSettings() {
+                    Object.keys(this.currentSettings).forEach(key => {
+                        this.applySetting(key, this.currentSettings[key]);
+                    });
+                }
+                
+                exportSettings() {
+                    const dataStr = JSON.stringify(this.currentSettings, null, 2);
+                    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                    
+                    const exportFileDefaultName = `2fmusic_settings_${new Date().toISOString().slice(0,10)}.json`;
+                    
+                    const linkElement = document.createElement('a');
+                    linkElement.setAttribute('href', dataUri);
+                    linkElement.setAttribute('download', exportFileDefaultName);
+                    linkElement.click();
+                    
+                    this.showToast('设置已导出');
+                }
+                
+                importSettings(file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const imported = JSON.parse(e.target.result);
+                            this.currentSettings = { ...this.defaultSettings, ...imported };
+                            this.saveToStorage();
+                            this.updateUI();
+                            this.applyAllSettings();
+                            this.showToast('设置已导入并应用');
+                        } catch (error) {
+                            this.showToast('导入失败：文件格式错误', 'error');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+                
+                bindEvents() {
+                    // 缩放滑块
+                    const scaleSlider = document.getElementById('ui-scale-slider');
+                    if (scaleSlider) {
+                        // 设置初始值
+                        scaleSlider.value = this.currentSettings.uiScale;
+                        this.updateScaleDisplay(this.currentSettings.uiScale);
+                        
+                        scaleSlider.addEventListener('input', (e) => {
+                            const scale = parseFloat(e.target.value);
+                            this.updateSetting('uiScale', scale);
+                            this.updateScaleDisplay(scale);
+                            this.updatePresetButtons(scale);
+                        });
+                    }
+                    
+                    // 缩放预设按钮
+                    document.querySelectorAll('.scale-preset-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const scale = parseFloat(btn.dataset.scale);
+                            this.updateSetting('uiScale', scale);
+                            if (scaleSlider) scaleSlider.value = scale;
+                            this.updateScaleDisplay(scale);
+                            this.updatePresetButtons(scale);
+                        });
+                    });
+                    
+                    // 响应式缩放开关
+                    const autoScaleCheckbox = document.getElementById('auto-responsive-scale');
+                    if (autoScaleCheckbox) {
+                        autoScaleCheckbox.checked = this.currentSettings.autoResponsiveScale;
+                        autoScaleCheckbox.addEventListener('change', (e) => {
+                            this.updateSetting('autoResponsiveScale', e.target.checked);
+                            // 重新应用缩放设置
+                            this.applyUIScale(this.currentSettings.uiScale);
+                        });
+                    }
+                    
+                    // 默认音量滑块
+                    const volumeSlider = document.getElementById('default-volume-slider');
+                    if (volumeSlider) {
+                        volumeSlider.value = this.currentSettings.defaultVolume;
+                        this.updateVolumeDisplay(this.currentSettings.defaultVolume);
+                        
+                        volumeSlider.addEventListener('input', (e) => {
+                            const volume = parseFloat(e.target.value);
+                            this.updateSetting('defaultVolume', volume);
+                            this.updateVolumeDisplay(volume);
+                        });
+                    }
+                    
+                    // 其他设置
+                    ['autoPlayNext', 'showLyrics'].forEach(id => {
+                        const checkbox = document.getElementById(id);
+                        if (checkbox) {
+                            checkbox.checked = this.currentSettings[id] || this.defaultSettings[id];
+                            checkbox.addEventListener('change', (e) => {
+                                this.updateSetting(id, e.target.checked);
+                            });
+                        }
+                    });
+                    
+                    // 操作按钮
+                    document.getElementById('save-settings-btn')?.addEventListener('click', () => {
+                        this.saveToStorage();
+                        this.showToast('设置已保存');
+                    });
+                    
+                    document.getElementById('reset-settings-btn')?.addEventListener('click', () => {
+                        if (confirm('确定要重置所有设置吗？此操作不可撤销。')) {
+                            this.resetToDefaults();
+                            this.showToast('设置已重置为默认值');
+                        }
+                    });
+                    
+                    document.getElementById('clear-cache-btn')?.addEventListener('click', () => {
+                        if (confirm('确定要清除缓存数据吗？这将清除播放列表等临时数据，但保留您的设置和收藏。')) {
+                            this.clearCache();
+                            this.showToast('缓存已清除');
+                        }
+                    });
+                    
+                    document.getElementById('export-settings-btn')?.addEventListener('click', () => {
+                        this.exportSettings();
+                    });
+                    
+                    document.getElementById('import-settings-btn')?.addEventListener('click', () => {
+                        document.getElementById('import-settings-file').click();
+                    });
+                    
+                    document.getElementById('import-settings-file')?.addEventListener('change', (e) => {
+                        if (e.target.files.length > 0) {
+                            this.importSettings(e.target.files[0]);
+                            e.target.value = ''; // 清除选择
+                        }
+                    });
+                    
+                    // 导航到设置页面
+                    document.getElementById('nav-settings')?.addEventListener('click', () => {
+                        this.navigateToSettings();
+                    });
+                }
+                
+                updateScaleDisplay(scale) {
+                    const percent = Math.round(scale * 100);
+                    const percentElement = document.getElementById('scale-percent');
+                    const valueElement = document.getElementById('current-scale-value');
+                    
+                    if (percentElement) percentElement.textContent = `${percent}%`;
+                    if (valueElement) valueElement.textContent = scale.toFixed(2);
+                    
+                    // 更新滑块背景
+                    const slider = document.getElementById('ui-scale-slider');
+                    if (slider) {
+                        const min = parseFloat(slider.min);
+                        const max = parseFloat(slider.max);
+                        const percentPos = ((scale - min) / (max - min)) * 100;
+                        
+                        slider.style.background = `linear-gradient(to right, 
+                            var(--primary) 0%, 
+                            var(--primary) ${percentPos}%, 
+                            rgba(255, 255, 255, 0.1) ${percentPos}%, 
+                            rgba(255, 255, 255, 0.1) 100%)`;
+                    }
+                }
+                
+                updateVolumeDisplay(volume) {
+                    const percent = Math.round(volume * 100);
+                    const percentElement = document.getElementById('volume-percent');
+                    if (percentElement) percentElement.textContent = `${percent}%`;
+                }
+                
+                updatePresetButtons(currentScale) {
+                    document.querySelectorAll('.scale-preset-btn').forEach(btn => {
+                        const scale = parseFloat(btn.dataset.scale);
+                        btn.classList.toggle('active', Math.abs(scale - currentScale) < 0.01);
+                    });
+                }
+                
+                updateUI() {
+                    // 更新所有UI元素以反映当前设置
+                    this.updateScaleDisplay(this.currentSettings.uiScale);
+                    this.updateVolumeDisplay(this.currentSettings.defaultVolume);
+                    this.updatePresetButtons(this.currentSettings.uiScale);
+                }
+                
+                clearCache() {
+                    // 清除播放列表等临时数据，但保留设置和收藏
+                    const keysToKeep = ['2fmusic_settings', '2fmusic_ui_scale', '2fmusic_favorites'];
+                    const keysToRemove = [];
+                    
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key.startsWith('2fmusic_') && !keysToKeep.includes(key)) {
+                            keysToRemove.push(key);
+                        }
+                    }
+                    
+                    keysToRemove.forEach(key => localStorage.removeItem(key));
+                    
+                    // 重新加载页面以应用更改
+                    setTimeout(() => location.reload(), 1000);
+                }
+                
+                navigateToSettings() {
+                    // 导航到设置页面
+                    document.querySelectorAll('nav li').forEach(el => el.classList.remove('active'));
+                    document.getElementById('nav-settings')?.classList.add('active');
+                    
+                    // 隐藏所有视图，显示设置视图
+                    const allViews = ['view-player', 'view-mount', 'view-netease', 'view-upload', 'view-settings'];
+                    allViews.forEach(viewId => {
+                        const view = document.getElementById(viewId);
+                        if (view) view.classList.add('hidden');
+                    });
+                    
+                    const settingsView = document.getElementById('view-settings');
+                    if (settingsView) {
+                        settingsView.classList.remove('hidden');
+                    }
+                    
+                    // 更新页面标题
+                    const pageTitle = document.getElementById('mobile-page-title');
+                    if (pageTitle) pageTitle.textContent = '设置';
+                    
+                    // 隐藏搜索框
+                    const searchBox = document.querySelector('.search-box');
+                    if (searchBox) {
+                        searchBox.style.display = 'none';
+                        searchBox.style.opacity = '0';
+                    }
+                    
+                    // 保存当前标签页状态
+                    try {
+                        const state = JSON.parse(localStorage.getItem('2fmusic_state') || '{}');
+                        state.tab = 'settings';
+                        localStorage.setItem('2fmusic_state', JSON.stringify(state));
+                    } catch (e) {
+                        console.error('Failed to save tab state:', e);
+                    }
+                }
+                
+                initKeyboardShortcuts() {
+                    document.addEventListener('keydown', (e) => {
+                        // 检查是否在输入框中
+                        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+                            return;
+                        }
+                        
+                        const scaleSlider = document.getElementById('ui-scale-slider');
+                        if (!scaleSlider) return;
+                        
+                        let currentScale = this.currentSettings.uiScale;
+                        const minScale = parseFloat(scaleSlider.min);
+                        const maxScale = parseFloat(scaleSlider.max);
+                        const step = parseFloat(scaleSlider.step);
+                        
+                        if ((e.ctrlKey || e.metaKey) && e.key === '=') {
+                            // Ctrl + + 放大
+                            e.preventDefault();
+                            const newScale = Math.min(currentScale + step, maxScale);
+                            this.updateSetting('uiScale', newScale);
+                            scaleSlider.value = newScale;
+                            this.updateScaleDisplay(newScale);
+                            this.updatePresetButtons(newScale);
+                            this.showToast(`缩放: ${Math.round(newScale * 100)}%`);
+                        }
+                        
+                        if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+                            // Ctrl + - 缩小
+                            e.preventDefault();
+                            const newScale = Math.max(currentScale - step, minScale);
+                            this.updateSetting('uiScale', newScale);
+                            scaleSlider.value = newScale;
+                            this.updateScaleDisplay(newScale);
+                            this.updatePresetButtons(newScale);
+                            this.showToast(`缩放: ${Math.round(newScale * 100)}%`);
+                        }
+                        
+                        if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+                            // Ctrl + 0 重置缩放
+                            e.preventDefault();
+                            this.updateSetting('uiScale', 1.0);
+                            scaleSlider.value = 1.0;
+                            this.updateScaleDisplay(1.0);
+                            this.updatePresetButtons(1.0);
+                            this.showToast('缩放已重置为默认值');
+                        }
+                        
+                        if ((e.ctrlKey || e.metaKey) && e.key === 'S' && !e.shiftKey) {
+                            // Ctrl + S 保存设置
+                            e.preventDefault();
+                            this.saveToStorage();
+                            this.showToast('设置已保存');
+                        }
+                    });
+                }
+                
+                showToast(message, type = 'success') {
+                    const toastContainer = document.getElementById('toast-container');
+                    if (!toastContainer) return;
+                    
+                    const toast = document.createElement('div');
+                    toast.className = `toast toast-${type}`;
+                    toast.textContent = message;
+                    
+                    toastContainer.appendChild(toast);
+                    
+                    // 添加样式
+                    toast.style.cssText = `
+                        position: fixed;
+                        bottom: 100px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        background: ${type === 'error' ? '#ff4757' : 'var(--primary)'};
+                        color: white;
+                        padding: 0.8rem 1.2rem;
+                        border-radius: 0.5rem;
+                        font-size: 0.9rem;
+                        z-index: 9999;
+                        animation: toastSlideUp 0.3s ease;
+                    `;
+                    
+                    // 添加动画
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        @keyframes toastSlideUp {
+                            from {
+                                opacity: 0;
+                                transform: translateX(-50%) translateY(20px);
+                            }
+                            to {
+                                opacity: 1;
+                                transform: translateX(-50%) translateY(0);
+                            }
+                        }
+                        
+                        .toast {
+                            animation: toastSlideUp 0.3s ease;
+                        }
+                        
+                        .toast::before {
+                            content: '✓';
+                            margin-right: 0.5rem;
+                        }
+                        
+                        .toast-error::before {
+                            content: '✗';
+                        }
+                    `;
+                    document.head.appendChild(style);
+                    
+                    setTimeout(() => {
+                        toast.style.opacity = '0';
+                        toast.style.transform = 'translateX(-50%) translateY(-10px)';
+                        setTimeout(() => toast.remove(), 300);
+                    }, 2000);
+                }
+            }
+            
+            // 页面加载完成后初始化设置管理器
+            document.addEventListener('DOMContentLoaded', () => {
+                window.settingsManager = new SettingsManager();
+                
+                // 确保CSS变量已定义
+                if (!document.documentElement.style.getPropertyValue('--ui-scale')) {
+                    document.documentElement.style.setProperty('--ui-scale', '1.0');
+                }
+            });
+        })();
+    </script>
+    
     <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 
