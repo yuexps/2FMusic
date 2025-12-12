@@ -449,7 +449,11 @@ ui.audio.addEventListener('ended', () => {
       lastLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }
-  if (state.playMode === 2) { ui.audio.currentTime = 0; ui.audio.play(); } else nextTrack();
+  if (state.playMode === 2) {
+    ui.audio.currentTime = 0;
+    if (ui.lyricsContainer) ui.lyricsContainer.scrollTop = 0; // Reset lyrics
+    ui.audio.play();
+  } else nextTrack();
 });
 
 let lastVolume = 1.0;
@@ -477,6 +481,9 @@ ui.audio.addEventListener('timeupdate', () => {
   if (state.lyricsData.length) {
     let idx = state.lyricsData.findIndex(l => l.time > ui.audio.currentTime);
     idx = idx === -1 ? state.lyricsData.length - 1 : idx - 1;
+    // Before first lyric, highlight the first line (intro)
+    if (idx < 0) idx = 0;
+
     if (idx >= 0) {
       const currentLine = ui.lyricsContainer?.querySelector(`.lyric-line[data-index="${idx}"]`);
       if (currentLine && !currentLine.classList.contains('active')) {
@@ -576,6 +583,7 @@ function parseAndRenderLyrics(lrc) {
   if (state.lyricsData.length === 0) { renderNoLyrics('纯音乐'); return; }
 
   if (ui.lyricsContainer) {
+    ui.lyricsContainer.classList.remove('no-lyrics');
     ui.lyricsContainer.innerHTML = state.lyricsData.map((l, i) =>
       `<p class="lyric-line" data-index="${i}" data-time="${l.time}">${l.text}</p>`
     ).join('');
@@ -841,6 +849,46 @@ export function bindUiControls() {
     overlay?.addEventListener('click', (e) => { if (e.target === overlay) { overlay.classList.remove('active'); state.currentConfirmAction = null; } });
   });
 
+  // Real-time Favorite Sync
+  window.addEventListener('storage', (e) => {
+    if (e.key === '2fmusic_favs' && e.newValue) {
+      try {
+        const newFavs = JSON.parse(e.newValue);
+        state.favorites = new Set(newFavs);
+
+        // 1. Update Detail Button
+        if (state.playQueue[state.currentTrackIndex]) {
+          updateDetailFavButton(state.favorites.has(state.playQueue[state.currentTrackIndex].filename));
+        }
+
+        // 2. Update Playlist UI if visible
+        // If current tab is Fav, re-render
+        if (state.currentTab === 'fav') {
+          renderPlaylist();
+        } else {
+          // Update individual buttons in list without full re-render
+          const visibleBtns = document.querySelectorAll('.card-fav-btn');
+          visibleBtns.forEach(btn => {
+            const card = btn.closest('.song-card');
+            const index = card ? parseInt(card.dataset.index) : -1;
+            // Note: dataset.index maps to state.displayPlaylist
+            if (index >= 0 && state.displayPlaylist[index]) {
+              const song = state.displayPlaylist[index];
+              if (state.favorites.has(song.filename)) {
+                btn.classList.add('active');
+                btn.innerHTML = '<i class="fas fa-heart"></i>';
+              } else {
+                btn.classList.remove('active');
+                btn.innerHTML = '<i class="far fa-heart"></i>';
+              }
+            }
+          });
+        }
+      } catch (err) { console.error("Sync favs error", err); }
+    }
+  });
+
+  // Action Menu
   if (ui.menuBtn) {
     const toggleMenu = (e) => { e.stopPropagation(); ui.sidebar?.classList.toggle('open'); };
     ui.menuBtn.addEventListener('click', toggleMenu);

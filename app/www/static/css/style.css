@@ -767,6 +767,13 @@ input[type=range]::-webkit-slider-thumb {
     height: 5rem;
 }
 
+.fp-header span {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--text-sub);
+    letter-spacing: 1px;
+}
+
 .fp-header-right {
     width: 1.5rem;
     display: flex;
@@ -832,11 +839,21 @@ input[type=range]::-webkit-slider-thumb {
     max-width: 38rem;
     overflow-y: auto;
     text-align: center;
-    mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
-    padding: 2rem 0 4rem;
+    /* Fixed mask fade area to prevent variable cutoff */
+    mask-image: linear-gradient(to bottom, transparent 0, black 3rem, black calc(100% - 3rem), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 3rem, black calc(100% - 3rem), transparent 100%);
+    padding: 3rem 0 3rem;
     box-sizing: border-box;
     scrollbar-width: none;
+}
+
+.fp-lyrics-area.no-lyrics {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    padding: 0 !important;
+    height: 100% !important;
 }
 
 .fp-lyrics-area::-webkit-scrollbar {
@@ -966,6 +983,12 @@ input[type=range]::-webkit-slider-thumb {
 #fp-btn-fav {
     font-size: 1.6rem;
     font-weight: 700;
+}
+
+/* 预览页专用：按钮更紧凑 */
+.preview-page .fp-buttons {
+    justify-content: center;
+    gap: 3.5rem;
 }
 
 .icon-btn.active-fav {

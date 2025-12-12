@@ -109,7 +109,8 @@ export function formatTime(s) {
 
 export function renderNoLyrics(msg) {
   if (!ui.lyricsContainer) return;
-  ui.lyricsContainer.innerHTML = `<div style="height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-sub);font-size:1.2rem;">${msg}</div>`;
+  ui.lyricsContainer.innerHTML = `<p class="lyric-line active">${msg}</p>`;
+  ui.lyricsContainer.classList.add('no-lyrics');
 }
 
 export function updateSliderFill(el) {
