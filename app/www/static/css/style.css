@@ -3390,6 +3390,11 @@ select:focus {
 .netease-search-hero .search-box input[type="text"] {
     margin-left: 0.8rem;
     padding-left: 0.2rem;
+    background: transparent !important;
+    border: none !important;
+    color: white !important;
+    box-shadow: none !important;
+    width: 100%;
 }
 
 #netease-global-search-btn:hover {
