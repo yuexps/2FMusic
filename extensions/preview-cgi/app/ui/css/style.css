@@ -174,7 +174,7 @@ body {
 .lyric-line {
     padding: 0.8rem 0;
     color: rgba(255, 255, 255, 0.4);
-    font-size: 1.2rem;
+    font-size: 1.35rem;
     transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     cursor: pointer;
     pointer-events: auto !important;
