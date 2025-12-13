@@ -98,9 +98,9 @@ function bindEvents() {
         if (!state.track || !state.track.filename) return;
 
         try {
-            // filename 先尝试 ID 再尝试路径，调用后端清理
-            if (/^\d+$/.test(state.track.filename)) {
-                await api.library.clearMetadata(state.track.filename);
+            // filename 先尝试 ID (如果是数字ID) 再尝试路径
+            if (state.track.id && /^\d+$/.test(state.track.id)) {
+                await api.library.clearMetadata(state.track.id);
             } else {
                 await api.library.clearMetadataExternal(state.track.filename);
             }
@@ -257,7 +257,8 @@ async function loadPreviewTrack(path) {
             title: song.title || "未知标题",
             artist: song.artist || "未知艺术家",
             album: song.album || "未知专辑",
-            filename: song.id || song.filename || path, // 优先使用 ID
+            id: song.id, // Store ID separately
+            filename: song.filename || path, // Use actual filename/path for metadata
             realPath: path, // 记录原始路径用于匹配
             in_library: song.in_library, // 明确的在库状态
             cover: toProxyUrl(song.album_art) || `${api.API_BASE}/images/icon_256.png`,
@@ -311,7 +312,7 @@ function updateTrackUi() {
 // 辅助：检查是否收藏 (由 loose matching)
 function checkIsFavorite(track) {
     if (!track || !state.favorites) return false;
-    const id = track.filename;
+    const id = track.id || track.filename;
 
     // 1. Direct match
     if (state.favorites.has(id)) return true;
@@ -507,7 +508,7 @@ function updateModeUI() {
 
 async function toggleFavorite() {
     if (!state.track || !state.track.filename) return;
-    const songId = state.track.filename; // 这里 filename 实际上存储的是 ID 或者 路径(如果是外部)
+    const songId = state.track.id || state.track.filename;
 
     // 1. 检查是否已收藏
     if (state.favorites.has(songId)) {
@@ -546,8 +547,8 @@ async function toggleFavorite() {
                 const res = await api.library.importPath(originPath);
                 if (res.success && (res.id || res.filename)) {
                     const id = res.id || res.filename; // Prefer ID, fallback to filename (legacy)
-                    state.track.id = id; // Store ID
-                    state.track.filename = id; // CRITICAL: Update filename property as toggleFavorite uses this!
+                    state.track.id = id; // Update ID
+                    // state.track.filename remains as logic path
                     state.track.in_library = true; // 标记已入库
                     state.favorites.add(id);
 
