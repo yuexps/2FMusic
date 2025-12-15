@@ -137,7 +137,20 @@ function addDownloadTask(song, status = 'queued') {
     status
   };
   state.neteaseDownloadTasks.unshift(task);
-  if (state.neteaseDownloadTasks.length > 30) state.neteaseDownloadTasks = state.neteaseDownloadTasks.slice(0, 30);
+  state.neteaseDownloadTasks.unshift(task);
+
+  // Smart List Management: Allow larger history but clean up old completed tasks
+  const MAX_HISTORY = 500;
+  if (state.neteaseDownloadTasks.length > MAX_HISTORY) {
+    // Remove oldest 'success' or 'error' tasks while keeping active ones
+    for (let i = state.neteaseDownloadTasks.length - 1; i >= 0; i--) {
+      if (state.neteaseDownloadTasks.length <= MAX_HISTORY) break;
+      const t = state.neteaseDownloadTasks[i];
+      if (['success', 'error'].includes(t.status)) {
+        state.neteaseDownloadTasks.splice(i, 1);
+      }
+    }
+  }
   renderDownloadTasks();
   return task.id;
 }
