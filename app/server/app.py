@@ -14,6 +14,7 @@ import locale
 import concurrent.futures
 from urllib.parse import quote, unquote, urlparse, parse_qs
 import hashlib
+import uuid
 from datetime import timedelta
 
 if getattr(sys, 'frozen', False):
@@ -342,11 +343,27 @@ def init_db():
                 )
             ''')
             conn.execute('''
-                CREATE TABLE IF NOT EXISTS favorites (
-                   song_id TEXT PRIMARY KEY,
-                   created_at REAL
+                CREATE TABLE IF NOT EXISTS favorite_playlists (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    is_default INTEGER DEFAULT 0,
+                    created_at REAL
                 )
             ''')
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS favorites (
+                   song_id TEXT,
+                   playlist_id TEXT,
+                   created_at REAL,
+                   PRIMARY KEY (song_id, playlist_id)
+                )
+            ''')
+            
+            # 检查是否已有默认收藏夹，如果没有则创建
+            default_count = conn.execute("SELECT COUNT(*) FROM favorite_playlists WHERE is_default = 1").fetchone()[0]
+            if default_count == 0:
+                conn.execute("INSERT INTO favorite_playlists (id, name, is_default, created_at) VALUES (?, ?, ?, ?)", 
+                           ('default', '默认收藏夹', 1, time.time()))
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS mount_points (
                     path TEXT PRIMARY KEY,
@@ -1651,38 +1668,156 @@ def import_music_by_path():
     except Exception as e: return jsonify({'success': False, 'error': str(e)})
 
 # --- 收藏夹接口 ---
-@app.route('/api/favorites', methods=['GET'])
-def get_favorites():
+
+# 获取所有收藏夹
+@app.route('/api/favorite_playlists', methods=['GET'])
+def get_favorite_playlists():
+    logger.info("API请求: 获取所有收藏夹")
     try:
         with get_db() as conn:
-            rows = conn.execute("SELECT song_id FROM favorites").fetchall()
-            return jsonify({'success': True, 'data': [r['song_id'] for r in rows]})
+            # 使用JOIN和COUNT计算每个收藏夹的歌曲数量
+            rows = conn.execute("""
+                SELECT fp.*, COUNT(f.song_id) as song_count
+                FROM favorite_playlists fp
+                LEFT JOIN favorites f ON fp.id = f.playlist_id
+                GROUP BY fp.id
+                ORDER BY fp.is_default DESC, fp.created_at ASC
+            """).fetchall()
+            # 将Row对象转换为字典
+            playlists = [dict(row) for row in rows]
+            logger.info(f"获取收藏夹成功，共 {len(playlists)} 个收藏夹")
+            return jsonify({'success': True, 'data': playlists})
     except Exception as e:
+        logger.error(f"获取收藏夹失败: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-@app.route('/api/favorites/<song_id>', methods=['POST'])
-def add_favorite(song_id):
+# 创建收藏夹
+@app.route('/api/favorite_playlists', methods=['POST'])
+def create_favorite_playlist():
+    logger.info("API请求: 创建收藏夹")
+    try:
+        data = request.get_json()
+        name = data.get('name')
+        if not name:
+            logger.warning("创建收藏夹失败: 收藏夹名称不能为空")
+            return jsonify({'success': False, 'error': "收藏夹名称不能为空"})
+        
+        # 检查是否已存在同名收藏夹
+        with get_db() as conn:
+            existing = conn.execute("SELECT id FROM favorite_playlists WHERE name = ?", (name,)).fetchone()
+            if existing:
+                logger.warning(f"创建收藏夹失败: 已存在名为'{name}'的收藏夹")
+                return jsonify({'success': False, 'error': f"已存在名为'{name}'的收藏夹"})
+        
+        playlist_id = f"{time.time()}_{uuid.uuid4().hex[:8]}"
+        with get_db() as conn:
+            conn.execute("INSERT INTO favorite_playlists (id, name, created_at) VALUES (?, ?, ?)", 
+                        (playlist_id, name, time.time()))
+            conn.commit()
+        logger.info(f"创建收藏夹成功: {name} (ID: {playlist_id})")
+        return jsonify({'success': True, 'data': {'id': playlist_id, 'name': name}})
+    except Exception as e:
+        logger.error(f"创建收藏夹失败: {e}")
+        return jsonify({'success': False, 'error': "创建失败"})
+
+# 删除收藏夹（默认收藏夹不能删除）
+@app.route('/api/favorite_playlists/<playlist_id>', methods=['DELETE'])
+def delete_favorite_playlist(playlist_id):
+    logger.info(f"API请求: 删除收藏夹，ID: {playlist_id}")
     try:
         with get_db() as conn:
-            conn.execute("INSERT OR IGNORE INTO favorites (song_id, created_at) VALUES (?, ?)", (song_id, time.time()))
+            # 检查是否是默认收藏夹
+            is_default = conn.execute("SELECT is_default FROM favorite_playlists WHERE id=?", (playlist_id,)).fetchone()
+            if is_default and is_default['is_default'] == 1:
+                logger.warning(f"删除收藏夹失败: 默认收藏夹(ID: {playlist_id})不能删除")
+                return jsonify({'success': False, 'error': "默认收藏夹不能删除"})
+            
+            # 获取收藏夹名称用于日志
+            playlist_name = conn.execute("SELECT name FROM favorite_playlists WHERE id=?", (playlist_id,)).fetchone()
+            playlist_name = playlist_name['name'] if playlist_name else '未知名称'
+            
+            # 删除收藏夹及其包含的所有收藏
+            conn.execute("DELETE FROM favorites WHERE playlist_id=?", (playlist_id,))
+            conn.execute("DELETE FROM favorite_playlists WHERE id=?", (playlist_id,))
             conn.commit()
-        logger.info(f"收藏成功: {song_id}")
+        logger.info(f"删除收藏夹成功: {playlist_name} (ID: {playlist_id})")
         return jsonify({'success': True})
     except Exception as e:
-        logger.error(f"收藏失败: {e}")
-        return jsonify({'success': False, 'error': "添加失败"})
+        logger.error(f"删除收藏夹失败，ID: {playlist_id}, 错误: {e}")
+        return jsonify({'success': False, 'error': "删除失败"})
 
-@app.route('/api/favorites/<song_id>', methods=['DELETE'])
-def remove_favorite(song_id):
+# 获取指定收藏夹中的所有歌曲
+@app.route('/api/favorite_playlists/<playlist_id>/songs', methods=['GET'])
+def get_playlist_songs(playlist_id):
+    logger.info(f"API请求: 获取收藏夹歌曲，收藏夹ID: {playlist_id}")
     try:
         with get_db() as conn:
-            conn.execute("DELETE FROM favorites WHERE song_id=?", (song_id,))
+            rows = conn.execute("SELECT song_id FROM favorites WHERE playlist_id=?", (playlist_id,)).fetchall()
+            song_ids = [r['song_id'] for r in rows]
+            logger.info(f"获取收藏夹歌曲成功，收藏夹ID: {playlist_id}，共 {len(song_ids)} 首歌曲")
+            return jsonify({'success': True, 'data': song_ids})
+    except Exception as e:
+        logger.error(f"获取收藏夹歌曲失败，收藏夹ID: {playlist_id}, 错误: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+# 添加歌曲到收藏夹
+@app.route('/api/favorites', methods=['POST'])
+def add_favorite():
+    logger.info("API请求: 添加歌曲到收藏夹")
+    try:
+        data = request.get_json()
+        song_id = data.get('song_id')
+        playlist_id = data.get('playlist_id', 'default')  # 默认添加到默认收藏夹
+        
+        if not song_id:
+            logger.warning("添加收藏失败: 歌曲ID不能为空")
+            return jsonify({'success': False, 'error': "歌曲ID不能为空"})
+        
+        with get_db() as conn:
+            conn.execute("INSERT OR IGNORE INTO favorites (song_id, playlist_id, created_at) VALUES (?, ?, ?)", 
+                        (song_id, playlist_id, time.time()))
             conn.commit()
-        logger.info(f"取消收藏成功: {song_id}")
+        logger.info(f"添加到收藏夹成功: 歌曲ID: {song_id} -> 收藏夹ID: {playlist_id}")
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.error(f"添加收藏失败: {e}")
+        return jsonify({'success': False, 'error': "添加失败"})
+
+# 从收藏夹移除歌曲
+@app.route('/api/favorites', methods=['DELETE'])
+def remove_favorite():
+    logger.info("API请求: 从收藏夹移除歌曲")
+    try:
+        data = request.get_json()
+        song_id = data.get('song_id')
+        playlist_id = data.get('playlist_id', 'default')  # 默认从默认收藏夹移除
+        
+        if not song_id:
+            logger.warning("取消收藏失败: 歌曲ID不能为空")
+            return jsonify({'success': False, 'error': "歌曲ID不能为空"})
+        
+        with get_db() as conn:
+            conn.execute("DELETE FROM favorites WHERE song_id=? AND playlist_id=?", (song_id, playlist_id))
+            conn.commit()
+        logger.info(f"从收藏夹移除成功: 歌曲ID: {song_id} <- 收藏夹ID: {playlist_id}")
         return jsonify({'success': True})
     except Exception as e:
         logger.error(f"取消收藏失败: {e}")
         return jsonify({'success': False, 'error': "移除失败"})
+
+# 兼容旧版API，获取所有收藏歌曲
+@app.route('/api/favorites', methods=['GET'])
+def get_favorites():
+    logger.info("API请求: 兼容旧版 - 获取默认收藏夹歌曲")
+    try:
+        with get_db() as conn:
+            rows = conn.execute("SELECT song_id FROM favorites WHERE playlist_id='default'").fetchall()
+            song_ids = [r['song_id'] for r in rows]
+            logger.info(f"获取默认收藏夹歌曲成功，共 {len(song_ids)} 首歌曲")
+            return jsonify({'success': True, 'data': song_ids})
+    except Exception as e:
+        logger.error(f"获取默认收藏夹歌曲失败: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/netease/search')
 def search_netease_music():
@@ -1917,7 +2052,7 @@ def netease_debug():
         'cookie_loaded': bool(NETEASE_COOKIE),
         'api_base': NETEASE_API_BASE,
         'download_dir': NETEASE_DOWNLOAD_DIR
-    }
+    } # type: ignore
     return jsonify(info)
 
 def _normalize_cover_url(url: str):
@@ -1938,7 +2073,7 @@ def run_download_task(task_id, payload):
     artist = (payload.get('artist') or '').strip()
     album = (payload.get('album') or '').strip()
     # Priority: Payload Level -> Configured Level -> Default (exhigh)
-    level = payload.get('level') or NETEASE_QUALITY or NETEASE_QUALITY_DEFAULT
+    level = payload.get('level') or NETEASE_QUALITY or NETEASE_QUALITY_DEFAULT # type: ignore
     
     cover_url = _normalize_cover_url(payload.get('cover') or payload.get('album_art'))
     cover_bytes = fetch_cover_bytes(cover_url) if cover_url else None
@@ -2111,13 +2246,13 @@ def netease_song_detail():
         
     except Exception as e:
         logger.warning(f"网易云下载失败: {e}")
-        DOWNLOAD_TASKS[task_id]['status'] = 'error'
-        DOWNLOAD_TASKS[task_id]['message'] = str(e)
+        DOWNLOAD_TASKS[task_id]['status'] = 'error' # type: ignore
+        DOWNLOAD_TASKS[task_id]['message'] = str(e) # type: ignore
     finally:
         # 10分钟后清理任务状态
         def clean_task():
             time.sleep(600)
-            DOWNLOAD_TASKS.pop(task_id, None)
+            DOWNLOAD_TASKS.pop(task_id, None) # type: ignore
         threading.Thread(target=clean_task, daemon=True).start()
 
 @app.route('/api/netease/download', methods=['POST'])

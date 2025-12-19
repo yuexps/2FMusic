@@ -3,8 +3,10 @@ import { ui } from './ui.js';
 import { api } from './api.js';
 import { showToast, showConfirmDialog, hideProgressToast, updateDetailFavButton, formatTime, renderNoLyrics, updateSliderFill, flyToElement, throttle, extractColorFromImage } from './utils.js';
 import { startScanPolling, loadMountPoints } from './mounts.js';
+import { showPlaylistSelectDialog, loadPlaylistFilter, handlePlaylistFilterChange, showCreatePlaylistDialog } from './favorites.js';
 
-// 收藏
+// 收藏功能相关函数已移至 favorites.js
+
 // 收藏 (Server Sync)
 async function toggleFavorite(song, btnEl) {
   if (!song.id) return;
@@ -15,20 +17,21 @@ async function toggleFavorite(song, btnEl) {
     state.favorites.delete(song.id);
     if (btnEl) { btnEl.classList.remove('active'); btnEl.innerHTML = '<i class="far fa-heart"></i>'; }
     try { await api.favorites.remove(song.id); } catch (e) { console.error(e); }
-  } else {
-    // 乐观 UI 更新
-    state.favorites.add(song.id);
-    if (btnEl) { btnEl.classList.add('active'); btnEl.innerHTML = '<i class="fas fa-heart"></i>'; }
-    try { await api.favorites.add(song.id); } catch (e) { console.error(e); }
-  }
-  saveFavorites();
+    saveFavorites();
 
-  const currentPlaying = state.playQueue[state.currentTrackIndex];
-  if (currentPlaying && currentPlaying.id === song.id) {
-    updateDetailFavButton(state.favorites.has(song.id));
+    const currentPlaying = state.playQueue[state.currentTrackIndex];
+    if (currentPlaying && currentPlaying.id === song.id) {
+      updateDetailFavButton(state.favorites.has(song.id));
+    }
+    if (state.currentTab === 'fav' && !state.favorites.has(song.id)) renderPlaylist();
+  } else {
+    // 弹出收藏夹选择窗口
+    showPlaylistSelectDialog(song, btnEl);
   }
-  if (state.currentTab === 'fav' && !state.favorites.has(song.id)) renderPlaylist();
 }
+
+// showPlaylistSelectDialog 函数已移至 favorites.js
+// addToSelectedPlaylist 函数已移至 favorites.js
 
 const throttledPersist = throttle(() => persistState(ui.audio), 2000);
 
@@ -192,36 +195,368 @@ export async function handleExternalFile() {
   }
 }
 
+// 添加一个标记，防止并发渲染
+let isRendering = false;
+
 export function renderPlaylist() {
   if (!ui.songContainer) return;
+  
+  // 如果已经在渲染中，直接返回
+  if (isRendering) return;
+  
+  isRendering = true;
+  
+  // 清空容器
   ui.songContainer.innerHTML = '';
-  if (state.currentTab === 'fav') { state.displayPlaylist = state.fullPlaylist.filter(s => state.favorites.has(s.id)); } else { state.displayPlaylist = state.fullPlaylist; }
-  if (state.displayPlaylist.length === 0) {
-    ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">${state.currentTab === 'fav' ? '暂无收藏歌曲' : '暂无歌曲'}</div>`;
+  
+  if (state.currentTab === 'fav') {
+    // 检查是否有选中的收藏夹（使用状态变量替代筛选器）
+    const selectedPlaylistId = state.selectedPlaylistId;
+    
+    if (!selectedPlaylistId) {
+      // 收藏主页：显示收藏夹文件夹形式
+      renderFavoritesHome().finally(() => {
+        isRendering = false;
+      });
+    } else {
+      // 收藏夹详情页：显示该收藏夹的歌曲，并提供排序筛选
+      renderPlaylistDetails(selectedPlaylistId).finally(() => {
+        isRendering = false;
+      });
+    }
+  } else {
+    // 非收藏页，保持原有列表显示
+    // 重置容器类名为默认的song-list，避免收藏页样式影响
+    ui.songContainer.className = 'song-list';
+    let filteredSongs;
+    filteredSongs = state.fullPlaylist;
+    
+    state.displayPlaylist = filteredSongs;
+    
+    if (state.displayPlaylist.length === 0) {
+      ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">暂无歌曲</div>`;
+      // 重置渲染标记
+      isRendering = false;
+      return;
+    }
+    
+    const frag = document.createDocumentFragment();
+    state.displayPlaylist.forEach((song, index) => {
+      const card = document.createElement('div');
+      card.className = 'song-card';
+      card.dataset.index = index;
+      if (song.isExternal) card.style.border = '1px dashed var(--primary)';
+      
+      // 使用 ID 判断收藏状态
+      const isFav = state.favorites.has(song.id);
+      
+      let favHtml = `<button class="card-fav-btn ${isFav ? 'active' : ''}" title="收藏"><i class="${isFav ? 'fas' : 'far'} fa-heart"></i></button>`;
+      if (song.isExternal) favHtml = '';
+      card.innerHTML = `${favHtml}<img src="${song.cover}" loading="lazy"><div class="card-info"><div class="title" title="${song.title}">${song.title}</div><div class="artist">${song.artist}</div></div>`;
+      
+      card.addEventListener('click', (e) => {
+        if (!e.target.closest('.card-fav-btn')) {
+          state.playQueue = [...state.displayPlaylist];
+          playTrack(index);
+        }
+      });
+      
+      if (!song.isExternal) {
+        const favBtn = card.querySelector('.card-fav-btn');
+        favBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleFavorite(song, favBtn);
+        });
+      }
+      frag.appendChild(card);
+    });
+    ui.songContainer.appendChild(frag);
+    
+    // 重置渲染标记
+    isRendering = false;
+  }
+  
+  highlightCurrentTrack();
+}
+
+// 渲染收藏主页：显示收藏夹文件夹
+function renderFavoritesHome() {
+  // 清空容器
+  ui.songContainer.innerHTML = '';
+  
+  // 恢复列表标题为"我的收藏列表"
+  const listTitle = document.getElementById('list-title');
+  listTitle.textContent = '收藏列表';
+  
+  // 移除返回按钮
+  const existingBackBtn = document.querySelector('.back-to-favorites-btn');
+  if (existingBackBtn) {
+    existingBackBtn.remove();
+  }
+  
+  // 移除三点菜单按钮
+  const existingMenuBtn = document.querySelector('.playlist-menu-btn');
+  if (existingMenuBtn) {
+    existingMenuBtn.remove();
+  }
+  
+  // 显示添加收藏夹按钮
+  const playlistFilterContainer = document.getElementById('playlist-filter-container');
+  if (playlistFilterContainer) {
+    playlistFilterContainer.classList.remove('hidden');
+  }
+  
+  // 为收藏夹页面设置合适的网格布局
+  ui.songContainer.className = 'song-list favorites-grid';
+  
+  // 获取收藏夹列表
+  return api.favoritePlaylists.list().then(async res => {
+    if (res.success && res.data) {
+      console.log('API返回的收藏夹数据:', res.data);
+      const playlists = res.data;
+      
+      // 去重处理
+      const uniquePlaylists = [];
+      const seenIds = new Set();
+      
+      playlists.forEach(playlist => {
+        if (!seenIds.has(playlist.id)) {
+          seenIds.add(playlist.id);
+          uniquePlaylists.push(playlist);
+        } else {
+          console.log('发现重复收藏夹:', playlist);
+        }
+      });
+      
+      if (uniquePlaylists.length === 0) {
+        ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">暂无收藏夹</div>`;
+        return;
+      }
+      
+      const frag = document.createDocumentFragment();
+      
+      // 并行获取所有收藏夹的歌曲列表
+      const playlistPromises = uniquePlaylists.map(async (playlist) => {
+        // 创建收藏夹文件夹卡片
+        const folderCard = document.createElement('div');
+        folderCard.className = 'folder-card';
+        folderCard.dataset.playlistId = playlist.id;
+        
+        // 默认封面
+        let folderCover = '/static/images/ICON_256.PNG';
+        
+        // 如果收藏夹有歌曲，尝试获取第一首歌曲的封面
+        if (playlist.song_count > 0) {
+          try {
+            const songsRes = await api.favoritePlaylists.getSongs(playlist.id);
+            if (songsRes.success && songsRes.data && songsRes.data.length > 0) {
+              // 获取第一首歌曲的ID
+              const firstSongId = songsRes.data[0];
+              // 从完整歌曲列表中找到对应的歌曲
+              const firstSong = state.fullPlaylist.find(song => song.id === firstSongId);
+              // 如果找到歌曲且有封面，使用该封面
+              if (firstSong && firstSong.cover) {
+                folderCover = firstSong.cover;
+              }
+            }
+          } catch (err) {
+            console.error(`获取收藏夹 ${playlist.name} 的歌曲列表失败:`, err);
+          }
+        }
+        
+        folderCard.innerHTML = `
+          <div class="folder-header">
+            <img src="${folderCover}" loading="lazy" class="folder-cover">
+            <div class="folder-info">
+              <div class="folder-name">${playlist.name} ${playlist.is_default ? '(默认)' : ''}</div>
+              <div class="folder-count">${playlist.song_count || 0} 首歌曲</div>
+            </div>
+            <div class="folder-arrow">
+              <i class="fas fa-arrow-right"></i>
+            </div>
+          </div>
+        `;
+        
+        // 添加点击事件，进入收藏夹详情页
+        folderCard.addEventListener('click', () => {
+          state.selectedPlaylistId = playlist.id;
+          renderPlaylist();
+        });
+        
+        return folderCard;
+      });
+      
+      // 等待所有收藏夹卡片创建完成
+      const folderCards = await Promise.all(playlistPromises);
+      // 将所有卡片添加到文档片段
+      folderCards.forEach(card => frag.appendChild(card));
+      // 将文档片段添加到容器
+      ui.songContainer.appendChild(frag);
+    }
+  }).catch(err => {
+    console.error('加载收藏夹列表失败:', err);
+    ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">加载收藏夹失败</div>`;
+  });
+}
+
+// 渲染收藏夹详情页：显示歌曲并提供排序筛选
+function renderPlaylistDetails(playlistId) {
+  // 先获取收藏夹详情，包括名称
+  return api.favoritePlaylists.list().then(playlistsRes => {
+    if (playlistsRes.success && playlistsRes.data) {
+      const playlist = playlistsRes.data.find(p => p.id === playlistId);
+      const playlistName = playlist ? playlist.name : '未知收藏夹';
+      
+      // 清空容器
+      ui.songContainer.innerHTML = '';
+      
+      // 恢复普通歌曲网格布局（小卡片）
+      ui.songContainer.className = 'song-list';
+      
+      // 修改现有的列表标题为收藏夹名称
+      const listTitle = document.getElementById('list-title');
+      listTitle.textContent = playlistName;
+      
+      // 移除可能已存在的返回按钮
+      const existingBackBtn = document.querySelector('.back-to-favorites-btn');
+      if (existingBackBtn) {
+        existingBackBtn.remove();
+      }
+      
+      // 移除可能已存在的三点菜单按钮
+      const existingMenuBtn = document.querySelector('.playlist-menu-btn');
+      if (existingMenuBtn) {
+        existingMenuBtn.remove();
+      }
+      
+      // 创建返回按钮
+      const backBtn = document.createElement('button');
+      backBtn.className = 'back-to-favorites-btn';
+      backBtn.title = '返回我的收藏';
+      backBtn.innerHTML = `<i class="fas fa-arrow-left"></i> 返回`;
+      
+      // 将返回按钮添加到content-header容器内，在标题之前
+      const contentHeader = document.querySelector('.content-header');
+      contentHeader.insertBefore(backBtn, listTitle);
+      
+      // 添加返回按钮事件监听
+      backBtn.addEventListener('click', () => {
+        // 清除选中的收藏夹
+        state.selectedPlaylistId = null;
+        // 重新渲染收藏主页
+        renderPlaylist();
+      });
+      
+      // 显示或隐藏添加收藏夹按钮：在收藏夹详情页隐藏
+      const playlistFilterContainer = document.getElementById('playlist-filter-container');
+      if (playlistFilterContainer) {
+        playlistFilterContainer.classList.add('hidden');
+      }
+      
+      // 添加三点菜单按钮（水平排列）
+      const menuBtn = document.createElement('button');
+      menuBtn.className = 'playlist-menu-btn';
+      menuBtn.title = '更多操作';
+      menuBtn.innerHTML = `<i class="fas fa-ellipsis-h"></i>`;
+      
+      // 获取header-actions容器
+      const headerActions = document.querySelector('.header-actions');
+      // 将菜单按钮添加到header-actions容器的最前面
+      headerActions.insertBefore(menuBtn, headerActions.firstChild);
+      
+      // 添加菜单按钮事件监听
+      menuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // 显示删除确认对话框
+        showConfirmDialog(
+          '确认删除',
+          `确定要删除收藏夹 "${playlistName}" 吗？`,
+          () => {
+            // 调用API删除收藏夹
+            api.favoritePlaylists.delete(playlistId)
+              .then(res => {
+                if (res.success) {
+                  // 删除成功，返回收藏主页
+                  state.selectedPlaylistId = null;
+                  renderPlaylist();
+                  showToast('收藏夹删除成功', 'success');
+                } else {
+                  showToast('删除收藏夹失败: ' + (res.error || '未知错误'), 'error');
+                }
+              })
+              .catch(err => {
+                console.error('删除收藏夹失败:', err);
+                showToast('删除收藏夹失败', 'error');
+              });
+          }
+        );
+      });
+      
+      // 获取收藏夹歌曲列表
+      return api.favoritePlaylists.getSongs(playlistId);
+    } else {
+      throw new Error('获取收藏夹列表失败');
+    }
+  }).then(songsRes => {
+    if (songsRes.success && songsRes.data) {
+      const playlistSongs = songsRes.data;
+      
+      // 从完整歌曲列表中找到对应的歌曲信息
+      const filteredSongs = state.fullPlaylist.filter(song => 
+        playlistSongs.includes(song.id)
+      );
+      
+      state.displayPlaylist = filteredSongs;
+      
+      if (state.displayPlaylist.length === 0) {
+        ui.songContainer.innerHTML += `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">该收藏夹暂无歌曲</div>`;
+        return;
+      }
+      
+      // 按当前排序方式渲染歌曲
+      renderPlaylistSongs(filteredSongs);
+    }
+  }).catch(err => {
+    console.error('加载收藏夹歌曲失败:', err);
+    ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">加载收藏夹歌曲失败</div>`;
+  });
+}
+
+
+
+// 渲染歌曲列表
+function renderPlaylistSongs(songs) {
+  // 直接使用ui.songContainer，因为它已经有song-list类和网格布局
+  const songListContainer = ui.songContainer;
+  
+  songListContainer.innerHTML = '';
+  
+  if (songs.length === 0) {
+    songListContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">没有找到匹配的歌曲</div>`;
     return;
   }
-
+  
   const frag = document.createDocumentFragment();
-  state.displayPlaylist.forEach((song, index) => {
+  songs.forEach((song, index) => {
     const card = document.createElement('div');
     card.className = 'song-card';
-    card.dataset.index = index;
+    card.dataset.index = state.displayPlaylist.indexOf(song);
     if (song.isExternal) card.style.border = '1px dashed var(--primary)';
-
+    
     // 使用 ID 判断收藏状态
     const isFav = state.favorites.has(song.id);
-
+    
     let favHtml = `<button class="card-fav-btn ${isFav ? 'active' : ''}" title="收藏"><i class="${isFav ? 'fas' : 'far'} fa-heart"></i></button>`;
     if (song.isExternal) favHtml = '';
     card.innerHTML = `${favHtml}<img src="${song.cover}" loading="lazy"><div class="card-info"><div class="title" title="${song.title}">${song.title}</div><div class="artist">${song.artist}</div></div>`;
-
+    
     card.addEventListener('click', (e) => {
       if (!e.target.closest('.card-fav-btn')) {
-        state.playQueue = [...state.displayPlaylist];
+        state.playQueue = [...songs];
         playTrack(index);
       }
     });
-
+    
     if (!song.isExternal) {
       const favBtn = card.querySelector('.card-fav-btn');
       favBtn.addEventListener('click', (e) => {
@@ -231,7 +566,8 @@ export function renderPlaylist() {
     }
     frag.appendChild(card);
   });
-  ui.songContainer.appendChild(frag);
+  
+  songListContainer.appendChild(frag);
   highlightCurrentTrack();
 }
 
@@ -269,6 +605,7 @@ export function switchTab(tab) {
   } else {
     // local or fav
     ui.viewPlayer?.classList.remove('hidden');
+    ui.viewPlayer?.setAttribute('data-tab', tab);
 
     // Styling hooks for CSS
     if (tab === 'fav') {
@@ -307,6 +644,28 @@ export function switchTab(tab) {
       ui.searchInput.value = ''; // Clear search
     }
   }
+
+  // Playlist Filter Visibility: Only for Favorites
+  if (ui.playlistFilterContainer) {
+    if (tab === 'fav') {
+      ui.playlistFilterContainer.classList.remove('hidden');
+      loadPlaylistFilter(); // Load favorite playlists
+    } else {
+      ui.playlistFilterContainer.classList.add('hidden');
+    }
+  }
+  
+  // Remove playlist menu button and back button when switching tabs
+  const playlistMenuBtn = document.querySelector('.playlist-menu-btn');
+  if (playlistMenuBtn) {
+    playlistMenuBtn.remove();
+  }
+  
+  const backToFavoritesBtn = document.querySelector('.back-to-favorites-btn');
+  if (backToFavoritesBtn) {
+    backToFavoritesBtn.remove();
+  }
+  
   if (window.innerWidth <= 768 && ui.sidebar?.classList.contains('open')) ui.sidebar.classList.remove('open');
   persistState(ui.audio);
 }
@@ -331,10 +690,6 @@ async function initPlayerState() {
   if (state.savedState.currentFilename) {
     // 优先通过文件名匹配，而不是索引
     const targetFilename = state.savedState.currentFilename;
-    // 如果是收藏列表，确保当前队列是基于收藏过滤的? 
-    // 上面 switchTab 已经做了，但 state.playQueue 可能还没更新（如果是 cachedPlaylist 刚加载）
-    // renderPlaylist 会更新 displayPlaylist，但 playQueue 只有点击才更新?
-    // initPlayerState 不应该依赖 playQueue? 
     // playTrack index 必须是 playQueue 的 index。
     // 如果当前 tab 是 local，playQueue 默认是 full。
 
@@ -803,6 +1158,14 @@ export function bindUiControls() {
   if (ui.navFav) ui.navFav.addEventListener('click', () => switchTab('fav'));
   if (ui.navMount) ui.navMount.addEventListener('click', () => switchTab('mount'));
   if (ui.navNetease) ui.navNetease.addEventListener('click', () => switchTab('netease'));
+  // 收藏夹筛选事件监听
+  if (ui.playlistFilter) {
+    ui.playlistFilter.addEventListener('change', handlePlaylistFilterChange);
+  }
+  // 添加收藏夹按钮事件
+  if (ui.btnAddPlaylist) {
+    ui.btnAddPlaylist.addEventListener('click', showCreatePlaylistDialog);
+  }
 
   if (ui.fpMenuBtn) ui.fpMenuBtn.addEventListener('click', (e) => { e.stopPropagation(); ui.actionMenuOverlay?.classList.add('active'); });
   ui.actionCancelBtn?.addEventListener('click', () => ui.actionMenuOverlay?.classList.remove('active'));

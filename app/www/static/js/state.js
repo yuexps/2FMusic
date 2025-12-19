@@ -15,6 +15,7 @@ export const state = {
   favorites: new Set(JSON.parse(localStorage.getItem('2fmusic_favs') || '[]')),
   savedState: JSON.parse(localStorage.getItem('2fmusic_state') || '{}'),
   currentTab: JSON.parse(localStorage.getItem('2fmusic_state') || '{}').tab || 'local',
+  selectedPlaylistId: JSON.parse(localStorage.getItem('2fmusic_state') || '{}').selectedPlaylistId || null,
   neteaseResults: [],
   neteaseRecommendations: [],
   neteaseResultSource: 'recommend',
@@ -36,7 +37,7 @@ export const state = {
 };
 
 export function persistState(audio) {
-  const { playQueue, currentTrackIndex, playMode, currentTab } = state;
+  const { playQueue, currentTrackIndex, playMode, currentTab, selectedPlaylistId } = state;
   const currentSong = playQueue[currentTrackIndex];
   if (currentSong && currentSong.isExternal) return;
 
@@ -46,6 +47,7 @@ export function persistState(audio) {
     currentTime: audio?.currentTime ?? 0,
     currentFilename: currentSong ? currentSong.filename : null,
     tab: currentTab,
+    selectedPlaylistId,
     isFullScreen: ui.overlay ? ui.overlay.classList.contains('active') : false
   };
   localStorage.setItem('2fmusic_state', JSON.stringify(nextState));

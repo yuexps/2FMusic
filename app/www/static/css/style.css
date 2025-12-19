@@ -397,6 +397,52 @@ body::before {
     margin-bottom: 0;
 }
 
+/* 收藏夹页面顶部栏 */
+.favorites-top-bar {
+    padding: 1rem;
+    background: var(--glass-bg);
+    border-bottom: 1px solid var(--glass-border);
+    margin-bottom: 1rem;
+}
+
+/* 收藏夹详情页顶部栏 */
+.playlist-detail-top-bar {
+    padding: 1rem;
+    background: var(--glass-bg);
+    border-bottom: 1px solid var(--glass-border);
+    margin-bottom: 1rem;
+}
+
+.playlist-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.playlist-name {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--text-main);
+}
+
+.back-to-favorites-btn {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-main);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.back-to-favorites-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: var(--glass-shadow);
+}
+
 @media (max-width: 768px) {
 
     /* Generic hiding of text-only titles */
@@ -3963,7 +4009,6 @@ select:focus {
     margin-bottom: 0;
 }
 
-/* Push actions to bottom of card if needed */
 /* Push actions to bottom of card if needed */
 .settings-actions {
     grid-column: 1 / -1;

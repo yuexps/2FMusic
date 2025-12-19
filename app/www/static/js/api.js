@@ -143,12 +143,42 @@ export const api = {
       const res = await fetch('/api/favorites');
       return jsonOrThrow(res);
     },
-    async add(id) {
-      const res = await fetch(`/api/favorites/${encodeURIComponent(id)}`, { method: 'POST' });
+    async add(song_id, playlist_id = 'default') {
+      const res = await fetch(`/api/favorites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ song_id, playlist_id })
+      });
       return jsonOrThrow(res);
     },
-    async remove(id) {
-      const res = await fetch(`/api/favorites/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    async remove(song_id, playlist_id = 'default') {
+      const res = await fetch(`/api/favorites`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ song_id, playlist_id })
+      });
+      return jsonOrThrow(res);
+    }
+  },
+  favoritePlaylists: {
+    async list() {
+      const res = await fetch('/api/favorite_playlists');
+      return jsonOrThrow(res);
+    },
+    async create(name) {
+      const res = await fetch('/api/favorite_playlists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      return jsonOrThrow(res);
+    },
+    async delete(playlist_id) {
+      const res = await fetch(`/api/favorite_playlists/${encodeURIComponent(playlist_id)}`, { method: 'DELETE' });
+      return jsonOrThrow(res);
+    },
+    async getSongs(playlist_id) {
+      const res = await fetch(`/api/favorite_playlists/${encodeURIComponent(playlist_id)}/songs`);
       return jsonOrThrow(res);
     }
   }

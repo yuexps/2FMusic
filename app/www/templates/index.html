@@ -44,6 +44,7 @@
     <script src="{{ url_for('static', filename='js/lib/color-thief.umd.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome/all.min.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/favorites.css') }}">
 </head>
 
 <body>
@@ -83,9 +84,16 @@
                 <div id="view-player">
                     <div class="content-header">
                         <div class="section-title" id="list-title">歌曲列表</div>
-                        <div class="search-box">
-                            <i class="fas fa-search"></i>
-                            <input type="text" id="search-input" placeholder="搜索本地歌曲...">
+                        <div class="header-actions">
+                            <div id="playlist-filter-container" class="playlist-filter-container hidden">
+                                <button id="btn-add-playlist" class="btn-normal btn-add-playlist">
+                                    <i class="fas fa-plus"></i> 添加收藏夹
+                                </button>
+                            </div>
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="search-input" placeholder="搜索本地歌曲...">
+                            </div>
                         </div>
                     </div>
                     <div class="song-list" id="song-list-container">

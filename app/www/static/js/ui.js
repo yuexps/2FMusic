@@ -6,6 +6,8 @@ export const ui = {
   fullPlayerOverlay: document.getElementById('full-player-overlay'), // Alias for clarity
   lyricsContainer: document.getElementById('lyrics-container'),
   searchInput: document.querySelector('.search-box input'),
+  btnAddPlaylist: document.getElementById('btn-add-playlist'),
+  playlistFilterContainer: document.getElementById('playlist-filter-container'),
 
   viewPlayer: document.getElementById('view-player'),
   viewMount: document.getElementById('view-mount'),
