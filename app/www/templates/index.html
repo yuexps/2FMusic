@@ -18,6 +18,14 @@
 
     <meta name="theme-color" content="#000000">
 
+    <!-- 预加载关键资源以防止闪烁 -->
+    <link rel="preload" href="{{ url_for('static', filename='css/font-awesome/all.min.css') }}" as="style">
+    <link rel="preload" href="{{ url_for('static', filename='css/font-awesome/webfonts/fa-solid-900.woff2') }}" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="{{ url_for('static', filename='css/font-awesome/webfonts/fa-regular-400.woff2') }}" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="{{ url_for('static', filename='css/font-awesome/webfonts/fa-brands-400.woff2') }}" as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="{{ url_for('static', filename='css/style.css') }}" as="style">
+    <link rel="preload" href="{{ url_for('static', filename='css/favorites.css') }}" as="style">
+
     <script>
         (function () {
             window.applyScale = function () {
@@ -93,6 +101,25 @@
                             <div class="search-box">
                                 <i class="fas fa-search"></i>
                                 <input type="text" id="search-input" placeholder="搜索本地歌曲...">
+                            </div>
+                            <div class="sort-controls">
+                                <button id="btn-sort" class="btn-normal">
+                                    <i class="fas fa-sort"></i> 标题
+                                </button>
+                                <div id="sort-dropdown" class="sort-dropdown">
+                                    <div class="sort-option" data-sort="title">
+                                        <i class="fas fa-sort-alpha-down"></i> 音乐标题
+                                    </div>
+                                    <div class="sort-option" data-sort="artist">
+                                        <i class="fas fa-user"></i> 音乐歌手
+                                    </div>
+                                    <div class="sort-option" data-sort="album">
+                                        <i class="fas fa-compact-disc"></i> 音乐专辑
+                                    </div>
+                                    <div class="sort-option" data-sort="mtime">
+                                        <i class="fas fa-clock"></i> 入库时间
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -482,13 +509,37 @@
                 const vp = document.getElementById('view-player');
                 const vm = document.getElementById('view-mount');
                 const vn = document.getElementById('view-netease');
+                const vu = document.getElementById('view-upload');
+                const vs = document.getElementById('view-settings');
+                
+                // 隐藏所有视图
                 if (vp) vp.classList.add('hidden');
                 if (vm) vm.classList.add('hidden');
                 if (vn) vn.classList.add('hidden');
+                if (vu) vu.classList.add('hidden');
+                if (vs) vs.classList.add('hidden');
 
+                // 根据标签显示对应的视图
                 if (tab === 'mount') { if (vm) vm.classList.remove('hidden'); }
                 else if (tab === 'netease') { if (vn) vn.classList.remove('hidden'); }
-                else { if (vp) vp.classList.remove('hidden'); }
+                else if (tab === 'upload') { if (vu) vu.classList.remove('hidden'); }
+                else if (tab === 'settings') { if (vs) vs.classList.remove('hidden'); }
+                else {
+                    // local or fav
+                    if (vp) {
+                        vp.classList.remove('hidden');
+                        vp.setAttribute('data-tab', tab);
+                        
+                        // Styling hooks for CSS
+                        if (tab === 'fav') {
+                            vp.classList.add('tab-fav');
+                            vp.classList.remove('tab-local');
+                        } else {
+                            vp.classList.add('tab-local');
+                            vp.classList.remove('tab-fav');
+                        }
+                    }
+                }
 
                 // 3. Search Box logic
                 const searchBox = document.querySelector('.search-box');
@@ -511,7 +562,37 @@
                     }
                 }
 
-                // 5. Pre-render Song List (Minimize Flicker)
+                // 5. Update Sort Button
+                const savedState = JSON.parse(localStorage.getItem('2fmusic_state') || '{}');
+                const currentSort = savedState.currentSort || 'title';
+                const sortOrder = savedState.sortOrder || 'asc';
+                
+                const btnSort = document.getElementById('btn-sort');
+                if (btnSort) {
+                    // 获取当前排序类型的文本
+                    let sortText = '标题';
+                    switch(currentSort) {
+                        case 'title':
+                            sortText = '标题';
+                            break;
+                        case 'artist':
+                            sortText = '歌手';
+                            break;
+                        case 'album':
+                            sortText = '专辑';
+                            break;
+                        case 'mtime':
+                            sortText = '时间';
+                            break;
+                    }
+                    
+                    // 更新按钮文本
+                    btnSort.innerHTML = `
+                        <i class="fas fa-sort"></i> ${sortText}
+                    `;
+                }
+                
+                // 6. Pre-render Song List (Minimize Flicker)
                 if (tab === 'local' || tab === 'fav') {
                     const container = document.getElementById('song-list-container');
                     const playlist = JSON.parse(localStorage.getItem('2fmusic_playlist') || '[]');
@@ -520,20 +601,85 @@
                     if (container && playlist.length > 0) {
                         let displayList = playlist;
 
+                        // Apply sorting to the playlist - same logic as in player.js
+                        displayList = [...playlist].sort((a, b) => {
+                            let valueA, valueB;
+                            
+                            switch (currentSort) {
+                                case 'title':
+                                    valueA = (a.title || '').toLowerCase();
+                                    valueB = (b.title || '').toLowerCase();
+                                    break;
+                                case 'artist':
+                                    valueA = (a.artist || '').toLowerCase();
+                                    valueB = (b.artist || '').toLowerCase();
+                                    break;
+                                case 'album':
+                                    valueA = (a.album || '').toLowerCase();
+                                    valueB = (b.album || '').toLowerCase();
+                                    break;
+                                case 'mtime':
+                                    valueA = a.mtime || 0;
+                                    valueB = b.mtime || 0;
+                                    break;
+                                default:
+                                    valueA = (a.title || '').toLowerCase();
+                                    valueB = (b.title || '').toLowerCase();
+                            }
+                            
+                            if (typeof valueA === 'string' && typeof valueB === 'string') {
+                                if (sortOrder === 'asc') {
+                                    return valueA > valueB ? 1 : valueA < valueB ? -1 : 0;
+                                } else {
+                                    return valueB > valueA ? 1 : valueB < valueA ? -1 : 0;
+                                }
+                            } else {
+                                if (sortOrder === 'asc') {
+                                    return valueA - valueB;
+                                } else {
+                                    return valueB - valueA;
+                                }
+                            }
+                        });
+
                         // If Tab is Favorite, filter it
                         if (tab === 'fav') {
                             // 检查是否在收藏夹详情页
                             const selectedPlaylistId = state.selectedPlaylistId;
                             if (selectedPlaylistId) {
-                                // 在快速初始化阶段，我们只设置基本状态，不进行详细渲染
-                                // 真正的详细渲染将在main.js中通过renderPlaylist完成
+                                // 在快速初始化阶段，我们设置基本状态并添加必要的UI元素
                                 state.currentTab = 'fav';
                                 const titleEl = document.getElementById('list-title');
+                                const contentHeader = document.querySelector('.content-header');
+                                
                                 if (titleEl) {
                                     // 查找对应收藏夹名称
                                     const playlists = JSON.parse(localStorage.getItem('2fmusic_playlists') || '[]');
                                     const currentPlaylist = playlists.find(p => p.id === selectedPlaylistId);
                                     titleEl.innerText = currentPlaylist ? currentPlaylist.name : '收藏夹详情';
+                                }
+                                
+                                // 添加返回按钮
+                                if (contentHeader) {
+                                    // 检查是否已存在返回按钮
+                                    let backBtn = document.querySelector('.back-to-favorites-btn');
+                                    if (!backBtn) {
+                                        backBtn = document.createElement('button');
+                                        backBtn.className = 'back-to-favorites-btn';
+                                        backBtn.innerHTML = '<i class="fas fa-arrow-left"></i> 返回';
+                                        
+                                        // 在标题前添加返回按钮
+                                        const sectionTitle = contentHeader.querySelector('.section-title');
+                                        if (sectionTitle) {
+                                            contentHeader.insertBefore(backBtn, sectionTitle);
+                                        }
+                                    }
+                                }
+                                
+                                // 隐藏添加收藏夹按钮
+                                const playlistFilterContainer = document.getElementById('playlist-filter-container');
+                                if (playlistFilterContainer) {
+                                    playlistFilterContainer.classList.add('hidden');
                                 }
                             } else {
                                 state.currentTab = 'fav';

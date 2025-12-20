@@ -136,6 +136,9 @@ export async function loadSongs(retry = true, initPlayer = true) {
   // 1. 优先使用缓存显示 (SWR)
   if (state.fullPlaylist.length > 0 && state.playQueue.length === 0) {
     state.playQueue = [...state.fullPlaylist];
+    // 在初始渲染前更新排序按钮显示，确保使用保存的排序状态
+    updateSortButton();
+    // 应用保存的排序状态
     if (state.currentTab === 'local' || state.currentTab === 'fav') renderPlaylist();
     if (!ui.audio.src && initPlayer) { initPlayerState(); }
   }
@@ -168,8 +171,14 @@ export async function loadSongs(retry = true, initPlayer = true) {
         };
       });
 
+      // 检查新数据是否与旧数据有显著差异
+      const hasSignificantChanges = JSON.stringify(newList.map(s => s.filename)) !== JSON.stringify(state.fullPlaylist.map(s => s.filename));
+
       state.fullPlaylist = newList;
       savePlaylist(); // 更新缓存
+      
+      // 更新排序按钮显示
+      updateSortButton();
 
       // 3. 更新播放队列上下文
       if (state.currentTab === 'local') {
@@ -179,9 +188,15 @@ export async function loadSongs(retry = true, initPlayer = true) {
           const newIdx = state.playQueue.findIndex(s => s.filename === currentFilename);
           if (newIdx !== -1) state.currentTrackIndex = newIdx;
         }
-        renderPlaylist();
+        // 只有当数据有显著变化时才重新渲染，减少闪现
+        if (hasSignificantChanges) {
+          setTimeout(() => renderPlaylist(), 100);
+        }
       } else if (state.currentTab === 'fav') {
-        renderPlaylist();
+        // 只有当数据有显著变化时才重新渲染，减少闪现
+        if (hasSignificantChanges) {
+          setTimeout(() => renderPlaylist(), 100);
+        }
       }
 
       if (state.playQueue.length === 0) state.playQueue = [...state.fullPlaylist];
@@ -275,6 +290,48 @@ export async function handleExternalFile() {
 // 添加一个标记，防止并发渲染
 let isRendering = false;
 
+// 排序状态使用state对象管理，已移至state.js
+
+// 更新排序按钮显示
+function updateSortButton() {
+  if (!ui.btnSort) return;
+  
+  // 获取当前排序类型的文本
+  let sortText = '标题';
+  switch(state.currentSort) {
+    case 'title':
+      sortText = '标题';
+      break;
+    case 'artist':
+      sortText = '歌手';
+      break;
+    case 'album':
+      sortText = '专辑';
+      break;
+    case 'mtime':
+      sortText = '时间';
+      break;
+  }
+  
+  // 更新按钮文本
+  ui.btnSort.innerHTML = `
+    <i class="fas fa-sort"></i> ${sortText}
+  `;
+  
+  // 更新排序选项的活动状态
+  document.querySelectorAll('.sort-option').forEach(option => {
+    option.classList.remove('active');
+    if (option.dataset.sort === state.currentSort) {
+      option.classList.add('active');
+      // 更新排序顺序图标
+      const icon = option.querySelector('.sort-order');
+      if (icon) {
+        icon.className = `fas ${state.sortOrder === 'asc' ? 'fa-sort-up' : 'fa-sort-down'}`;
+      }
+    }
+  });
+}
+
 export function renderPlaylist() {
   if (!ui.songContainer) return;
   
@@ -323,7 +380,38 @@ export function renderPlaylist() {
       }
     }
     let filteredSongs;
-    filteredSongs = state.fullPlaylist;
+    filteredSongs = [...state.fullPlaylist];
+    
+    // 应用排序
+    filteredSongs.sort((a, b) => {
+      let valueA, valueB;
+      
+      switch (state.currentSort) {
+        case 'title':
+          valueA = (a.title || '').toLowerCase();
+          valueB = (b.title || '').toLowerCase();
+          break;
+        case 'artist':
+          valueA = (a.artist || '').toLowerCase();
+          valueB = (b.artist || '').toLowerCase();
+          break;
+        case 'album':
+          valueA = (a.album || '').toLowerCase();
+          valueB = (b.album || '').toLowerCase();
+          break;
+        case 'mtime':
+          valueA = a.mtime || 0;
+          valueB = b.mtime || 0;
+          break;
+        default:
+          valueA = (a.title || '').toLowerCase();
+          valueB = (b.title || '').toLowerCase();
+      }
+      
+      if (valueA < valueB) return state.sortOrder === 'asc' ? -1 : 1;
+      if (valueA > valueB) return state.sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
     
     state.displayPlaylist = filteredSongs;
     
@@ -804,13 +892,44 @@ function renderPlaylistSongs(songs) {
   
   songListContainer.innerHTML = '';
   
-  if (songs.length === 0) {
-    songListContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">没有找到匹配的歌曲</div>`;
-    return;
-  }
+  // 应用排序
+  const sortedSongs = [...songs].sort((a, b) => {
+    let valueA, valueB;
+    
+    switch (state.currentSort) {
+      case 'title':
+        valueA = (a.title || '').toLowerCase();
+        valueB = (b.title || '').toLowerCase();
+        break;
+      case 'artist':
+        valueA = (a.artist || '').toLowerCase();
+        valueB = (b.artist || '').toLowerCase();
+        break;
+      case 'album':
+        valueA = (a.album || '').toLowerCase();
+        valueB = (b.album || '').toLowerCase();
+        break;
+      case 'mtime':
+        valueA = a.mtime || 0;
+        valueB = b.mtime || 0;
+        break;
+      default:
+        valueA = (a.title || '').toLowerCase();
+        valueB = (b.title || '').toLowerCase();
+    }
+    
+    if (valueA < valueB) return state.sortOrder === 'asc' ? -1 : 1;
+    if (valueA > valueB) return state.sortOrder === 'asc' ? 1 : -1;
+    return 0;
+  });
   
-  const frag = document.createDocumentFragment();
-  songs.forEach((song, index) => {
+  if (sortedSongs.length === 0) {
+      songListContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">没有找到匹配的歌曲</div>`;
+      return;
+    }
+    
+    const frag = document.createDocumentFragment();
+    sortedSongs.forEach((song, index) => {
     const card = document.createElement('div');
     card.className = 'song-card';
     card.dataset.index = state.displayPlaylist.indexOf(song);
@@ -1504,6 +1623,49 @@ export function bindUiControls() {
   if (ui.btnAddPlaylist) {
     ui.btnAddPlaylist.addEventListener('click', showCreatePlaylistDialog);
   }
+
+  // 排序功能
+  if (ui.btnSort) {
+    ui.btnSort.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ui.sortDropdown?.classList.toggle('active');
+    });
+  }
+  
+  // 点击外部关闭排序下拉菜单
+  document.addEventListener('click', (e) => {
+    if (!ui.btnSort?.contains(e.target) && !ui.sortDropdown?.contains(e.target)) {
+      ui.sortDropdown?.classList.remove('active');
+    }
+  });
+  
+  // 排序选项点击事件
+  document.querySelectorAll('.sort-option').forEach(option => {
+    option.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const sortType = option.dataset.sort;
+      if (sortType === state.currentSort) {
+        // 切换排序顺序
+        state.sortOrder = state.sortOrder === 'asc' ? 'desc' : 'asc';
+      } else {
+        // 更改排序类型
+        state.currentSort = sortType;
+        state.sortOrder = 'asc';
+      }
+      
+      // 保存排序状态到localStorage
+      persistState(ui.audio, { currentSort: state.currentSort, sortOrder: state.sortOrder });
+      
+      // 更新排序按钮显示
+      updateSortButton();
+      
+      // 重新渲染歌曲列表
+      renderPlaylist();
+      
+      // 关闭下拉菜单
+      ui.sortDropdown?.classList.remove('active');
+    });
+  });
 
   if (ui.fpMenuBtn) ui.fpMenuBtn.addEventListener('click', (e) => { e.stopPropagation(); ui.actionMenuOverlay?.classList.add('active'); });
   ui.actionCancelBtn?.addEventListener('click', () => ui.actionMenuOverlay?.classList.remove('active'));

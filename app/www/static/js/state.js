@@ -16,6 +16,9 @@ export const state = {
   savedState: JSON.parse(localStorage.getItem('2fmusic_state') || '{}'),
   currentTab: JSON.parse(localStorage.getItem('2fmusic_state') || '{}').tab || 'local',
   selectedPlaylistId: JSON.parse(localStorage.getItem('2fmusic_state') || '{}').selectedPlaylistId || null,
+  // 排序状态
+  currentSort: JSON.parse(localStorage.getItem('2fmusic_state') || '{}').currentSort || 'title',
+  sortOrder: JSON.parse(localStorage.getItem('2fmusic_state') || '{}').sortOrder || 'asc',
   // 收藏夹缓存
   cachedPlaylists: JSON.parse(localStorage.getItem('2fmusic_cached_playlists') || '[]'),
   cachedPlaylistsTime: parseInt(localStorage.getItem('2fmusic_cached_playlists_time') || '0'),
@@ -55,9 +58,28 @@ export function saveCachedPlaylistSongs(playlistId, songs) {
   localStorage.setItem('2fmusic_cached_playlist_songs', JSON.stringify(state.cachedPlaylistSongs));
 }
 
-export function persistState(audio) {
-  const { playQueue, currentTrackIndex, playMode, currentTab, selectedPlaylistId } = state;
+export function persistState(audio, sortState = {}) {
+  const { playQueue, currentTrackIndex, playMode, currentTab, selectedPlaylistId, currentSort, sortOrder } = state;
   const currentSong = playQueue[currentTrackIndex];
+  
+  // 如果有排序状态需要保存，即使当前歌曲是外部文件，也保存排序状态
+  if (sortState.currentSort || sortState.sortOrder) {
+    // 获取当前保存的状态
+    const savedState = JSON.parse(localStorage.getItem('2fmusic_state') || '{}');
+    
+    // 更新排序状态
+    const updatedState = {
+      ...savedState,
+      currentSort: sortState.currentSort || currentSort || 'title',
+      sortOrder: sortState.sortOrder || sortOrder || 'asc'
+    };
+    
+    // 保存更新后的状态
+    localStorage.setItem('2fmusic_state', JSON.stringify(updatedState));
+    return;
+  }
+  
+  // 如果没有排序状态需要保存，并且当前歌曲是外部文件，则不保存任何状态
   if (currentSong && currentSong.isExternal) return;
 
   const nextState = {
@@ -67,7 +89,10 @@ export function persistState(audio) {
     currentFilename: currentSong ? currentSong.filename : null,
     tab: currentTab,
     selectedPlaylistId,
-    isFullScreen: ui.overlay ? ui.overlay.classList.contains('active') : false
+    isFullScreen: ui.overlay ? ui.overlay.classList.contains('active') : false,
+    // 保存排序状态
+    currentSort: currentSort || 'title',
+    sortOrder: sortOrder || 'asc'
   };
   localStorage.setItem('2fmusic_state', JSON.stringify(nextState));
 }

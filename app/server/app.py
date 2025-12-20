@@ -863,7 +863,8 @@ def get_music_list():
                 songs.append({
                     'id': row['id'], # 新增 ID
                     'filename': row['filename'], 'title': row['title'],
-                    'artist': row['artist'], 'album': row['album'], 'album_art': album_art
+                    'artist': row['artist'], 'album': row['album'], 'album_art': album_art,
+                    'mtime': row['mtime']
                 })
         logger.info(f"返回音乐数量: {len(songs)}")
         return jsonify({'success': True, 'data': songs})
