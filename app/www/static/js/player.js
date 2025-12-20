@@ -3,7 +3,7 @@ import { ui } from './ui.js';
 import { api } from './api.js';
 import { showToast, showConfirmDialog, hideProgressToast, updateDetailFavButton, formatTime, renderNoLyrics, updateSliderFill, flyToElement, throttle, extractColorFromImage } from './utils.js';
 import { startScanPolling, loadMountPoints } from './mounts.js';
-import { showPlaylistSelectDialog, loadPlaylistFilter, handlePlaylistFilterChange, showCreatePlaylistDialog } from './favorites.js';
+import { showPlaylistSelectDialog, loadPlaylistFilter, handlePlaylistFilterChange, showCreatePlaylistDialog, getPlaylistsWithCache, clearPlaylistCache } from './favorites.js';
 
 // 收藏功能相关函数已移至 favorites.js
 
@@ -309,9 +309,9 @@ function renderFavoritesHome() {
   // 为收藏夹页面设置合适的网格布局
   ui.songContainer.className = 'song-list favorites-grid';
   
-  // 获取收藏夹列表
-  return api.favoritePlaylists.list().then(async res => {
-    if (res.success && res.data) {
+  // 获取收藏夹列表（使用缓存）
+  return getPlaylistsWithCache().then(async res => {
+    if (res && res.data) {
       console.log('API返回的收藏夹数据:', res.data);
       const playlists = res.data;
       
@@ -368,7 +368,7 @@ function renderFavoritesHome() {
           <div class="folder-header">
             <img src="${folderCover}" loading="lazy" class="folder-cover">
             <div class="folder-info">
-              <div class="folder-name">${playlist.name} ${playlist.is_default ? '(默认)' : ''}</div>
+              <div class="folder-name">${playlist.name} </div>
               <div class="folder-count">${playlist.song_count || 0} 首歌曲</div>
             </div>
             <div class="folder-arrow">
@@ -401,9 +401,9 @@ function renderFavoritesHome() {
 
 // 渲染收藏夹详情页：显示歌曲并提供排序筛选
 function renderPlaylistDetails(playlistId) {
-  // 先获取收藏夹详情，包括名称
-  return api.favoritePlaylists.list().then(playlistsRes => {
-    if (playlistsRes.success && playlistsRes.data) {
+  // 先获取收藏夹详情，包括名称（使用缓存）
+  return getPlaylistsWithCache().then(playlistsRes => {
+    if (playlistsRes && playlistsRes.data) {
       const playlist = playlistsRes.data.find(p => p.id === playlistId);
       const playlistName = playlist ? playlist.name : '未知收藏夹';
       
@@ -476,6 +476,9 @@ function renderPlaylistDetails(playlistId) {
             api.favoritePlaylists.delete(playlistId)
               .then(res => {
                 if (res.success) {
+                  // 清除缓存以获取最新数据
+                  clearPlaylistCache();
+                  
                   // 删除成功，返回收藏主页
                   state.selectedPlaylistId = null;
                   renderPlaylist();

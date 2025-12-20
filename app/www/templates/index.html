@@ -455,19 +455,6 @@
             </div>
         </div>
 
-
-        <!-- 通用确认模态框 -->
-        <div class="overlay" id="confirm-modal-overlay">
-            <div class="modal confirm-box">
-                <h3>提示</h3>
-                <p>确认执行此操作吗？</p>
-                <div class="modal-buttons">
-                    <button id="confirm-no" class="btn-normal">取消</button>
-                    <button id="confirm-yes" class="btn-primary">确定</button>
-                </div>
-            </div>
-        </div>
-
         <div id="toast-container"></div>
         <input type="file" id="file-upload" accept=".mp3,.flac,.wav,.ogg,.m4a" style="display: none;">
 
@@ -535,9 +522,12 @@
 
                         // If Tab is Favorite, filter it
                         if (tab === 'fav') {
-                            displayList = playlist.filter(s => favs.has(s.id));
+                            // 触发收藏夹卡片的渲染
+                            state.currentTab = 'fav';
+                            renderPlaylist();
                             const titleEl = document.getElementById('list-title');
                             if (titleEl) titleEl.innerText = '收藏列表';
+                            return; // 提前返回，避免执行下面的通用渲染逻辑
                         } else {
                             const titleEl = document.getElementById('list-title');
                             if (titleEl) titleEl.innerText = '歌曲列表';

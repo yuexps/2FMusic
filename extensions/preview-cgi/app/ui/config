@@ -6,6 +6,7 @@
             "type": "iframe",
             "url": "/cgi/ThirdParty/2fmusic-preview/index.cgi",
             "allUsers": false,
+            "platforms": ["web"],
             "fileTypes": [
                 "mp3",
                 "flac",

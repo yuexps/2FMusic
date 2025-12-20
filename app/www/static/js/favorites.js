@@ -4,13 +4,44 @@ import { api } from './api.js';
 import { showToast, updateDetailFavButton, extractColorFromImage } from './utils.js';
 import { renderPlaylist } from './player.js';
 
+// 收藏夹列表缓存
+let playlistCache = null;
+let playlistCacheTime = 0;
+const CACHE_DURATION = 30000; // 30秒缓存
+
+// 获取收藏夹列表（带缓存）
+export async function getPlaylistsWithCache(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && playlistCache && (now - playlistCacheTime) < CACHE_DURATION) {
+    return playlistCache;
+  }
+  
+  try {
+    const res = await api.favoritePlaylists.list();
+    if (res.success && res.data) {
+      playlistCache = res;
+      playlistCacheTime = now;
+      return res;
+    }
+  } catch (e) {
+    console.error('获取收藏夹列表失败:', e);
+  }
+  return null;
+}
+
+// 清除收藏夹列表缓存
+export function clearPlaylistCache() {
+  playlistCache = null;
+  playlistCacheTime = 0;
+}
+
 // 加载收藏夹筛选列表
 export async function loadPlaylistFilter() {
   if (!ui.playlistFilter) return;
   
   try {
-    const res = await api.favoritePlaylists.list();
-    if (res.success && res.data) {
+    const res = await getPlaylistsWithCache();
+    if (res && res.data) {
       // 去重处理
       const uniquePlaylists = [];
       const seenIds = new Set();
@@ -29,7 +60,7 @@ export async function loadPlaylistFilter() {
       uniquePlaylists.forEach(playlist => {
         const option = document.createElement('option');
         option.value = playlist.id;
-        option.textContent = playlist.name + (playlist.is_default ? ' (默认)' : '');
+        option.textContent = playlist.name;
         ui.playlistFilter.appendChild(option);
       });
     }
@@ -38,26 +69,20 @@ export async function loadPlaylistFilter() {
   }
 }
 
-// 处理收藏夹筛选变化
 export function handlePlaylistFilterChange() {
   if (!ui.playlistFilter) return;
   
   const selectedPlaylistId = ui.playlistFilter.value;
-  renderPlaylist(); // 注意：renderPlaylist 仍在 player.js 中定义
+  renderPlaylist();
 }
 
-// 加载指定收藏夹的歌曲
 export async function loadPlaylistSongs(playlistId) {
   if (!ui.songContainer) return;
   
   try {
     const res = await api.favoritePlaylists.getSongs(playlistId);
     if (res.success && res.data) {
-      // 获取收藏夹中的歌曲ID列表
       const playlistSongIds = new Set(res.data);
-      
-      // 这里的逻辑需要根据实际情况调整，可能需要与 player.js 中的 renderPlaylist 配合使用
-      // 暂时保留这个函数的骨架
     }
   } catch (e) {
     console.error('加载收藏夹歌曲失败:', e);
@@ -101,8 +126,8 @@ export function showPlaylistSelectDialog(song, btnEl) {
   img.crossOrigin = 'Anonymous';
   
   // 先获取收藏夹列表，然后再应用颜色并显示对话框
-  api.favoritePlaylists.list().then(res => {
-    if (res.success) {
+  getPlaylistsWithCache().then(res => {
+    if (res && res.data) {
       // 去重处理
       const uniquePlaylists = [];
       const seenIds = new Set();
@@ -122,7 +147,7 @@ export function showPlaylistSelectDialog(song, btnEl) {
         item.className = 'playlist-item';
         item.innerHTML = `
           <input type="radio" name="playlist" id="playlist-${playlist.id}" value="${playlist.id}" ${playlist.is_default ? 'checked' : ''}>
-          <label for="playlist-${playlist.id}">${playlist.name} ${playlist.is_default ? '(默认)' : ''}</label>
+          <label for="playlist-${playlist.id}">${playlist.name}</label>
         `;
         container.appendChild(item);
       });
@@ -207,6 +232,8 @@ export async function addToSelectedPlaylist(song, playlistId, btnEl, dialog) {
   if (btnEl) { btnEl.classList.add('active'); btnEl.innerHTML = '<i class="fas fa-heart"></i>'; }
   try { 
     await api.favorites.add(song.id, playlistId); 
+    // 清除收藏夹列表缓存以获取最新数据
+    clearPlaylistCache();
   } catch (e) { 
     console.error(e); 
     // 回滚 UI
@@ -263,8 +290,8 @@ export function showCreatePlaylistDialog() {
     
     try {
       // 先获取所有收藏夹，检查名称是否已存在
-      const listRes = await api.favoritePlaylists.list();
-      if (listRes.success) {
+      const listRes = await getPlaylistsWithCache();
+      if (listRes && listRes.data) {
         // 检查是否存在同名收藏夹
         const existingPlaylist = listRes.data.find(playlist => playlist.name === name);
         if (existingPlaylist) {
@@ -277,6 +304,9 @@ export function showCreatePlaylistDialog() {
       // 创建收藏夹
       const res = await api.favoritePlaylists.create(name);
       if (res.success) {
+        // 清除缓存以获取最新数据
+        clearPlaylistCache();
+        
         // 创建成功后刷新收藏夹页面
         console.log('收藏夹创建成功:', res.data);
         renderPlaylist();
@@ -317,16 +347,12 @@ export function showCreatePlaylistDialog() {
   
 
   const dialogContent = dialog.querySelector('.dialog-content');
-  const createBtnElement = dialog.querySelector('#create-btn');
   
-  dialogContent.style.background = 'var(--glass-bg)';
-  dialogContent.style.border = '1px solid var(--glass-border)';
-  dialogContent.style.color = 'var(--text-main)';
-  
-  createBtnElement.style.background = 'var(--glass-bg)';
-  createBtnElement.style.border = '1px solid var(--glass-border)';
-  createBtnElement.style.color = 'var(--text-main)';
-  createBtnElement.style.fontWeight = '600';
+  // 设置平衡的背景透明度和流体效果
+  dialogContent.style.backgroundColor = 'rgba(35, 35, 35, 0.9)';
+  dialogContent.style.border = '1px solid rgba(255, 255, 255, 0.15)';
+  dialogContent.style.backdropFilter = 'blur(10px)';
+  dialogContent.style.webkitBackdropFilter = 'blur(10px)';
   
   // 显示对话框并设置焦点
   document.body.appendChild(dialog);
