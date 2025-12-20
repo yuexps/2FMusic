@@ -168,23 +168,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (ui.scaleValue) ui.scaleValue.innerText = '自动';
     }
 
-    let rafId = null;
+    // 拖动过程中只更新滑块视觉效果，不应用缩放
     ui.scaleInput.addEventListener('input', (e) => {
       const val = e.target.value;
-
-      // Update visual immediately
+      // 只更新滑块视觉效果
       updateLabel(val);
-
-      // Throttle heavy layout updates
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        document.documentElement.style.setProperty('--ui-scale', val);
-      });
     });
 
+    // 用户放下拖动条时应用缩放并保存设置
     ui.scaleInput.addEventListener('change', (e) => {
-      // Save only on release/commit
-      localStorage.setItem('2fmusic_ui_scale', e.target.value);
+      const val = e.target.value;
+      // 应用缩放效果
+      document.documentElement.style.setProperty('--ui-scale', val);
+      // 保存到本地存储
+      localStorage.setItem('2fmusic_ui_scale', val);
     });
 
     ui.scaleReset?.addEventListener('click', () => {
