@@ -16,6 +16,11 @@ export const state = {
   savedState: JSON.parse(localStorage.getItem('2fmusic_state') || '{}'),
   currentTab: JSON.parse(localStorage.getItem('2fmusic_state') || '{}').tab || 'local',
   selectedPlaylistId: JSON.parse(localStorage.getItem('2fmusic_state') || '{}').selectedPlaylistId || null,
+  // 收藏夹缓存
+  cachedPlaylists: JSON.parse(localStorage.getItem('2fmusic_cached_playlists') || '[]'),
+  cachedPlaylistsTime: parseInt(localStorage.getItem('2fmusic_cached_playlists_time') || '0'),
+  // 收藏夹歌曲缓存，key为playlistId，value为歌曲ID数组
+  cachedPlaylistSongs: JSON.parse(localStorage.getItem('2fmusic_cached_playlist_songs') || '{}'),
   neteaseResults: [],
   neteaseRecommendations: [],
   neteaseResultSource: 'recommend',
@@ -35,6 +40,20 @@ export const state = {
   currentConfirmAction: null,
   libraryVersion: 0,
 };
+
+// 保存收藏夹缓存
+export function saveCachedPlaylists(playlists) {
+  state.cachedPlaylists = playlists;
+  state.cachedPlaylistsTime = Date.now();
+  localStorage.setItem('2fmusic_cached_playlists', JSON.stringify(playlists));
+  localStorage.setItem('2fmusic_cached_playlists_time', state.cachedPlaylistsTime.toString());
+}
+
+// 保存收藏夹歌曲缓存
+export function saveCachedPlaylistSongs(playlistId, songs) {
+  state.cachedPlaylistSongs[playlistId] = songs;
+  localStorage.setItem('2fmusic_cached_playlist_songs', JSON.stringify(state.cachedPlaylistSongs));
+}
 
 export function persistState(audio) {
   const { playQueue, currentTrackIndex, playMode, currentTab, selectedPlaylistId } = state;

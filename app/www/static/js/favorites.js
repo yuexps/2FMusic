@@ -1,38 +1,18 @@
-import { state, saveFavorites } from './state.js';
+import { state, saveFavorites, saveCachedPlaylists, saveCachedPlaylistSongs } from './state.js';
 import { ui } from './ui.js';
 import { api } from './api.js';
 import { showToast, updateDetailFavButton, extractColorFromImage } from './utils.js';
 import { renderPlaylist } from './player.js';
 
-// 收藏夹列表缓存
-let playlistCache = null;
-let playlistCacheTime = 0;
-const CACHE_DURATION = 30000; // 30秒缓存
-
-// 获取收藏夹列表（带缓存）
-export async function getPlaylistsWithCache(forceRefresh = false) {
-  const now = Date.now();
-  if (!forceRefresh && playlistCache && (now - playlistCacheTime) < CACHE_DURATION) {
-    return playlistCache;
-  }
-  
-  try {
-    const res = await api.favoritePlaylists.list();
-    if (res.success && res.data) {
-      playlistCache = res;
-      playlistCacheTime = now;
-      return res;
-    }
-  } catch (e) {
-    console.error('获取收藏夹列表失败:', e);
-  }
-  return null;
-}
+// 旧的缓存机制已替换为state.js中的持久化缓存
 
 // 清除收藏夹列表缓存
 export function clearPlaylistCache() {
-  playlistCache = null;
-  playlistCacheTime = 0;
+  // 清除state中的收藏夹缓存
+  saveCachedPlaylists([]);
+  // 清除所有收藏夹歌曲缓存
+  state.cachedPlaylistSongs = {};
+  localStorage.setItem('2fmusic_cached_playlist_songs', JSON.stringify({}));
 }
 
 // 加载收藏夹筛选列表
@@ -40,13 +20,23 @@ export async function loadPlaylistFilter() {
   if (!ui.playlistFilter) return;
   
   try {
-    const res = await getPlaylistsWithCache();
-    if (res && res.data) {
+    // 优先使用本地缓存数据
+    let playlists = state.cachedPlaylists;
+    
+    // 如果缓存中没有数据或数据为空，从API获取
+    if (playlists.length === 0) {
+      const res = await api.favoritePlaylists.list();
+      if (res && res.data) {
+        playlists = res.data;
+      }
+    }
+    
+    if (playlists.length > 0) {
       // 去重处理
       const uniquePlaylists = [];
       const seenIds = new Set();
       
-      res.data.forEach(playlist => {
+      playlists.forEach(playlist => {
         if (!seenIds.has(playlist.id)) {
           seenIds.add(playlist.id);
           uniquePlaylists.push(playlist);
@@ -237,8 +227,29 @@ export async function addToSelectedPlaylist(song, playlistId, btnEl, dialog) {
   if (btnEl) { btnEl.classList.add('active'); btnEl.innerHTML = '<i class="fas fa-heart"></i>'; }
   try { 
     await api.favorites.add(song.id, playlistId); 
-    // 清除收藏夹列表缓存以获取最新数据
+    
+    // 清除旧的缓存
     clearPlaylistCache();
+    
+    // 更新本地缓存：立即更新收藏夹歌曲列表，实现乐观UI
+    // 1. 更新收藏夹列表中的歌曲数量
+    const updatedPlaylists = state.cachedPlaylists.map(playlist => {
+      if (String(playlist.id) === String(playlistId)) {
+        return {
+          ...playlist,
+          song_count: (playlist.song_count || 0) + 1
+        };
+      }
+      return playlist;
+    });
+    saveCachedPlaylists(updatedPlaylists);
+    
+    // 2. 更新收藏夹歌曲列表
+    const currentSongs = state.cachedPlaylistSongs[playlistId] || [];
+    if (!currentSongs.includes(song.id)) {
+      currentSongs.push(song.id);
+      saveCachedPlaylistSongs(playlistId, currentSongs);
+    }
   } catch (e) { 
     console.error(e); 
     // 回滚 UI

@@ -1,11 +1,11 @@
-import { state, persistState, saveFavorites, savePlaylist } from './state.js';
+import { state, persistState, saveFavorites, savePlaylist, saveCachedPlaylists, saveCachedPlaylistSongs } from './state.js';
 import { ui } from './ui.js';
 import { api } from './api.js';
 import { showToast, showConfirmDialog, hideProgressToast, updateDetailFavButton, formatTime, renderNoLyrics, updateSliderFill, flyToElement, throttle, extractColorFromImage } from './utils.js';
 import { startScanPolling, loadMountPoints } from './mounts.js';
-import { showPlaylistSelectDialog, loadPlaylistFilter, handlePlaylistFilterChange, showCreatePlaylistDialog, getPlaylistsWithCache, clearPlaylistCache } from './favorites.js';
+import { showPlaylistSelectDialog, loadPlaylistFilter, handlePlaylistFilterChange, showCreatePlaylistDialog, clearPlaylistCache } from './favorites.js';
 
-// 收藏功能相关函数已移至 favorites.js
+// 收藏功能相关函数已部分移至 favorites.js
 
 // 收藏 (Server Sync)
 async function toggleFavorite(song, btnEl) {
@@ -332,9 +332,6 @@ export function renderPlaylist() {
 
 // 渲染收藏主页：显示收藏夹文件夹
 function renderFavoritesHome() {
-  // 清空容器
-  ui.songContainer.innerHTML = '';
-  
   // 恢复列表标题为"我的收藏列表"
   const listTitle = document.getElementById('list-title');
   if (listTitle) {
@@ -369,45 +366,34 @@ function renderFavoritesHome() {
   // 为收藏夹页面设置合适的网格布局
   ui.songContainer.className = 'song-list favorites-grid';
   
-  // 获取收藏夹列表（使用缓存）
-  return getPlaylistsWithCache().then(async res => {
-    if (res && res.data) {
-      console.log('API返回的收藏夹数据:', res.data);
-      const playlists = res.data;
+  // 1. 优先使用本地缓存数据渲染
+  if (state.cachedPlaylists.length > 0) {
+    const frag = document.createDocumentFragment();
+    
+    // 并行创建所有收藏夹卡片
+    const playlistPromises = state.cachedPlaylists.map(async (playlist) => {
+      // 创建收藏夹文件夹卡片
+      const folderCard = document.createElement('div');
+      folderCard.className = 'folder-card';
+      folderCard.dataset.playlistId = playlist.id;
       
-      // 去重处理
-      const uniquePlaylists = [];
-      const seenIds = new Set();
+      // 默认封面
+      let folderCover = '/static/images/ICON_256.PNG';
       
-      playlists.forEach(playlist => {
-        if (!seenIds.has(playlist.id)) {
-          seenIds.add(playlist.id);
-          uniquePlaylists.push(playlist);
-        } else {
-          console.log('发现重复收藏夹:', playlist);
-        }
-      });
-      
-      if (uniquePlaylists.length === 0) {
-        ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">暂无收藏夹</div>`;
-        return;
-      }
-      
-      const frag = document.createDocumentFragment();
-      
-      // 并行获取所有收藏夹的歌曲列表
-      const playlistPromises = uniquePlaylists.map(async (playlist) => {
-        // 创建收藏夹文件夹卡片
-        const folderCard = document.createElement('div');
-        folderCard.className = 'folder-card';
-        folderCard.dataset.playlistId = playlist.id;
-        
-        // 默认封面
-        let folderCover = '/static/images/ICON_256.PNG';
-        
-        // 如果收藏夹有歌曲，尝试获取第一首歌曲的封面
-        if (playlist.song_count > 0) {
-          try {
+      // 如果收藏夹有歌曲，尝试获取第一首歌曲的封面
+      if (playlist.song_count > 0) {
+        try {
+          // 优先使用缓存的歌曲列表
+          const cachedSongs = state.cachedPlaylistSongs[playlist.id] || [];
+          if (cachedSongs.length > 0) {
+            // 从完整歌曲列表中找到对应的歌曲
+            const firstSong = state.fullPlaylist.find(song => song.id === cachedSongs[0]);
+            // 如果找到歌曲且有封面，使用该封面
+            if (firstSong && firstSong.cover) {
+              folderCover = firstSong.cover;
+            }
+          } else {
+            // 缓存中没有歌曲列表，尝试从API获取
             const songsRes = await api.favoritePlaylists.getSongs(playlist.id);
             if (songsRes.success && songsRes.data && songsRes.data.length > 0) {
               // 获取第一首歌曲的ID
@@ -419,54 +405,253 @@ function renderFavoritesHome() {
                 folderCover = firstSong.cover;
               }
             }
-          } catch (err) {
-            console.error(`获取收藏夹 ${playlist.name} 的歌曲列表失败:`, err);
           }
+        } catch (err) {
+          console.error(`获取收藏夹 ${playlist.name} 的歌曲列表失败:`, err);
         }
-        
-        folderCard.innerHTML = `
-          <div class="folder-header">
-            <img src="${folderCover}" loading="lazy" class="folder-cover">
-            <div class="folder-info">
-              <div class="folder-name">${playlist.name} </div>
-              <div class="folder-count">${playlist.song_count || 0} 首歌曲</div>
-            </div>
-            <div class="folder-arrow">
-              <i class="fas fa-arrow-right"></i>
-            </div>
+      }
+      
+      folderCard.innerHTML = `
+        <div class="folder-header">
+          <img src="${folderCover}" loading="lazy" class="folder-cover">
+          <div class="folder-info">
+            <div class="folder-name">${playlist.name} </div>
+            <div class="folder-count">${playlist.song_count || 0} 首歌曲</div>
           </div>
-        `;
-        
-        // 添加点击事件，进入收藏夹详情页
-        folderCard.addEventListener('click', () => {
-          state.selectedPlaylistId = playlist.id;
-          renderPlaylist();
-        });
-        
-        return folderCard;
+          <div class="folder-arrow">
+            <i class="fas fa-arrow-right"></i>
+          </div>
+        </div>
+      `;
+      
+      // 添加点击事件，进入收藏夹详情页
+      folderCard.addEventListener('click', () => {
+        state.selectedPlaylistId = playlist.id;
+        renderPlaylist();
       });
       
-      // 等待所有收藏夹卡片创建完成
-      const folderCards = await Promise.all(playlistPromises);
-      // 将所有卡片添加到文档片段
+      return folderCard;
+    });
+    
+    // 等待所有收藏夹卡片创建完成
+    Promise.all(playlistPromises).then(folderCards => {
+      // 清空容器并添加卡片
+      ui.songContainer.innerHTML = '';
       folderCards.forEach(card => frag.appendChild(card));
-      // 将文档片段添加到容器
       ui.songContainer.appendChild(frag);
+    });
+  } else {
+    // 缓存中没有数据，显示加载状态
+    ui.songContainer.innerHTML = '<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">加载中...</div>';
+  }
+  
+  // 2. 后台静默获取最新数据并更新
+  return api.favoritePlaylists.list().then(async res => {
+    if (res && res.data) {
+      // 去重处理
+      const uniquePlaylists = [];
+      const seenIds = new Set();
+      
+      res.data.forEach(playlist => {
+        if (!seenIds.has(playlist.id)) {
+          seenIds.add(playlist.id);
+          uniquePlaylists.push(playlist);
+        }
+      });
+      
+      // 更新缓存
+      saveCachedPlaylists(uniquePlaylists);
+      
+      // 如果缓存数据与当前显示的数据不同，重新渲染
+      if (JSON.stringify(uniquePlaylists) !== JSON.stringify(state.cachedPlaylists)) {
+        // 重新渲染页面以显示最新数据
+        renderPlaylist();
+      }
     }
   }).catch(err => {
     console.error('加载收藏夹列表失败:', err);
-    ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">加载收藏夹失败</div>`;
+    // 如果缓存中没有数据且加载失败，显示错误信息
+    if (state.cachedPlaylists.length === 0) {
+      ui.songContainer.innerHTML = '<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">加载收藏夹失败</div>';
+    }
   });
 }
 
 // 渲染收藏夹详情页：显示歌曲并提供排序筛选
 function renderPlaylistDetails(playlistId) {
-  // 先显示加载提示，避免页面空白
-  ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">加载中...</div>`;
+  // 1. 优先使用本地缓存数据渲染
+  const cachedPlaylist = state.cachedPlaylists.find(p => String(p.id) === String(playlistId));
+  const cachedSongs = state.cachedPlaylistSongs[playlistId] || [];
   
-  // 先获取收藏夹详情，包括名称
-  return api.favoritePlaylists.list().then(playlistsRes => {
-    if (playlistsRes.success && playlistsRes.data) {
+  // 如果有缓存的收藏夹信息
+  if (cachedPlaylist) {
+    const playlistName = cachedPlaylist.name;
+    
+    // 恢复普通歌曲网格布局（小卡片）
+    ui.songContainer.className = 'song-list';
+    
+    // 修改现有的列表标题为收藏夹名称
+    const listTitle = document.getElementById('list-title');
+    if (listTitle) {
+      listTitle.textContent = playlistName;
+    }
+    
+    // 修改移动端顶栏标题为收藏夹名称
+    const mobilePageTitle = document.getElementById('mobile-page-title');
+    if (mobilePageTitle) {
+      mobilePageTitle.textContent = playlistName;
+    }
+    
+    // 总是移除可能已存在的返回按钮和菜单按钮，确保创建新的
+    let existingBackBtn = document.querySelector('.back-to-favorites-btn');
+    while (existingBackBtn) {
+      existingBackBtn.remove();
+      existingBackBtn = document.querySelector('.back-to-favorites-btn');
+    }
+    
+    let existingMenuBtn = document.querySelector('.playlist-menu-btn');
+    while (existingMenuBtn) {
+      existingMenuBtn.remove();
+      existingMenuBtn = document.querySelector('.playlist-menu-btn');
+    }
+    
+    // 创建返回按钮（只在收藏夹详情页显示）
+    const backBtn = document.createElement('button');
+    backBtn.className = 'back-to-favorites-btn mobile-back-btn';
+    backBtn.title = '返回我的收藏';
+    
+    // 检查是否为移动端
+    const isMobile = window.innerWidth <= 768;
+    
+    if (isMobile) {
+      // 在移动端，将返回按钮添加到顶栏右侧
+      backBtn.innerHTML = `<i class="fas fa-arrow-left"></i>`;
+      backBtn.style.fontSize = '1.5rem';
+      backBtn.style.background = 'none';
+      backBtn.style.border = 'none';
+      backBtn.style.color = 'white';
+      backBtn.style.padding = '0.5rem';
+      backBtn.style.cursor = 'pointer';
+      backBtn.style.position = 'absolute';
+      backBtn.style.right = '1rem';
+      backBtn.style.top = '50%';
+      backBtn.style.transform = 'translateY(-50%)';
+      
+      // 找到顶栏
+      const topBar = document.querySelector('.top-bar');
+      if (topBar) {
+        // 将返回按钮添加到顶栏
+        topBar.appendChild(backBtn);
+      }
+    } else {
+      // 在桌面端，将返回按钮添加到content-header容器内，在标题之前
+      backBtn.innerHTML = `<i class="fas fa-arrow-left"></i> 返回`;
+      const contentHeader = document.querySelector('.content-header');
+      if (contentHeader && listTitle) {
+        // 确保返回按钮插入到正确位置
+        contentHeader.insertBefore(backBtn, listTitle);
+      } else if (contentHeader) {
+        // 如果找不到标题元素，就直接添加到contentHeader末尾
+        contentHeader.appendChild(backBtn);
+      }
+    }
+    
+    // 添加返回按钮事件监听
+    backBtn.addEventListener('click', () => {
+      // 清除选中的收藏夹
+      state.selectedPlaylistId = null;
+      // 重新渲染收藏主页
+      renderPlaylist();
+      
+      // 移除所有移动端返回按钮
+      const mobileBackBtns = document.querySelectorAll('.mobile-back-btn');
+      mobileBackBtns.forEach(btn => btn.remove());
+    });
+    
+    // 隐藏添加收藏夹按钮：在收藏夹详情页隐藏
+    const playlistFilterContainer = document.getElementById('playlist-filter-container');
+    if (playlistFilterContainer) {
+      playlistFilterContainer.classList.add('hidden');
+    }
+    
+    // 添加三点菜单按钮（只在收藏夹详情页显示）
+    const menuBtn = document.createElement('button');
+    menuBtn.className = 'playlist-menu-btn';
+    menuBtn.title = '更多操作';
+    menuBtn.innerHTML = `<i class="fas fa-ellipsis-h"></i>`;
+    
+    // 获取header-actions容器
+    const headerActions = document.querySelector('.header-actions');
+    // 将菜单按钮添加到header-actions容器的最前面
+    if (headerActions) {
+      headerActions.insertBefore(menuBtn, headerActions.firstChild);
+    }
+    
+    // 添加菜单按钮事件监听
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // 显示删除确认对话框
+      showConfirmDialog(
+        '确认删除',
+        `确定要删除收藏夹 "${playlistName}" 吗？`,
+        () => {
+          // 调用API删除收藏夹
+          api.favoritePlaylists.delete(playlistId)
+            .then(res => {
+              if (res.success) {
+                // 删除成功，清除收藏夹缓存，然后返回收藏主页
+                clearPlaylistCache();
+                // 同时清除本地缓存
+                const updatedPlaylists = state.cachedPlaylists.filter(p => String(p.id) !== String(playlistId));
+                saveCachedPlaylists(updatedPlaylists);
+                delete state.cachedPlaylistSongs[playlistId];
+                saveCachedPlaylistSongs(playlistId, []);
+                
+                state.selectedPlaylistId = null;
+                renderPlaylist();
+                showToast('收藏夹删除成功', 'success');
+              } else {
+                showToast('删除收藏夹失败: ' + (res.error || '未知错误'), 'error');
+              }
+            })
+            .catch(err => {
+              console.error('删除收藏夹失败:', err);
+              showToast('删除收藏夹失败', 'error');
+            });
+        }
+      );
+    });
+    
+    // 如果有缓存的歌曲列表
+    if (cachedSongs.length > 0) {
+      // 从完整歌曲列表中找到对应的歌曲信息
+      const filteredSongs = state.fullPlaylist.filter(song => 
+        cachedSongs.includes(song.id)
+      );
+      
+      state.displayPlaylist = filteredSongs;
+      
+      if (state.displayPlaylist.length === 0) {
+        ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">该收藏夹暂无歌曲</div>`;
+      } else {
+        // 按当前排序方式渲染歌曲
+        renderPlaylistSongs(filteredSongs);
+      }
+    } else {
+      // 缓存中没有歌曲列表，显示加载状态
+      ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">加载中...</div>`;
+    }
+  } else {
+    // 缓存中没有收藏夹信息，显示加载状态
+    ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">加载中...</div>`;
+  }
+  
+  // 2. 后台静默获取最新数据并更新
+  return Promise.all([
+    api.favoritePlaylists.list(),
+    api.favoritePlaylists.getSongs(playlistId)
+  ]).then(([playlistsRes, songsRes]) => {
+    if (playlistsRes.success && playlistsRes.data && songsRes.success && songsRes.data) {
       // 确保ID类型匹配，避免类型不匹配导致的查找失败
       const playlist = playlistsRes.data.find(p => String(p.id) === String(playlistId));
       
@@ -476,170 +661,40 @@ function renderPlaylistDetails(playlistId) {
         state.selectedPlaylistId = null;
         // 重新渲染收藏主页
         renderPlaylist();
-        // 返回空的Promise，结束当前函数执行
-        return Promise.resolve();
+        return;
       }
       
-      const playlistName = playlist.name;
-      
-      // 恢复普通歌曲网格布局（小卡片）
-      ui.songContainer.className = 'song-list';
-      
-      // 修改现有的列表标题为收藏夹名称
-      const listTitle = document.getElementById('list-title');
-      if (listTitle) {
-        listTitle.textContent = playlistName;
-      }
-      
-      // 修改移动端顶栏标题为收藏夹名称
-      const mobilePageTitle = document.getElementById('mobile-page-title');
-      if (mobilePageTitle) {
-        mobilePageTitle.textContent = playlistName;
-      }
-      
-      // 总是移除可能已存在的返回按钮和菜单按钮，确保创建新的
-      let existingBackBtn = document.querySelector('.back-to-favorites-btn');
-      while (existingBackBtn) {
-        existingBackBtn.remove();
-        existingBackBtn = document.querySelector('.back-to-favorites-btn');
-      }
-      
-      let existingMenuBtn = document.querySelector('.playlist-menu-btn');
-      while (existingMenuBtn) {
-        existingMenuBtn.remove();
-        existingMenuBtn = document.querySelector('.playlist-menu-btn');
-      }
-      
-      // 创建返回按钮（只在收藏夹详情页显示）
-      const backBtn = document.createElement('button');
-      backBtn.className = 'back-to-favorites-btn mobile-back-btn';
-      backBtn.title = '返回我的收藏';
-      
-      // 检查是否为移动端
-      const isMobile = window.innerWidth <= 768;
-      
-      if (isMobile) {
-        // 在移动端，将返回按钮添加到顶栏右侧
-        backBtn.innerHTML = `<i class="fas fa-arrow-left"></i>`;
-        backBtn.style.fontSize = '1.5rem';
-        backBtn.style.background = 'none';
-        backBtn.style.border = 'none';
-        backBtn.style.color = 'white';
-        backBtn.style.padding = '0.5rem';
-        backBtn.style.cursor = 'pointer';
-        backBtn.style.position = 'absolute';
-        backBtn.style.right = '1rem';
-        backBtn.style.top = '50%';
-        backBtn.style.transform = 'translateY(-50%)';
-        
-        // 找到顶栏
-        const topBar = document.querySelector('.top-bar');
-        if (topBar) {
-          // 将返回按钮添加到顶栏
-          topBar.appendChild(backBtn);
-        }
-      } else {
-        // 在桌面端，将返回按钮添加到content-header容器内，在标题之前
-        backBtn.innerHTML = `<i class="fas fa-arrow-left"></i> 返回`;
-        const contentHeader = document.querySelector('.content-header');
-        if (contentHeader && listTitle) {
-          // 确保返回按钮插入到正确位置
-          contentHeader.insertBefore(backBtn, listTitle);
-        } else if (contentHeader) {
-          // 如果找不到标题元素，就直接添加到contentHeader末尾
-          contentHeader.appendChild(backBtn);
-        }
-      }
-      
-      // 添加返回按钮事件监听
-      backBtn.addEventListener('click', () => {
-        // 清除选中的收藏夹
-        state.selectedPlaylistId = null;
-        // 重新渲染收藏主页
-        renderPlaylist();
-        
-        // 移除所有移动端返回按钮
-        const mobileBackBtns = document.querySelectorAll('.mobile-back-btn');
-        mobileBackBtns.forEach(btn => btn.remove());
-      });
-      
-      // 隐藏添加收藏夹按钮：在收藏夹详情页隐藏
-      const playlistFilterContainer = document.getElementById('playlist-filter-container');
-      if (playlistFilterContainer) {
-        playlistFilterContainer.classList.add('hidden');
-      }
-      
-      // 添加三点菜单按钮（只在收藏夹详情页显示）
-      const menuBtn = document.createElement('button');
-      menuBtn.className = 'playlist-menu-btn';
-      menuBtn.title = '更多操作';
-      menuBtn.innerHTML = `<i class="fas fa-ellipsis-h"></i>`;
-      
-      // 获取header-actions容器
-      const headerActions = document.querySelector('.header-actions');
-      // 将菜单按钮添加到header-actions容器的最前面
-      if (headerActions) {
-        headerActions.insertBefore(menuBtn, headerActions.firstChild);
-      }
-      
-      // 添加菜单按钮事件监听
-      menuBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        // 显示删除确认对话框
-        showConfirmDialog(
-          '确认删除',
-          `确定要删除收藏夹 "${playlistName}" 吗？`,
-          () => {
-            // 调用API删除收藏夹
-            api.favoritePlaylists.delete(playlistId)
-              .then(res => {
-                if (res.success) {
-                  // 删除成功，清除收藏夹缓存，然后返回收藏主页
-                  clearPlaylistCache();
-                  state.selectedPlaylistId = null;
-                  renderPlaylist();
-                  showToast('收藏夹删除成功', 'success');
-                } else {
-                  showToast('删除收藏夹失败: ' + (res.error || '未知错误'), 'error');
-                }
-              })
-              .catch(err => {
-                console.error('删除收藏夹失败:', err);
-                showToast('删除收藏夹失败', 'error');
-              });
-          }
-        );
-      });
-      
-      // 获取收藏夹歌曲列表
-      return api.favoritePlaylists.getSongs(playlistId);
-    } else {
-      throw new Error('获取收藏夹列表失败');
-    }
-  }).then(songsRes => {
-    if (songsRes && songsRes.success && songsRes.data) {
       const playlistSongs = songsRes.data;
+      
+      // 更新缓存
+      const updatedPlaylists = state.cachedPlaylists.filter(p => String(p.id) !== String(playlistId));
+      updatedPlaylists.push(playlist);
+      saveCachedPlaylists(updatedPlaylists);
+      saveCachedPlaylistSongs(playlistId, playlistSongs);
       
       // 从完整歌曲列表中找到对应的歌曲信息
       const filteredSongs = state.fullPlaylist.filter(song => 
         playlistSongs.includes(song.id)
       );
       
-      state.displayPlaylist = filteredSongs;
-      
-      if (state.displayPlaylist.length === 0) {
-        ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">该收藏夹暂无歌曲</div>`;
-        return;
+      // 如果数据有变化，重新渲染
+      if (JSON.stringify(filteredSongs.map(s => s.id)) !== JSON.stringify(state.displayPlaylist.map(s => s.id))) {
+        state.displayPlaylist = filteredSongs;
+        
+        if (state.displayPlaylist.length === 0) {
+          ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">该收藏夹暂无歌曲</div>`;
+        } else {
+          // 按当前排序方式渲染歌曲
+          renderPlaylistSongs(filteredSongs);
+        }
       }
-      
-      // 按当前排序方式渲染歌曲
-      renderPlaylistSongs(filteredSongs);
-    } else {
-      throw new Error('获取收藏夹歌曲列表失败');
     }
   }).catch(err => {
-    console.error('加载收藏夹歌曲失败:', err);
-    ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">加载收藏夹歌曲失败: ${err.message}</div>`;
+    console.error('加载收藏夹详情失败:', err);
+    // 如果缓存中没有数据且加载失败，显示错误信息
+    if (!cachedPlaylist && cachedSongs.length === 0) {
+      ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">加载收藏夹失败: ${err.message}</div>`;
+    }
   });
 }
 
