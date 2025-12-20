@@ -137,7 +137,6 @@ function addDownloadTask(song, status = 'queued') {
     status
   };
   state.neteaseDownloadTasks.unshift(task);
-  state.neteaseDownloadTasks.unshift(task);
 
   // Smart List Management: Allow larger history but clean up old completed tasks
   const MAX_HISTORY = 500;

@@ -884,12 +884,14 @@ function loadTrackInfo(track) {
   if (!track) return;
   ['current-title', 'fp-title'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = track.title; });
   ['current-artist', 'fp-artist'].forEach(id => { const el = document.getElementById(id); if (el) el.innerText = track.artist; });
-  const coverSrc = track.cover || '/static/images/ICON_256.PNG';
+  // 更健壮的封面处理，确保始终有封面显示
+  const coverSrc = track.cover && track.cover.trim() !== '' ? track.cover : '/static/images/ICON_256.PNG';
   ['current-cover', 'fp-cover'].forEach(id => { const el = document.getElementById(id); if (el) el.src = coverSrc; });
   updateDetailFavButton(state.favorites.has(track.id));
   document.title = `${track.title} - 2FMusic`;
   if (ui.lyricsContainer) ui.lyricsContainer.innerHTML = '';
-  if (track.lyrics) parseAndRenderLyrics(track.lyrics); else renderNoLyrics('正在搜索歌词...');
+  // 即使track.lyrics存在，也确保它不是空字符串
+  if (track.lyrics && track.lyrics.trim() !== '') parseAndRenderLyrics(track.lyrics); else renderNoLyrics('正在搜索歌词...');
   if ('mediaSession' in navigator) { navigator.mediaSession.metadata = new MediaMetadata({ title: track.title, artist: track.artist, artwork: [{ src: coverSrc, sizes: '512x512', type: 'image/jpeg' }] }); }
   if (ui.fpMenuBtn) { ui.fpMenuBtn.style.display = track.isExternal ? 'none' : 'block'; }
 }
@@ -1062,13 +1064,32 @@ async function checkAndFetchMetadata(track, fetchId) {
   const query = `?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}&filename=${encodeURIComponent(track.filename)}`;
 
   const fetchLyrics = async () => {
-    if (track.lyrics) return;
+    // 即使track.lyrics存在，也要确保它有效
+    if (track.lyrics && track.lyrics.trim() !== '') {
+      // 重新解析一次，确保歌词能正确显示
+      parseAndRenderLyrics(track.lyrics);
+      return;
+    }
     try {
       const d = await api.library.lyrics(query);
       if (fetchId !== state.currentFetchId) return;
-      if (d.success && d.lyrics) { track.lyrics = d.lyrics; savePlaylist(); parseAndRenderLyrics(d.lyrics); }
-      else { renderNoLyrics('暂无歌词'); }
-    } catch (e) { if (fetchId === state.currentFetchId) renderNoLyrics('歌词加载失败'); }
+      if (d.success && d.lyrics && d.lyrics.trim() !== '') {
+        track.lyrics = d.lyrics;
+        savePlaylist();
+        parseAndRenderLyrics(d.lyrics);
+      } else {
+        renderNoLyrics('暂无歌词');
+      }
+    } catch (e) { 
+      if (fetchId === state.currentFetchId) {
+        // 如果API请求失败，但本地可能有缓存的无效歌词，尝试重新解析
+        if (track.lyrics && track.lyrics.trim() !== '') {
+          parseAndRenderLyrics(track.lyrics);
+        } else {
+          renderNoLyrics('歌词加载失败');
+        }
+      }
+    }
   };
 
   const fetchCover = async () => {
@@ -1090,9 +1111,39 @@ async function checkAndFetchMetadata(track, fetchId) {
 
 function parseAndRenderLyrics(lrc) {
   state.lyricsData = [];
-  const lines = lrc.split('\n'); const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
-  lines.forEach(line => { const match = timeRegex.exec(line); if (match) { const min = parseInt(match[1]); const sec = parseInt(match[2]); const ms = parseInt(match[3]); const time = min * 60 + sec + (ms / (match[3].length === 3 ? 1000 : 100)); const text = line.replace(timeRegex, '').trim(); if (text) state.lyricsData.push({ time, text }); } });
-  if (state.lyricsData.length === 0) { renderNoLyrics('纯音乐'); return; }
+  if (!lrc || lrc.trim() === '') { renderNoLyrics('暂无歌词'); return; }
+  
+  const lines = lrc.split('\n'); 
+  // 更宽松的歌词解析逻辑，支持更多格式的时间戳
+  const timeRegex = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\]/;
+  
+  lines.forEach(line => {
+    line = line.trim();
+    if (!line) return;
+    
+    const match = timeRegex.exec(line);
+    if (match) {
+      const min = parseInt(match[1]);
+      const sec = parseInt(match[2]);
+      const ms = match[3] ? parseInt(match[3]) : 0;
+      const time = min * 60 + sec + (ms / (match[3] && match[3].length === 3 ? 1000 : 100));
+      const text = line.replace(timeRegex, '').trim();
+      if (text) state.lyricsData.push({ time, text });
+    } else {
+      // 如果没有时间戳但有文本，也作为一行歌词添加
+      state.lyricsData.push({ time: 0, text: line });
+    }
+  });
+  
+  // 如果解析后还是没有歌词行，尝试直接显示原始歌词
+  if (state.lyricsData.length === 0) {
+    // 显示原始歌词文本
+    if (ui.lyricsContainer) {
+      ui.lyricsContainer.classList.remove('no-lyrics');
+      ui.lyricsContainer.innerHTML = `<p class="lyric-line active">${lrc.replace(/\n/g, '<br>')}</p>`;
+    }
+    return;
+  }
 
   if (ui.lyricsContainer) {
     ui.lyricsContainer.classList.remove('no-lyrics');
