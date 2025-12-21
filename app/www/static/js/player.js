@@ -16,11 +16,11 @@ async function toggleFavorite(song, btnEl) {
     // 乐观 UI 更新
     state.favorites.delete(song.id);
     if (btnEl) { btnEl.classList.remove('active'); btnEl.innerHTML = '<i class="far fa-heart"></i>'; }
-    try { 
+    try {
       if (state.selectedPlaylistId) {
         // 如果在收藏夹详情页，只从当前收藏夹中移除
         await api.favorites.remove(song.id, state.selectedPlaylistId);
-        
+
         // 更新当前收藏夹的缓存
         try {
           const songsRes = await api.favoritePlaylists.getSongs(state.selectedPlaylistId);
@@ -36,12 +36,12 @@ async function toggleFavorite(song, btnEl) {
           // 获取所有收藏夹列表
           const playlistsRes = await api.favoritePlaylists.list();
           const playlistIds = playlistsRes.data ? playlistsRes.data.map(p => p.id) : [];
-          
+
           // 确保包含默认收藏夹
           if (!playlistIds.includes('default')) {
             playlistIds.push('default');
           }
-          
+
           // 从每个收藏夹中移除歌曲
           for (const playlistId of playlistIds) {
             try {
@@ -66,7 +66,7 @@ async function toggleFavorite(song, btnEl) {
         // 获取所有收藏夹的最新歌曲列表并更新缓存
         const playlistsRes = await api.favoritePlaylists.list();
         const playlists = playlistsRes.data || [];
-        
+
         // 更新每个收藏夹的歌曲列表缓存
         for (const playlist of playlists) {
           try {
@@ -78,7 +78,7 @@ async function toggleFavorite(song, btnEl) {
             console.error(`获取收藏夹 ${playlist.id} 歌曲列表失败:`, e);
           }
         }
-        
+
         // 处理默认收藏夹
         try {
           const defaultSongsRes = await api.favoritePlaylists.getSongs('default');
@@ -88,7 +88,7 @@ async function toggleFavorite(song, btnEl) {
         } catch (e) {
           console.error('获取默认收藏夹歌曲列表失败:', e);
         }
-        
+
         // 更新收藏夹列表缓存
         saveCachedPlaylists(playlists);
       } catch (e) {
@@ -176,7 +176,7 @@ export async function loadSongs(retry = true, initPlayer = true) {
 
       state.fullPlaylist = newList;
       savePlaylist(); // 更新缓存
-      
+
       // 更新排序按钮显示
       updateSortButton();
 
@@ -295,10 +295,10 @@ let isRendering = false;
 // 更新排序按钮显示
 function updateSortButton() {
   if (!ui.btnSort) return;
-  
+
   // 获取当前排序类型的文本
   let sortText = '标题';
-  switch(state.currentSort) {
+  switch (state.currentSort) {
     case 'title':
       sortText = '标题';
       break;
@@ -312,12 +312,12 @@ function updateSortButton() {
       sortText = '时间';
       break;
   }
-  
+
   // 更新按钮文本
   ui.btnSort.innerHTML = `
     <i class="fas fa-sort"></i> ${sortText}
   `;
-  
+
   // 更新排序选项的活动状态
   document.querySelectorAll('.sort-option').forEach(option => {
     option.classList.remove('active');
@@ -334,19 +334,19 @@ function updateSortButton() {
 
 export function renderPlaylist() {
   if (!ui.songContainer) return;
-  
+
   // 如果已经在渲染中，直接返回
   if (isRendering) return;
-  
+
   isRendering = true;
-  
+
   // 清空容器
   ui.songContainer.innerHTML = '';
-  
+
   if (state.currentTab === 'fav') {
     // 检查是否有选中的收藏夹（使用状态变量替代筛选器）
     const selectedPlaylistId = state.selectedPlaylistId;
-    
+
     if (!selectedPlaylistId) {
       // 收藏主页：显示收藏夹文件夹形式
       renderFavoritesHome().finally(() => {
@@ -362,7 +362,7 @@ export function renderPlaylist() {
     // 非收藏页，保持原有列表显示
     // 重置容器类名为默认的song-list，避免收藏页样式影响
     ui.songContainer.className = 'song-list';
-    
+
     // 恢复移动端顶栏标题为默认值
     const mobilePageTitle = document.getElementById('mobile-page-title');
     if (mobilePageTitle) {
@@ -381,12 +381,12 @@ export function renderPlaylist() {
     }
     let filteredSongs;
     filteredSongs = [...state.fullPlaylist];
-    
+
     // 应用排序：只在本地音乐页面使用
     if (state.currentTab === 'local') {
       filteredSongs.sort((a, b) => {
         let valueA, valueB;
-        
+
         switch (state.currentSort) {
           case 'title':
             valueA = (a.title || '').toLowerCase();
@@ -408,43 +408,43 @@ export function renderPlaylist() {
             valueA = (a.title || '').toLowerCase();
             valueB = (b.title || '').toLowerCase();
         }
-        
+
         if (valueA < valueB) return state.sortOrder === 'asc' ? -1 : 1;
         if (valueA > valueB) return state.sortOrder === 'asc' ? 1 : -1;
         return 0;
       });
     }
-    
+
     state.displayPlaylist = filteredSongs;
-    
+
     if (state.displayPlaylist.length === 0) {
       ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">暂无歌曲</div>`;
       // 重置渲染标记
       isRendering = false;
       return;
     }
-    
+
     const frag = document.createDocumentFragment();
     state.displayPlaylist.forEach((song, index) => {
       const card = document.createElement('div');
       card.className = 'song-card';
       card.dataset.index = index;
       if (song.isExternal) card.style.border = '1px dashed var(--primary)';
-      
+
       // 使用 ID 判断收藏状态
       const isFav = state.favorites.has(song.id);
-      
+
       let favHtml = `<button class="card-fav-btn ${isFav ? 'active' : ''}" title="收藏"><i class="${isFav ? 'fas' : 'far'} fa-heart"></i></button>`;
       if (song.isExternal) favHtml = '';
       card.innerHTML = `${favHtml}<img src="${song.cover}" loading="lazy"><div class="card-info"><div class="title" title="${song.title}">${song.title}</div><div class="artist">${song.artist}</div></div>`;
-      
+
       card.addEventListener('click', (e) => {
         if (!e.target.closest('.card-fav-btn')) {
           state.playQueue = [...state.displayPlaylist];
           playTrack(index);
         }
       });
-      
+
       if (!song.isExternal) {
         const favBtn = card.querySelector('.card-fav-btn');
         favBtn.addEventListener('click', (e) => {
@@ -455,11 +455,11 @@ export function renderPlaylist() {
       frag.appendChild(card);
     });
     ui.songContainer.appendChild(frag);
-    
+
     // 重置渲染标记
     isRendering = false;
   }
-  
+
   // 当不在收藏夹主页时，确保隐藏添加收藏夹按钮
   if (!(state.currentTab === 'fav' && !state.selectedPlaylistId)) {
     // 隐藏添加收藏夹按钮
@@ -468,7 +468,7 @@ export function renderPlaylist() {
       playlistFilterContainer.classList.add('hidden');
     }
   }
-  
+
   // 当不在收藏夹详情页时，确保移除详情页特有的按钮
   if (!(state.currentTab === 'fav' && state.selectedPlaylistId)) {
     // 移除可能存在的返回按钮和菜单按钮
@@ -477,14 +477,14 @@ export function renderPlaylist() {
       existingBackBtn.remove();
       existingBackBtn = document.querySelector('.back-to-favorites-btn');
     }
-    
+
     let existingMenuBtn = document.querySelector('.playlist-menu-btn');
     while (existingMenuBtn) {
       existingMenuBtn.remove();
       existingMenuBtn = document.querySelector('.playlist-menu-btn');
     }
   }
-  
+
   // 移动端适配：关闭侧边栏，添加轻微延迟避免误触
   if (ui.sidebar && ui.sidebar.classList.contains('open')) {
     setTimeout(() => {
@@ -493,7 +493,7 @@ export function renderPlaylist() {
       }
     }, 200); // 200ms延迟关闭，避免误触
   }
-  
+
   highlightCurrentTrack();
 }
 
@@ -506,57 +506,57 @@ export async function renderFavoritesHome() {
     if (listTitle) {
       listTitle.textContent = '收藏列表';
     }
-    
+
     // 恢复移动端顶栏标题为"我的收藏"
     const mobilePageTitle = document.getElementById('mobile-page-title');
     if (mobilePageTitle) {
       mobilePageTitle.textContent = '我的收藏';
     }
   }
-  
+
   // 总是移除可能已存在的返回按钮和菜单按钮（这些按钮只在收藏夹详情页显示）
   let existingBackBtn = document.querySelector('.back-to-favorites-btn');
   while (existingBackBtn) {
     existingBackBtn.remove();
     existingBackBtn = document.querySelector('.back-to-favorites-btn');
   }
-  
+
   let existingMenuBtn = document.querySelector('.playlist-menu-btn');
   while (existingMenuBtn) {
     existingMenuBtn.remove();
     existingMenuBtn = document.querySelector('.playlist-menu-btn');
   }
-  
+
   // 显示添加收藏夹按钮（只在收藏夹主页显示）
   const playlistFilterContainer = document.getElementById('playlist-filter-container');
   if (playlistFilterContainer) {
     playlistFilterContainer.classList.remove('hidden');
   }
-  
+
   // 为收藏夹页面设置合适的网格布局
   ui.songContainer.className = 'song-list favorites-grid';
-  
+
   // 1. 优先使用本地缓存数据渲染，缓存为空时从服务器获取
   let cachedPlaylists = state.cachedPlaylists || [];
-  
+
   // 如果缓存中没有数据，直接从服务器获取
   if (cachedPlaylists.length === 0) {
     try {
       // 同步从服务器获取数据
       const res = await api.favoritePlaylists.list();
-      
+
       if (res && res.data) {
         // 去重处理
         const uniquePlaylists = [];
         const seenIds = new Set();
-        
+
         res.data.forEach(playlist => {
           if (!seenIds.has(playlist.id)) {
             seenIds.add(playlist.id);
             uniquePlaylists.push(playlist);
           }
         });
-        
+
         // 对收藏夹进行排序：默认收藏夹排第一位，其他按名称排序
         const sortedPlaylists = uniquePlaylists.sort((a, b) => {
           // 默认收藏夹排第一位
@@ -565,7 +565,7 @@ export async function renderFavoritesHome() {
           // 其他收藏夹按名称排序
           return a.name.localeCompare(b.name);
         });
-        
+
         // 更新缓存
         saveCachedPlaylists(sortedPlaylists);
         cachedPlaylists = sortedPlaylists;
@@ -577,10 +577,10 @@ export async function renderFavoritesHome() {
       return;
     }
   }
-  
+
   if (cachedPlaylists.length > 0) {
     const frag = document.createDocumentFragment();
-    
+
     // 对收藏夹进行排序：默认收藏夹排第一位，其他按名称排序
     const sortedPlaylists = [...cachedPlaylists].sort((a, b) => {
       // 默认收藏夹排第一位
@@ -589,17 +589,17 @@ export async function renderFavoritesHome() {
       // 其他收藏夹按名称排序
       return a.name.localeCompare(b.name);
     });
-    
+
     // 并行创建所有收藏夹卡片
     const playlistPromises = sortedPlaylists.map(async (playlist) => {
       // 创建收藏夹文件夹卡片
       const folderCard = document.createElement('div');
       folderCard.className = 'folder-card';
       folderCard.dataset.playlistId = playlist.id;
-      
+
       // 默认封面
       let folderCover = '/static/images/ICON_256.PNG';
-      
+
       // 如果收藏夹有歌曲，尝试获取第一首歌曲的封面
       if (playlist.song_count > 0) {
         try {
@@ -630,7 +630,7 @@ export async function renderFavoritesHome() {
           console.error(`获取收藏夹 ${playlist.name} 的歌曲列表失败:`, err);
         }
       }
-      
+
       folderCard.innerHTML = `
         <div class="folder-header">
           <img src="${folderCover}" loading="lazy" class="folder-cover">
@@ -643,16 +643,16 @@ export async function renderFavoritesHome() {
           </div>
         </div>
       `;
-      
+
       // 添加点击事件，进入收藏夹详情页
       folderCard.addEventListener('click', () => {
         state.selectedPlaylistId = playlist.id;
         renderPlaylist();
       });
-      
+
       return folderCard;
     });
-    
+
     // 等待所有收藏夹卡片创建完成
     Promise.all(playlistPromises).then(folderCards => {
       // 清空容器并添加卡片
@@ -664,21 +664,21 @@ export async function renderFavoritesHome() {
     // 没有收藏夹数据
     ui.songContainer.innerHTML = '<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">暂无收藏夹</div>';
   }
-  
+
   // 2. 后台静默获取最新数据并更新
   api.favoritePlaylists.list().then(async res => {
     if (res && res.data) {
       // 去重处理
       const uniquePlaylists = [];
       const seenIds = new Set();
-      
+
       res.data.forEach(playlist => {
         if (!seenIds.has(playlist.id)) {
           seenIds.add(playlist.id);
           uniquePlaylists.push(playlist);
         }
       });
-      
+
       // 对收藏夹进行排序：默认收藏夹排第一位，其他按名称排序
       const sortedPlaylists = uniquePlaylists.sort((a, b) => {
         // 默认收藏夹排第一位
@@ -687,10 +687,10 @@ export async function renderFavoritesHome() {
         // 其他收藏夹按名称排序
         return a.name.localeCompare(b.name);
       });
-      
+
       // 更新缓存
       saveCachedPlaylists(sortedPlaylists);
-      
+
       // 如果缓存数据与当前显示的数据不同，重新渲染
       if (JSON.stringify(uniquePlaylists) !== JSON.stringify(state.cachedPlaylists)) {
         // 重新渲染页面以显示最新数据
@@ -708,47 +708,47 @@ function renderPlaylistDetails(playlistId) {
   // 1. 优先使用本地缓存数据渲染
   const cachedPlaylist = state.cachedPlaylists.find(p => String(p.id) === String(playlistId));
   const cachedSongs = state.cachedPlaylistSongs[playlistId] || [];
-  
+
   // 如果有缓存的收藏夹信息
   if (cachedPlaylist) {
     const playlistName = cachedPlaylist.name;
-    
+
     // 恢复普通歌曲网格布局（小卡片）
     ui.songContainer.className = 'song-list';
-    
+
     // 修改现有的列表标题为收藏夹名称
     const listTitle = document.getElementById('list-title');
     if (listTitle) {
       listTitle.textContent = playlistName;
     }
-    
+
     // 修改移动端顶栏标题为收藏夹名称
     const mobilePageTitle = document.getElementById('mobile-page-title');
     if (mobilePageTitle) {
       mobilePageTitle.textContent = playlistName;
     }
-    
+
     // 总是移除可能已存在的返回按钮和菜单按钮，确保创建新的
     let existingBackBtn = document.querySelector('.back-to-favorites-btn');
     while (existingBackBtn) {
       existingBackBtn.remove();
       existingBackBtn = document.querySelector('.back-to-favorites-btn');
     }
-    
+
     let existingMenuBtn = document.querySelector('.playlist-menu-btn');
     while (existingMenuBtn) {
       existingMenuBtn.remove();
       existingMenuBtn = document.querySelector('.playlist-menu-btn');
     }
-    
+
     // 创建返回按钮（只在收藏夹详情页显示）
     const backBtn = document.createElement('button');
     backBtn.className = 'back-to-favorites-btn mobile-back-btn';
     backBtn.title = '返回我的收藏';
-    
+
     // 检查是否为移动端
     const isMobile = window.innerWidth <= 768;
-    
+
     if (isMobile) {
       // 在移动端，将返回按钮添加到顶栏右侧
       backBtn.innerHTML = `<i class="fas fa-arrow-left"></i>`;
@@ -765,13 +765,13 @@ function renderPlaylistDetails(playlistId) {
       backBtn.style.transform = 'translateY(-50%)';
       backBtn.style.transition = 'all 0.3s ease';
       // 添加悬停效果
-      backBtn.addEventListener('mouseenter', function() {
+      backBtn.addEventListener('mouseenter', function () {
         this.style.color = 'rgba(255, 255, 255, 0.8)';
       });
-      backBtn.addEventListener('mouseleave', function() {
+      backBtn.addEventListener('mouseleave', function () {
         this.style.color = 'rgba(255, 255, 255, 0.6)';
       });
-      
+
       // 找到顶栏
       const topBar = document.querySelector('.top-bar');
       if (topBar) {
@@ -790,38 +790,38 @@ function renderPlaylistDetails(playlistId) {
         contentHeader.appendChild(backBtn);
       }
     }
-    
+
     // 添加返回按钮事件监听
     backBtn.addEventListener('click', () => {
       // 清除选中的收藏夹
       state.selectedPlaylistId = null;
       // 重新渲染收藏主页
       renderPlaylist();
-      
+
       // 移除所有移动端返回按钮
       const mobileBackBtns = document.querySelectorAll('.mobile-back-btn');
       mobileBackBtns.forEach(btn => btn.remove());
     });
-    
+
     // 隐藏添加收藏夹按钮：在收藏夹详情页隐藏
     const playlistFilterContainer = document.getElementById('playlist-filter-container');
     if (playlistFilterContainer) {
       playlistFilterContainer.classList.add('hidden');
     }
-    
+
     // 添加三点菜单按钮（只在收藏夹详情页显示）
     const menuBtn = document.createElement('button');
     menuBtn.className = 'playlist-menu-btn';
     menuBtn.title = '更多操作';
     menuBtn.innerHTML = `<i class="fas fa-ellipsis-h"></i>`;
-    
+
     // 获取header-actions容器
     const headerActions = document.querySelector('.header-actions');
     // 将菜单按钮添加到header-actions容器的最前面
     if (headerActions) {
       headerActions.insertBefore(menuBtn, headerActions.firstChild);
     }
-    
+
     // 添加菜单按钮事件监听
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -837,13 +837,13 @@ function renderPlaylistDetails(playlistId) {
                 // 删除成功，更新本地缓存（只移除被删除的收藏夹）
                 const updatedPlaylists = state.cachedPlaylists.filter(p => String(p.id) !== String(playlistId));
                 saveCachedPlaylists(updatedPlaylists);
-                
+
                 // 清除被删除收藏夹的歌曲缓存
                 if (state.cachedPlaylistSongs[playlistId]) {
                   delete state.cachedPlaylistSongs[playlistId];
                   localStorage.setItem('2fmusic_cached_playlist_songs', JSON.stringify(state.cachedPlaylistSongs));
                 }
-                
+
                 state.selectedPlaylistId = null;
                 renderPlaylist();
                 showToast('收藏夹删除成功', 'success');
@@ -858,16 +858,16 @@ function renderPlaylistDetails(playlistId) {
         }
       );
     });
-    
+
     // 如果有缓存的歌曲列表（包括空数组）
     if (cachedSongs !== undefined && cachedSongs !== null) {
       // 从完整歌曲列表中找到对应的歌曲信息
-      const filteredSongs = state.fullPlaylist.filter(song => 
+      const filteredSongs = state.fullPlaylist.filter(song =>
         cachedSongs.includes(song.id)
       );
-      
+
       state.displayPlaylist = filteredSongs;
-      
+
       if (state.displayPlaylist.length === 0) {
         ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">该收藏夹暂无歌曲</div>`;
       } else {
@@ -882,7 +882,7 @@ function renderPlaylistDetails(playlistId) {
     // 缓存中没有收藏夹信息，显示加载状态
     ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">加载中...</div>`;
   }
-  
+
   // 2. 后台静默获取最新数据并更新
   return Promise.all([
     api.favoritePlaylists.list(),
@@ -891,7 +891,7 @@ function renderPlaylistDetails(playlistId) {
     if (playlistsRes.success && playlistsRes.data && songsRes.success && songsRes.data) {
       // 确保ID类型匹配，避免类型不匹配导致的查找失败
       const playlist = playlistsRes.data.find(p => String(p.id) === String(playlistId));
-      
+
       // 检查收藏夹是否存在，如果不存在，返回收藏主页
       if (!playlist) {
         // 清除选中的收藏夹ID
@@ -900,24 +900,35 @@ function renderPlaylistDetails(playlistId) {
         renderPlaylist();
         return;
       }
-      
+
       const playlistSongs = songsRes.data;
-      
+
       // 更新缓存
       const updatedPlaylists = state.cachedPlaylists.filter(p => String(p.id) !== String(playlistId));
       updatedPlaylists.push(playlist);
       saveCachedPlaylists(updatedPlaylists);
       saveCachedPlaylistSongs(playlistId, playlistSongs);
-      
+
+      // 3. 总是更新UI标题（修复bug：从其他页面返回时标题丢失）
+      const playlistName = playlist.name;
+      const listTitle = document.getElementById('list-title');
+      if (listTitle) {
+        listTitle.textContent = playlistName;
+      }
+      const mobilePageTitle = document.getElementById('mobile-page-title');
+      if (mobilePageTitle) {
+        mobilePageTitle.textContent = playlistName;
+      }
+
       // 从完整歌曲列表中找到对应的歌曲信息
-      const filteredSongs = state.fullPlaylist.filter(song => 
+      const filteredSongs = state.fullPlaylist.filter(song =>
         playlistSongs.includes(song.id)
       );
-      
+
       // 如果数据有变化，重新渲染
       if (JSON.stringify(filteredSongs.map(s => s.id)) !== JSON.stringify(state.displayPlaylist.map(s => s.id))) {
         state.displayPlaylist = filteredSongs;
-        
+
         if (state.displayPlaylist.length === 0) {
           ui.songContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">该收藏夹暂无歌曲</div>`;
         } else {
@@ -941,13 +952,13 @@ function renderPlaylistDetails(playlistId) {
 function renderPlaylistSongs(songs) {
   // 直接使用ui.songContainer，因为它已经有song-list类和网格布局
   const songListContainer = ui.songContainer;
-  
+
   songListContainer.innerHTML = '';
-  
+
   // 应用排序
   const sortedSongs = [...songs].sort((a, b) => {
     let valueA, valueB;
-    
+
     switch (state.currentSort) {
       case 'title':
         valueA = (a.title || '').toLowerCase();
@@ -969,38 +980,38 @@ function renderPlaylistSongs(songs) {
         valueA = (a.title || '').toLowerCase();
         valueB = (b.title || '').toLowerCase();
     }
-    
+
     if (valueA < valueB) return state.sortOrder === 'asc' ? -1 : 1;
     if (valueA > valueB) return state.sortOrder === 'asc' ? 1 : -1;
     return 0;
   });
-  
+
   if (sortedSongs.length === 0) {
-      songListContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">没有找到匹配的歌曲</div>`;
-      return;
-    }
-    
-    const frag = document.createDocumentFragment();
-    sortedSongs.forEach((song, index) => {
+    songListContainer.innerHTML = `<div class="loading-text" style="grid-column: 1/-1; padding: 4rem 0; font-size: 1.1rem; opacity: 0.6;">没有找到匹配的歌曲</div>`;
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  sortedSongs.forEach((song, index) => {
     const card = document.createElement('div');
     card.className = 'song-card';
     card.dataset.index = state.displayPlaylist.indexOf(song);
     if (song.isExternal) card.style.border = '1px dashed var(--primary)';
-    
+
     // 使用 ID 判断收藏状态
     const isFav = state.favorites.has(song.id);
-    
+
     let favHtml = `<button class="card-fav-btn ${isFav ? 'active' : ''}" title="收藏"><i class="${isFav ? 'fas' : 'far'} fa-heart"></i></button>`;
     if (song.isExternal) favHtml = '';
     card.innerHTML = `${favHtml}<img src="${song.cover}" loading="lazy"><div class="card-info"><div class="title" title="${song.title}">${song.title}</div><div class="artist">${song.artist}</div></div>`;
-    
+
     card.addEventListener('click', (e) => {
       if (!e.target.closest('.card-fav-btn')) {
         state.playQueue = [...songs];
         playTrack(index);
       }
     });
-    
+
     if (!song.isExternal) {
       const favBtn = card.querySelector('.card-fav-btn');
       favBtn.addEventListener('click', (e) => {
@@ -1010,7 +1021,7 @@ function renderPlaylistSongs(songs) {
     }
     frag.appendChild(card);
   });
-  
+
   songListContainer.appendChild(frag);
   highlightCurrentTrack();
 }
@@ -1064,7 +1075,19 @@ export function switchTab(tab) {
     renderPlaylist();
     // Update Desktop Title
     const titleEl = document.getElementById('list-title');
-    if (titleEl) titleEl.innerText = (tab === 'fav') ? '收藏列表' : '歌曲列表';
+    if (titleEl) {
+      if (tab === 'fav') {
+        // 如果选中了具体收藏夹，尝试显示收藏夹名称
+        let playlistName = '收藏列表';
+        if (state.selectedPlaylistId && state.cachedPlaylists) {
+          const playlist = state.cachedPlaylists.find(p => String(p.id) === String(state.selectedPlaylistId));
+          if (playlist) playlistName = playlist.name;
+        }
+        titleEl.innerText = playlistName;
+      } else {
+        titleEl.innerText = '歌曲列表';
+      }
+    }
   }
 
   // Update Mobile Title
@@ -1076,7 +1099,14 @@ export function switchTab(tab) {
     'upload': '上传音乐',
     'settings': '系统设置'
   };
-  if (ui.mobileTitle) ui.mobileTitle.innerText = titles[tab] || '2FMusic';
+  if (ui.mobileTitle) {
+    let title = titles[tab] || '2FMusic';
+    if (tab === 'fav' && state.selectedPlaylistId && state.cachedPlaylists) {
+      const playlist = state.cachedPlaylists.find(p => String(p.id) === String(state.selectedPlaylistId));
+      if (playlist) title = playlist.name;
+    }
+    ui.mobileTitle.innerText = title;
+  }
 
   // Search Box Visibility: Only for Local Music
   if (ui.searchInput && ui.searchInput.parentElement) {
@@ -1119,7 +1149,7 @@ export function switchTab(tab) {
       existingBackBtn.remove();
       existingBackBtn = document.querySelector('.back-to-favorites-btn');
     }
-    
+
     let existingMenuBtn = document.querySelector('.playlist-menu-btn');
     while (existingMenuBtn) {
       existingMenuBtn.remove();
@@ -1415,7 +1445,7 @@ async function checkAndFetchMetadata(track, fetchId) {
       } else {
         renderNoLyrics('暂无歌词');
       }
-    } catch (e) { 
+    } catch (e) {
       if (fetchId === state.currentFetchId) {
         // 如果API请求失败，但本地可能有缓存的无效歌词，尝试重新解析
         if (track.lyrics && track.lyrics.trim() !== '') {
@@ -1447,15 +1477,15 @@ async function checkAndFetchMetadata(track, fetchId) {
 function parseAndRenderLyrics(lrc) {
   state.lyricsData = [];
   if (!lrc || lrc.trim() === '') { renderNoLyrics('暂无歌词'); return; }
-  
-  const lines = lrc.split('\n'); 
+
+  const lines = lrc.split('\n');
   // 更宽松的歌词解析逻辑，支持更多格式的时间戳
   const timeRegex = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\]/;
-  
+
   lines.forEach(line => {
     line = line.trim();
     if (!line) return;
-    
+
     const match = timeRegex.exec(line);
     if (match) {
       const min = parseInt(match[1]);
@@ -1469,7 +1499,7 @@ function parseAndRenderLyrics(lrc) {
       state.lyricsData.push({ time: 0, text: line });
     }
   });
-  
+
   // 如果解析后还是没有歌词行，尝试直接显示原始歌词
   if (state.lyricsData.length === 0) {
     // 显示原始歌词文本
@@ -1556,24 +1586,24 @@ function updatePlayState() {
 }
 
 export function bindPlayerEvents() {
-    // 播放状态切换显示“正在播放”或“已暂停”
-    const playingLabel = document.getElementById('fp-playing-label');
-    const pausedLabel = document.getElementById('fp-paused-label');
-    function updatePlayingLabel() {
-      if (ui.audio && !ui.audio.paused && !ui.audio.ended) {
-        if (playingLabel) playingLabel.style.display = '';
-        if (pausedLabel) pausedLabel.style.display = 'none';
-      } else {
-        if (playingLabel) playingLabel.style.display = 'none';
-        if (pausedLabel) pausedLabel.style.display = '';
-      }
+  // 播放状态切换显示“正在播放”或“已暂停”
+  const playingLabel = document.getElementById('fp-playing-label');
+  const pausedLabel = document.getElementById('fp-paused-label');
+  function updatePlayingLabel() {
+    if (ui.audio && !ui.audio.paused && !ui.audio.ended) {
+      if (playingLabel) playingLabel.style.display = '';
+      if (pausedLabel) pausedLabel.style.display = 'none';
+    } else {
+      if (playingLabel) playingLabel.style.display = 'none';
+      if (pausedLabel) pausedLabel.style.display = '';
     }
-    if (ui.audio) {
-      ui.audio.addEventListener('play', updatePlayingLabel);
-      ui.audio.addEventListener('pause', updatePlayingLabel);
-      ui.audio.addEventListener('ended', updatePlayingLabel);
-      updatePlayingLabel();
-    }
+  }
+  if (ui.audio) {
+    ui.audio.addEventListener('play', updatePlayingLabel);
+    ui.audio.addEventListener('pause', updatePlayingLabel);
+    ui.audio.addEventListener('ended', updatePlayingLabel);
+    updatePlayingLabel();
+  }
   [ui.btnPlay, ui.fpBtnPlay, ui.mobileMiniPlay].forEach(btn => btn?.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); }));
   [ui.btnPrev, ui.fpBtnPrev].forEach(btn => btn?.addEventListener('click', prevTrack));
   [ui.btnNext, ui.fpBtnNext].forEach(btn => btn?.addEventListener('click', nextTrack));
@@ -1695,14 +1725,14 @@ export function bindUiControls() {
       ui.sortDropdown?.classList.toggle('active');
     });
   }
-  
+
   // 点击外部关闭排序下拉菜单
   document.addEventListener('click', (e) => {
     if (!ui.btnSort?.contains(e.target) && !ui.sortDropdown?.contains(e.target)) {
       ui.sortDropdown?.classList.remove('active');
     }
   });
-  
+
   // 排序选项点击事件
   document.querySelectorAll('.sort-option').forEach(option => {
     option.addEventListener('click', (e) => {
@@ -1716,16 +1746,16 @@ export function bindUiControls() {
         state.currentSort = sortType;
         state.sortOrder = 'asc';
       }
-      
+
       // 保存排序状态到localStorage
       persistState(ui.audio, { currentSort: state.currentSort, sortOrder: state.sortOrder });
-      
+
       // 更新排序按钮显示
       updateSortButton();
-      
+
       // 重新渲染歌曲列表
       renderPlaylist();
-      
+
       // 关闭下拉菜单
       ui.sortDropdown?.classList.remove('active');
     });
