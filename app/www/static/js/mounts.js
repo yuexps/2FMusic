@@ -111,7 +111,7 @@ export function startScanPolling(isUserAction = false, onRefreshSongs, onRefresh
             // Completion logic: Find the card for lastScrapingPath and mark green
             if (lastScrapingPath) {
               // Add to map to persist
-              const finalMsg = lastScrapingMsg || '后台刮削完成';
+              const finalMsg = lastScrapingMsg || '刮削完成';
               scrapedPaths.set(lastScrapingPath, finalMsg);
               localStorage.setItem('scrapedPaths', JSON.stringify(Array.from(scrapedPaths.entries())));
 
@@ -264,9 +264,45 @@ export async function loadMountPoints() {
           fill.style.height = '100%';
 
           if (completedMsg) {
-            progressText.innerText = completedMsg;
+            if (completedMsg.includes('失败')) {
+              progressText.style.display = 'flex';
+              progressText.style.justifyContent = 'space-between';
+              progressText.style.alignItems = 'center';
+
+              const txt = document.createElement('span');
+              txt.innerText = completedMsg;
+              txt.style.overflow = 'hidden';
+              txt.style.textOverflow = 'ellipsis';
+              progressText.appendChild(txt);
+
+              const retryBtn = document.createElement('button');
+              retryBtn.className = 'btn-primary';
+              retryBtn.style.fontSize = '0.7rem';
+              retryBtn.style.padding = '2px 8px';
+              retryBtn.style.height = 'auto';
+              retryBtn.style.marginLeft = '0.5rem';
+              retryBtn.innerHTML = '<i class="fas fa-redo"></i> 重试';
+              retryBtn.onclick = async (e) => {
+                e.stopPropagation();
+                try {
+                  const res = await api.mount.retryScrape(path);
+                  if (res.success) {
+                    showToast('已重新开始刮削...');
+                    scrapedPaths.delete(path);
+                    localStorage.setItem('scrapedPaths', JSON.stringify(Array.from(scrapedPaths.entries())));
+                    loadMountPoints();
+                  } else {
+                    showToast('操作失败: ' + res.error);
+                  }
+                } catch (err) { showToast('网络错误'); }
+              };
+              progressText.appendChild(retryBtn);
+            } else {
+              progressText.innerText = completedMsg;
+            }
+
             fill.style.width = '100%';
-            fill.style.background = '#28a745'; // Green
+            fill.style.background = completedMsg.includes('失败') ? '#ffc107' : '#28a745'; // Yellow for partial fail, Green for success
             progressContainer.classList.add('completed');
           } else {
             progressText.innerText = '已就绪';

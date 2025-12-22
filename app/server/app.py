@@ -984,14 +984,13 @@ def scrape_single_song(item, idx, total):
             SCAN_STATUS['processed'] = current_processed
             # 减少日志刷屏，只在5的倍数或完成时更新
             if current_processed % 5 == 0 or current_processed >= total:
-                percent = int((current_processed/total)*100) if total > 0 else 0
-                SCAN_STATUS['current_file'] = f"后台刮削中... {percent}%"
+                SCAN_STATUS['current_file'] = "刮削中..."
 
 
-def auto_scrape_missing_metadata():
+def auto_scrape_missing_metadata(target_dir=None):
     """后台任务：自动刮削缺失的封面和歌词"""
     with app.app_context():
-        logger.info("开始自动刮削缺失元数据...")
+        logger.info(f"开始自动刮削缺失元数据... {f'(目录: {target_dir})' if target_dir else ''}")
         SCAN_STATUS['current_file'] = "正在准备自动刮削..."
         SCAN_STATUS['is_scraping'] = True
         SCAN_STATUS['processed'] = 0
@@ -1000,7 +999,12 @@ def auto_scrape_missing_metadata():
         try:
             songs_to_scrape = []
             with get_db() as conn:
-                cursor = conn.execute("SELECT id, path, title, artist, album, filename, has_cover FROM songs")
+                sql = "SELECT id, path, title, artist, album, filename, has_cover FROM songs"
+                params = ()
+                if target_dir:
+                    sql += " WHERE path LIKE ? || '%'"
+                    params = (target_dir,)
+                cursor = conn.execute(sql, params)
                 all_songs = cursor.fetchall()
 
             for song in all_songs:
@@ -1023,7 +1027,7 @@ def auto_scrape_missing_metadata():
             if total == 0:
                 logger.info("没有需要刮削的歌曲。")
                 # 强制显示完成状态一段时间，让前端捕获
-                SCAN_STATUS['current_file'] = "后台刮削完成"
+                SCAN_STATUS['current_file'] = "刮削完成"
                 time.sleep(1.5)
                 SCAN_STATUS['is_scraping'] = False
                 return
@@ -1058,9 +1062,9 @@ def auto_scrape_missing_metadata():
             # 强制停留完成状态 (带上失败统计)
             failed_count = SCAN_STATUS.get('failed', 0)
             if failed_count > 0:
-                SCAN_STATUS['current_file'] = f"后台刮削完成 ({failed_count}首失败)"
+                SCAN_STATUS['current_file'] = f"刮削完成 ({failed_count}首失败)"
             else:
-                SCAN_STATUS['current_file'] = "后台刮削完成"
+                SCAN_STATUS['current_file'] = "刮削完成"
             
             time.sleep(1.5)
             
@@ -1069,6 +1073,21 @@ def auto_scrape_missing_metadata():
             if not SCAN_STATUS.get('scanning', False):
                  SCAN_STATUS['current_file'] = ''
             SCAN_STATUS['is_scraping'] = False
+
+@app.route('/api/mount_points/retry_scrape', methods=['POST'])
+def retry_scrape_mount():
+    try:
+        path = request.json.get('path')
+        if not path:
+             return jsonify({'success': False, 'error': '未指定路径'})
+        
+        if SCAN_STATUS.get('is_scraping') or SCAN_STATUS.get('scanning'):
+             return jsonify({'success': False, 'error': '后台任务进行中，请稍后'})
+             
+        threading.Thread(target=auto_scrape_missing_metadata, args=(path,), daemon=True).start()
+        return jsonify({'success': True, 'message': '已开始重新刮削'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 
 # --- 优化后的并发扫描逻辑 ---

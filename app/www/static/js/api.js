@@ -70,6 +70,14 @@ export const api = {
         body: JSON.stringify({ path })
       });
       return jsonOrThrow(res);
+    },
+    async retryScrape(path) {
+      const res = await fetch('/api/mount_points/retry_scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path })
+      });
+      return jsonOrThrow(res);
     }
   },
   netease: {
@@ -187,4 +195,3 @@ export const api = {
     }
   }
 };
-//2233
