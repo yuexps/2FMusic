@@ -451,7 +451,7 @@ body::before {
     #view-mount .section-title {
         display: none !important;
     }
-    
+
     /* Fix for mobile search box layout */
     .content-header {
         display: flex;
@@ -459,7 +459,7 @@ body::before {
         align-items: center;
         padding: 0.8rem 0;
     }
-    
+
     .header-actions {
         display: flex;
         align-items: center;
@@ -467,7 +467,7 @@ body::before {
         width: 100%;
         justify-content: flex-end;
     }
-    
+
     .search-box {
         flex: 1;
         width: 100%;
@@ -950,7 +950,7 @@ input[type=range]::-webkit-slider-thumb {
     word-break: break-word;
     overflow-wrap: anywhere;
     max-width: 90vw;
-    width: 100%;
+    width: 85%;
     margin: 0 auto;
 
     /* 默认状态 (远距离) */
@@ -3122,7 +3122,7 @@ select:focus {
     left: -20%;
     right: -20%;
     bottom: -20%;
-    background: 
+    background:
         radial-gradient(circle at 30% 30%, rgba(108, 92, 231, 0.2), transparent 40%),
         radial-gradient(circle at 70% 70%, rgba(162, 155, 254, 0.2), transparent 40%),
         radial-gradient(circle at 50% 100%, rgba(108, 92, 231, 0.1), transparent 40%);
@@ -3161,15 +3161,19 @@ select:focus {
     0% {
         transform: translate(0, 0) rotate(0deg);
     }
+
     25% {
         transform: translate(1%, 0.5%) rotate(0.05deg);
     }
+
     50% {
         transform: translate(0.5%, 1%) rotate(-0.05deg);
     }
+
     75% {
         transform: translate(-0.5%, 0.5%) rotate(0.05deg);
     }
+
     100% {
         transform: translate(-1%, -0.5%) rotate(-0.05deg);
     }
@@ -4217,29 +4221,29 @@ select:focus {
         grid-template-columns: 1fr;
         gap: 1rem;
     }
-    
+
     /* 优化移动端搜索框和排序按钮布局 */
     .content-header {
         gap: 0.5rem;
     }
-    
+
     .header-actions {
         gap: 0.5rem;
         width: 100%;
         justify-content: space-between;
     }
-    
+
     .header-actions .search-box {
         flex: 1;
         min-width: 150px;
         padding: 0.5rem 1rem;
     }
-    
+
     .sort-controls {
         margin-left: 0;
         flex-shrink: 0;
     }
-    
+
     .btn-normal {
         padding: 0.5rem 0.8rem;
         font-size: 0.9rem;
