@@ -1522,8 +1522,10 @@ function parseAndRenderLyrics(lrc) {
       if (text) state.lyricsData.push({ time, text });
     } else {
       // 如果没有时间戳但有文本，也作为一行歌词添加
-      // Only add if it doesn't look like broken JSON
-      if (!line.startsWith('{')) {
+      // Only add if it doesn't look like broken JSON AND is not a metadata tag
+      const isMetadata = /^\[(id|ar|ti|by|hash|al|sign|qq|total|offset|length|re|ve):.*?\]$/i.test(line);
+
+      if (!line.startsWith('{') && !isMetadata) {
         state.lyricsData.push({ time: 0, text: line });
       }
     }
