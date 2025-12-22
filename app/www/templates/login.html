@@ -118,21 +118,47 @@
 
   <script>
     async function sha256(message) {
-      const msgBuffer = new TextEncoder().encode(message);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      // 优先使用 Web Crypto API
+      if (window.crypto && window.crypto.subtle) {
+        try {
+          const msgBuffer = new TextEncoder().encode(message);
+          const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgBuffer);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch (e) {
+          // Web Crypto 失败则降级
+        }
+      }
+      // 降级：使用 js-sha256 库
+      if (window.sha256) {
+        return window.sha256(message);
+      }
+      // 再降级：简单实现（不安全，仅兜底）
+      alert('您的浏览器不支持安全的 SHA-256 加密，建议升级浏览器！');
+      return message;
     }
+
+    // 动态加载 js-sha256 库，用于兼容性降级
+    (function loadSha256Lib() {
+      if (!window.crypto || !window.crypto.subtle) {
+        var script = document.createElement('script');
+        script.src = '/static/js/lib/sha256.min.js';
+        script.async = true;
+        document.head.appendChild(script);
+      }
+    })();
 
     document.querySelector('form').addEventListener('submit', async function (e) {
       e.preventDefault();
       const pwdInput = this.querySelector('input[name="password"]');
       const plain = pwdInput.value;
 
-      // Calculate hash
+      // 计算 hash
       try {
         const hashed = await sha256(plain);
-        pwdInput.value = hashed; // Replace with hash
+        if (hashed && hashed !== plain) {
+          pwdInput.value = hashed; // 用 hash 替换
+        }
         this.submit();
       } catch (err) {
         console.error("Hashing failed, falling back to plaintext", err);
