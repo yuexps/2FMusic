@@ -258,11 +258,23 @@ app.permanent_session_lifetime = timedelta(days=30)
 
 # 缓存静态文件的MD5值，避免重复计算
 static_file_md5_cache = {}
+# 缓存全局版本戳
+global_version_cache = None
 
 def get_file_md5(file_path):
     """计算文件的MD5值"""
+    # 获取文件的修改时间
+    try:
+        mtime = os.path.getmtime(file_path)
+    except Exception:
+        mtime = int(time.time())
+    
+    # 检查缓存中是否有该文件的MD5值和修改时间
     if file_path in static_file_md5_cache:
-        return static_file_md5_cache[file_path]
+        cached_md5, cached_mtime = static_file_md5_cache[file_path]
+        # 如果文件没有修改，直接返回缓存的MD5值
+        if mtime == cached_mtime:
+            return cached_md5
     
     try:
         with open(file_path, 'rb') as f:
@@ -270,11 +282,45 @@ def get_file_md5(file_path):
             for chunk in iter(lambda: f.read(4096), b''):
                 md5_hash.update(chunk)
             md5_value = md5_hash.hexdigest()
-            static_file_md5_cache[file_path] = md5_value
+            # 缓存MD5值和修改时间
+            static_file_md5_cache[file_path] = (md5_value, mtime)
             return md5_value
     except Exception:
         # 如果计算失败，返回当前时间戳作为 fallback
         return str(int(time.time()))
+
+def calculate_global_version(force_refresh=False):
+    """计算所有JS、CSS和HTML文件的MD5值，生成统一的版本戳"""
+    global global_version_cache
+    
+    # 如果缓存中有版本戳且不强制刷新，直接返回
+    if global_version_cache and not force_refresh:
+        return global_version_cache
+    
+    md5_list = []
+    
+    # 遍历静态文件夹中的JS和CSS文件
+    for root, dirs, files in os.walk(STATIC_DIR):
+        for file in files:
+            if file.endswith(('.js', '.css')):
+                file_path = os.path.join(root, file)
+                md5_list.append(get_file_md5(file_path))
+    
+    # 遍历模板文件夹中的HTML文件
+    for root, dirs, files in os.walk(TEMPLATE_DIR):
+        for file in files:
+            if file.endswith('.html'):
+                file_path = os.path.join(root, file)
+                md5_list.append(get_file_md5(file_path))
+    
+    # 将所有MD5值排序后连接，再计算一次MD5作为统一版本戳
+    md5_list.sort()
+    combined_md5 = hashlib.md5(''.join(md5_list).encode()).hexdigest()
+    
+    # 缓存版本戳
+    global_version_cache = combined_md5
+    
+    return combined_md5
 
 @app.template_filter('static_url')
 def static_url(filename):
@@ -304,6 +350,28 @@ def ensure_static_version():
 @app.route('/favicon.ico')
 def favicon():
     return send_file(os.path.join(STATIC_DIR, 'images', 'ICON_256.PNG'), mimetype='image/png')
+
+@app.route('/api/version_check')
+def api_version_check():
+    """返回基于所有JS、CSS和HTML文件的统一版本戳"""
+    # 获取是否强制刷新的参数
+    force_refresh = request.args.get('force_refresh', 'false').lower() == 'true'
+    # 计算全局版本戳
+    version = calculate_global_version(force_refresh=force_refresh)
+    # 返回JSON响应
+    return jsonify({
+        'version': version
+    })
+
+@app.route('/api/clear-version-cache')
+def clear_version_cache():
+    """清除版本戳缓存，强制重新计算"""
+    global global_version_cache
+    global_version_cache = None
+    return jsonify({
+        'success': True,
+        'message': 'Version cache cleared'
+    })
 
 # 为HTML响应添加缓存控制头，使用条件缓存确保获取最新版本
 @app.after_request

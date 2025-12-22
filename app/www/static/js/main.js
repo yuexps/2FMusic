@@ -7,6 +7,33 @@ import { initMounts, loadMountPoints, startScanPolling } from './mounts.js';
 import { initPlayer, loadSongs, performDelete, handleExternalFile, renderPlaylist, switchTab } from './player.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // 版本检查
+  try {
+    const VERSION_STORAGE_KEY = 'app_version';
+    const currentVersion = localStorage.getItem(VERSION_STORAGE_KEY);
+    const response = await api.system.versionCheck();
+    
+    if (response && response.version) {
+      // 如果是首次访问或版本号变化
+      if (!currentVersion || currentVersion !== response.version) {
+        console.log('前端已过时！\n最新版本：' + response.version, '\n当前版本：' + currentVersion);
+        showToast('检测到新版本，正在更新页面...');
+        
+        // 更新本地存储的版本号
+        localStorage.setItem(VERSION_STORAGE_KEY, response.version);
+        
+        // 强制清除浏览器缓存并刷新页面
+        window.location.reload(true);
+      }
+      else {
+        console.log('前端已是最新！\n最新版本：' + response.version, '\n当前版本：' + currentVersion);
+      }
+    }
+  } catch (error) {
+    console.error('版本检查失败:', error);
+    showToast('版本检查失败，请刷新页面重试', 'error');
+  }
+  
   // UI 适配与基础防护
   autoResizeUI();
   window.addEventListener('resize', () => {

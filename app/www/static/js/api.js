@@ -44,6 +44,10 @@ export const api = {
     async status() {
       const res = await fetch('/api/system/status');
       return jsonOrThrow(res);
+    },
+    async versionCheck(forceRefresh = true) {
+      const res = await fetch(`/api/version_check?force_refresh=${forceRefresh}`);
+      return jsonOrThrow(res);
     }
   },
   mount: {
