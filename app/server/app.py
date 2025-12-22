@@ -37,6 +37,7 @@ try:
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler
     from werkzeug.middleware.proxy_fix import ProxyFix
+    from mod import searchx
 except ImportError as e:
     print(f"错误：无法导入依赖库。\n详情: {e}")
     sys.exit(1)
@@ -735,6 +736,110 @@ def index_single_file(file_path):
     except Exception as e:
         logger.error(f"单文件索引失败: {e}")
 
+def auto_scrape_missing_metadata():
+    """后台任务：自动刮削缺失的封面和歌词"""
+    with app.app_context():
+        logger.info("开始自动刮削缺失元数据...")
+        SCAN_STATUS['current_file'] = "正在准备自动刮削..."
+        
+        try:
+            songs_to_scrape = []
+            with get_db() as conn:
+                cursor = conn.execute("SELECT id, path, title, artist, album, filename, has_cover FROM songs")
+                all_songs = cursor.fetchall()
+
+            for song in all_songs:
+                # 检查封面
+                need_cover = (song['has_cover'] == 0)
+                
+                # 检查歌词
+                base_name = os.path.splitext(song['filename'])[0]
+                lrc_path = os.path.join(MUSIC_LIBRARY_PATH, 'lyrics', f"{base_name}.lrc")
+                need_lyrics = not os.path.exists(lrc_path)
+                
+                if need_cover or need_lyrics:
+                    songs_to_scrape.append({
+                        'song': song,
+                        'need_cover': need_cover,
+                        'need_lyrics': need_lyrics
+                    })
+
+            total = len(songs_to_scrape)
+            if total == 0:
+                logger.info("没有需要刮削的歌曲。")
+                return
+
+            logger.info(f"发现 {total} 首歌曲需要刮削元数据")
+            
+            # 更新状态 total
+            SCAN_STATUS['total'] = total
+            SCAN_STATUS['processed'] = 0
+
+            for idx, item in enumerate(songs_to_scrape):
+                # 检查是否应该停止？暂无停止信号机制
+                
+                song = item['song']
+                SCAN_STATUS['current_file'] = f"正在刮削 ({idx+1}/{total}): {song['title']}"
+                SCAN_STATUS['processed'] = idx + 1 # 实时更新进度
+
+                try:
+                    # 只有当确实需要网络请求时才搜索
+                    # 构造搜索请求
+                    # 注意 search_all 的参数
+                    
+                    # 搜索
+                    # logger.info(f"搜索元数据: {song['title']} - {song['artist']}")
+                    results = searchx.search_all(title=song['title'], artist=song['artist'], album=song['album'], timeout=10)
+                    
+                    if not results:
+                        continue
+                    
+                    best_res = results[0] # 取最佳结果
+                    logger.info(f"刮削结果: {song['title']} - keys: {list(best_res.keys())}, cover: {best_res.get('cover')}")
+
+                    # 处理歌词
+                    if item['need_lyrics'] and best_res.get('lyrics'):
+                         base_name = os.path.splitext(song['filename'])[0]
+                         save_lrc_path = os.path.join(MUSIC_LIBRARY_PATH, 'lyrics', f"{base_name}.lrc")
+                         try:
+                            with open(save_lrc_path, 'w', encoding='utf-8') as f:
+                                f.write(best_res['lyrics'])
+                            logger.info(f"自动保存歌词成功: {save_lrc_path}")
+                         except Exception as e:
+                            logger.warning(f"保存歌词失败: {e}")
+
+                    # 处理封面
+                    if item['need_cover']:
+                        if best_res.get('cover'):
+                            cover_url = best_res['cover']
+                            base_name = os.path.splitext(song['filename'])[0]
+                            local_cover_path = os.path.join(MUSIC_LIBRARY_PATH, 'covers', f"{base_name}.jpg")
+                            try:
+                                resp = requests.get(cover_url, timeout=10, headers=COMMON_HEADERS)
+                                if resp.status_code == 200:
+                                    with open(local_cover_path, 'wb') as f:
+                                        f.write(resp.content)
+                                    # 更新数据库
+                                    with get_db() as conn:
+                                        conn.execute("UPDATE songs SET has_cover=1 WHERE id=?", (song['id'],))
+                                        conn.commit()
+                                    logger.info(f"自动保存封面成功: {local_cover_path}")
+                                else:
+                                    logger.warning(f"下载封面失败: {resp.status_code} - {cover_url}")
+                            except Exception as e:
+                                logger.warning(f"下载封面异常: {e}")
+                        else:
+                            logger.info(f"结果中未包含封面: {song['title']}")
+                
+                except Exception as e:
+                    logger.warning(f"刮削单曲失败 {song['title']}: {e}")
+
+        except Exception as e:
+            logger.error(f"自动刮削任务异常: {e}")
+        finally:
+            logger.info("自动刮削任务结束")
+
+
 # --- 优化后的并发扫描逻辑 ---
 def scan_library_incremental():
     global SCAN_STATUS
@@ -751,13 +856,14 @@ def scan_library_incremental():
             return 
 
     try:
-        # 更新状态：开始
-        SCAN_STATUS.update({'scanning': True, 'total': 0, 'processed': 0, 'current_file': '正在遍历文件...'})
-        
-        with open(lock_file, 'w') as f: f.write(str(time.time()))
-        logger.info("开始增量扫描...")
-        
-        # 1. 获取所有扫描根目录
+        with app.app_context():
+            # 更新状态：开始
+            SCAN_STATUS.update({'scanning': True, 'total': 0, 'processed': 0, 'current_file': '正在遍历文件...'})
+            
+            with open(lock_file, 'w') as f: f.write(str(time.time()))
+            logger.info("开始增量扫描...")
+            
+            # 1. 获取所有扫描根目录
         scan_roots = [MUSIC_LIBRARY_PATH]
         try:
             with get_db() as conn:
@@ -871,6 +977,10 @@ def scan_library_incremental():
                     conn.commit()
 
         logger.info("扫描完成。")
+        
+        # --- 自动刮削缺失元数据 ---
+        auto_scrape_missing_metadata()
+        
         global LIBRARY_VERSION; LIBRARY_VERSION = time.time()
         
     except Exception as e:
@@ -1409,12 +1519,7 @@ def get_lyrics_api():
                 logger.warning(f"保存内嵌歌词失败: {e}")
             return jsonify({'success': True, 'lyrics': embedded_lrc})
 
-    # 3. 网络获取
-    api_urls = [
-        f"https://api.lrc.cx/lyrics?artist={quote(artist or '')}&title={quote(title)}",
-        f"https://lrcapi.msfxp.top/lyrics?artist={quote(artist or '')}&title={quote(title)}"
-    ]
-    
+    # 3. 网络获取 - Use integrated LrcApi
     # Determine save path for network lyrics
     save_lrc_path = None
     if actual_path:
@@ -1423,26 +1528,32 @@ def get_lyrics_api():
     elif filename:
         save_lrc_path = os.path.join(MUSIC_LIBRARY_PATH, 'lyrics', f"{os.path.splitext(os.path.basename(filename))[0]}.lrc")
 
-    for idx, api_url in enumerate(api_urls):
-        try:
-            label = "主API" if idx == 0 else "备用API"
-            safe_url = re.sub(r'^https?://[^/]+', f'[{label}]', api_url)
-            logger.info(f"请求网络歌词API: {safe_url}")
-            resp = requests.get(api_url, timeout=3, headers=COMMON_HEADERS)
-            if resp.status_code == 200:
+    try:
+        logger.info(f"本地调用 LrcApi 搜索歌词: title={title}, artist={artist}")
+        results = searchx.search_all(title=title, artist=artist, album='')
+        if results and len(results) > 0:
+            # 查找第一个包含歌词的结果
+            best_lrc = None
+            for res in results:
+                if res.get('lyrics'):
+                    best_lrc = res['lyrics']
+                    break
+            
+            if best_lrc:
                 if save_lrc_path:
                     try:
                         os.makedirs(os.path.dirname(save_lrc_path), exist_ok=True)
                         with open(save_lrc_path, 'wb') as f:
-                            f.write(resp.text.encode('utf-8'))
+                            f.write(best_lrc.encode('utf-8'))
                         logger.info(f"网络歌词保存: {save_lrc_path}")
                     except Exception as e:
                         logger.warning(f"保存网络歌词失败: {e}")
-                return jsonify({'success': True, 'lyrics': resp.text})
+                return jsonify({'success': True, 'lyrics': best_lrc})
             else:
-                logger.warning(f"歌词API响应异常: {api_url}, 状态码: {resp.status_code}")
-        except:
-            pass
+                 logger.warning(f"LrcApi 未找到歌词: {title}")
+    except Exception as e:
+        logger.warning(f"LrcApi 搜索歌词异常: {e}")
+
     logger.warning(f"歌词获取失败: {title} - {artist}")
     return jsonify({'success': False})
 
@@ -1483,34 +1594,34 @@ def get_album_art_api():
             pass
         return jsonify({'success': True, 'album_art': f"/api/music/covers/{quote(base_name)}.jpg?filename={quote(base_name)}"})
 
-    # 网络获取并保存
-    api_urls = [
-        f"https://api.lrc.cx/cover?artist={quote(artist)}&title={quote(title)}",
-        f"https://lrcapi.msfxp.top/cover?artist={quote(artist)}&title={quote(title)}"
-    ]
-    
-    for idx, api_url in enumerate(api_urls):
-        try:
-            label = "主API" if idx == 0 else "备用API"
-            safe_url = re.sub(r'^https?://[^/]+', f'[{label}]', api_url)
-            logger.info(f"请求网络封面API: {safe_url}")
-            resp = requests.get(api_url, timeout=3, headers=COMMON_HEADERS)
-            if resp.status_code == 200 and resp.headers.get('content-type', '').startswith('image/'):
-                with open(local_path, 'wb') as f: 
-                    f.write(resp.content)
-                
-                # 更新数据库标识
-                if not os.path.isabs(filename):
-                    with get_db() as conn: 
-                        conn.execute("UPDATE songs SET has_cover=1 WHERE filename=?", (filename,))
-                        conn.commit()
-                        
-                return jsonify({'success': True, 'album_art': f"/api/music/covers/{quote(base_name)}.jpg?filename={quote(base_name)}"})
-            else:
-                logger.warning(f"封面API响应异常: {api_url}, 状态码: {resp.status_code}")
-        except:
-            pass
-    logger.warning(f"封面获取失败: {title} - {artist}")
+    # 网络获取并保存 - Use integrated LrcApi
+    try:
+        logger.info(f"本地调用 LrcApi 搜索封面: title={title}, artist={artist}")
+        results = searchx.search_all(title=title, artist=artist, album='')
+        cover_url = None
+        if results:
+            for res in results:
+                if res.get('cover'):
+                    cover_url = res['cover']
+                    break
+        
+        if cover_url:
+            logger.info(f"LrcApi 找到封面 URL: {cover_url}")
+            try:
+                resp = requests.get(cover_url, timeout=10, headers=COMMON_HEADERS)
+                if resp.status_code == 200 and resp.headers.get('content-type', '').startswith('image/'):
+                    with open(local_path, 'wb') as f: 
+                        f.write(resp.content)
+                    return jsonify({'success': True, 'album_art': f"/api/music/covers/{quote(base_name)}.jpg?filename={quote(base_name)}"})
+                else:
+                    logger.warning(f"封面下载失败: {resp.status_code}")
+            except Exception as dl_err:
+                 logger.warning(f"封面下载异常: {dl_err}")
+        else:
+            logger.warning("LrcApi 未找到封面")
+    except Exception as e:
+        logger.warning(f"LrcApi 搜索封面异常: {e}")
+        
     return jsonify({'success': False})
 
 @app.route('/api/music/delete/<song_id>', methods=['DELETE'])
