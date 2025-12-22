@@ -9,6 +9,8 @@ export function startScanPolling(isUserAction = false, onRefreshSongs, onRefresh
   if (state.isPolling) return;
   state.isPolling = true;
   let hasTrackedScan = false;
+  let hasTrackedScrape = false;
+  let lastScrapingPath = null;
 
   // 轮询函数，使用 setTimeout 实现动态间隔
   const poll = async () => {
@@ -37,6 +39,112 @@ export function startScanPolling(isUserAction = false, onRefreshSongs, onRefresh
         }
       }
 
+      // 1.1 处理后台刮削进度 (Global status applied to all mount cards)
+      const bars = document.querySelectorAll('.mount-card-progress');
+      // Use explicit flag if available, fallback to string check
+      const isScraping = status.is_scraping === true || (status.current_file && status.current_file.includes('刮削'));
+
+      if (bars.length > 0) {
+        if (isScraping) {
+          const pct = status.total > 0 ? Math.round((status.processed / status.total) * 100) : 0;
+          const text = status.current_file || '后台处理中...';
+          const currentPath = status.current_path || '';
+
+          bars.forEach(barContainer => {
+            const card = barContainer.closest('.mount-card');
+            let mountPath = card ? card.dataset.mountPath : null;
+            // Fallback for stale DOM
+            if (!mountPath && card) {
+              const pathSpan = card.querySelector('.mount-path-text');
+              if (pathSpan) mountPath = pathSpan.innerText.trim();
+            }
+
+            // Only show if currentPath starts with mountPath
+            let shouldShow = false;
+            if (mountPath && currentPath) {
+              if (currentPath.startsWith(mountPath)) {
+                shouldShow = true;
+                // Store this as the active scraping path
+                lastScrapingPath = mountPath;
+              }
+            } else if (!currentPath && !lastScrapingPath) {
+              // Initial fallback
+              shouldShow = true;
+            }
+
+            const fill = barContainer.querySelector('.progress-fill');
+            const label = barContainer.querySelector('.progress-text');
+
+            if (shouldShow) {
+              if (barContainer.classList.contains('hidden')) {
+                barContainer.classList.remove('hidden');
+              }
+              // Reset styles for active scraping (Blue)
+              if (fill) {
+                fill.style.width = pct + '%';
+                fill.style.background = 'var(--primary)';
+              }
+              if (label) label.innerText = `${text} (${pct}%)`;
+              barContainer.classList.remove('completed'); // Remove completed state if it starts scraping again
+            } else {
+              // Hide others UNLESS they are in "completed" state?
+              // For now, if we switch to another folder, we hide others.
+              // But if we want to persist "Completed" indefinitely until refresh, we shouldn't hide indiscriminately.
+              // Let's only hide if NOT completed.
+              if (!barContainer.classList.contains('completed')) {
+                barContainer.classList.add('hidden');
+              }
+            }
+          });
+
+          // Mark that we are currently scraping
+          hasTrackedScrape = true;
+
+        } else {
+          // Scraping finished (or idle)
+
+          if (hasTrackedScrape) {
+            // Just finished!
+            hasTrackedScrape = false;
+            // Completion logic: Find the card for lastScrapingPath and mark green
+            if (lastScrapingPath) {
+              const bars = document.querySelectorAll('.mount-card-progress');
+              bars.forEach(barContainer => {
+                const card = barContainer.closest('.mount-card');
+                let mountPath = card ? card.dataset.mountPath : null;
+                if (!mountPath && card) {
+                  const pathSpan = card.querySelector('.mount-path-text');
+                  if (pathSpan) mountPath = pathSpan.innerText.trim();
+                }
+
+                if (mountPath && lastScrapingPath.startsWith(mountPath)) {
+                  // This is the one
+                  barContainer.classList.remove('hidden');
+                  barContainer.classList.add('completed');
+
+                  const fill = barContainer.querySelector('.progress-fill');
+                  const label = barContainer.querySelector('.progress-text');
+
+                  if (fill) {
+                    fill.style.width = '100%';
+                    fill.style.background = '#28a745'; // Green
+                  }
+                  if (label) label.innerText = '后台刮削完成';
+                }
+              });
+            }
+            // Do NOT show global toast
+            onRefreshSongs && onRefreshSongs();
+          }
+          // If not scraping and not just finished, ensure all non-completed bars are hidden
+          bars.forEach(barContainer => {
+            if (!barContainer.classList.contains('completed')) {
+              barContainer.classList.add('hidden');
+            }
+          });
+        }
+      }
+
       // 2. 处理库版本变更 (自动同步)
       if (status.library_version) {
         if (state.libraryVersion === 0) {
@@ -55,8 +163,11 @@ export function startScanPolling(isUserAction = false, onRefreshSongs, onRefresh
     } catch (e) {
       console.error('Poll error', e);
     } finally {
-      // 动态调整间隔：正在扫描时 1s，闲置时 2s
-      const delay = hasTrackedScan ? 1000 : 2000;
+      // 动态调整间隔：正在扫描或刮削时 0.5s，否则 1s
+      // Speed up polling to catch fast scraping tasks
+      const delay = (hasTrackedScan || hasTrackedScrape || state.isPollingFast) ? 500 : 1000;
+      // Set a flag to keep fast polling for a moment after completion?
+      // Simplified: just check if we are *tracking* something.
       setTimeout(poll, delay);
     }
   };
@@ -78,6 +189,21 @@ export async function loadMountPoints() {
         data.data.forEach(path => {
           const card = document.createElement('div');
           card.className = 'mount-card';
+          card.dataset.mountPath = path; // Store path for progress matching
+          // Force column layout for the card to stack info/btn row above progress bar
+          card.style.display = 'flex';
+          card.style.flexDirection = 'column';
+          card.style.alignItems = 'stretch'; // Stretch to full width
+          card.style.justifyContent = 'flex-start'; // Reset space-between from CSS
+          card.style.gap = '0'; // Handle gap manually or let children handle it
+
+          // Top row: Info + Button (Original mount-card layout simulation)
+          const topRow = document.createElement('div');
+          topRow.style.display = 'flex';
+          topRow.style.justifyContent = 'space-between';
+          topRow.style.alignItems = 'center';
+          topRow.style.width = '100%';
+          topRow.style.marginBottom = '0';
 
           const infoDiv = document.createElement('div');
           infoDiv.className = 'mount-info';
@@ -91,11 +217,54 @@ export async function loadMountPoints() {
 
           const btn = document.createElement('button');
           btn.className = 'btn-remove-mount';
+          btn.readOnly = true; // Just in case
           btn.textContent = '移除';
-          btn.onclick = () => triggerRemoveMount(path);
+          btn.onclick = (e) => {
+            e.stopPropagation(); // prevent card click if any
+            triggerRemoveMount(path);
+          };
 
-          card.appendChild(infoDiv);
-          card.appendChild(btn);
+          topRow.appendChild(infoDiv);
+          topRow.appendChild(btn);
+
+          // Progress Bar (Hidden by default)
+          const progressContainer = document.createElement('div');
+          progressContainer.className = 'mount-card-progress hidden';
+          // Ensure it takes width
+          progressContainer.style.width = '100%';
+          progressContainer.style.marginTop = '0.8rem';
+          progressContainer.style.background = 'rgba(0,0,0,0.2)';
+          progressContainer.style.borderRadius = '4px';
+          progressContainer.style.padding = '0.5rem';
+          progressContainer.style.fontSize = '0.8rem';
+
+          const progressText = document.createElement('div');
+          progressText.className = 'progress-text';
+          progressText.style.marginBottom = '0.3rem';
+          progressText.style.color = 'var(--text-sub)';
+          progressText.style.whiteSpace = 'nowrap';
+          progressText.style.overflow = 'hidden';
+          progressText.style.textOverflow = 'ellipsis';
+          progressText.innerText = '准备中...';
+
+          const track = document.createElement('div');
+          track.style.height = '4px';
+          track.style.background = 'rgba(255,255,255,0.1)';
+          track.style.borderRadius = '2px';
+          track.style.overflow = 'hidden';
+
+          const fill = document.createElement('div');
+          fill.className = 'progress-fill';
+          fill.style.height = '100%';
+          fill.style.width = '0%';
+          fill.style.background = 'var(--primary)';
+
+          track.appendChild(fill);
+          progressContainer.appendChild(progressText);
+          progressContainer.appendChild(track);
+
+          card.appendChild(topRow);
+          card.appendChild(progressContainer);
           frag.appendChild(card);
         });
         ui.mountListContainer.appendChild(frag);

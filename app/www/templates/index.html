@@ -138,6 +138,7 @@
                     </div>
 
                     <div class="section-subtitle">已添加目录</div>
+
                     <div id="mount-list-container">
                         <div class="loading">
                             <div class="loading-spinner"></div>
@@ -503,7 +504,7 @@
                 const vn = document.getElementById('view-netease');
                 const vu = document.getElementById('view-upload');
                 const vs = document.getElementById('view-settings');
-                
+
                 // 隐藏所有视图
                 if (vp) vp.classList.add('hidden');
                 if (vm) vm.classList.add('hidden');
@@ -521,7 +522,7 @@
                     if (vp) {
                         vp.classList.remove('hidden');
                         vp.setAttribute('data-tab', tab);
-                        
+
                         // Styling hooks for CSS
                         if (tab === 'fav') {
                             vp.classList.add('tab-fav');
@@ -558,12 +559,12 @@
                 const savedState = JSON.parse(localStorage.getItem('2fmusic_state') || '{}');
                 const currentSort = savedState.currentSort || 'title';
                 const sortOrder = savedState.sortOrder || 'asc';
-                
+
                 const btnSort = document.getElementById('btn-sort');
                 if (btnSort) {
                     // 获取当前排序类型的文本
                     let sortText = '标题';
-                    switch(currentSort) {
+                    switch (currentSort) {
                         case 'title':
                             sortText = '标题';
                             break;
@@ -577,13 +578,13 @@
                             sortText = '时间';
                             break;
                     }
-                    
+
                     // 更新按钮文本
                     btnSort.innerHTML = `
                         <i class="fas fa-sort"></i> ${sortText}
                     `;
                 }
-                
+
                 // 6. Pre-render Song List (Minimize Flicker)
                 if (tab === 'local' || tab === 'fav') {
                     const container = document.getElementById('song-list-container');
@@ -596,7 +597,7 @@
                         // Apply sorting to the playlist - same logic as in player.js
                         displayList = [...playlist].sort((a, b) => {
                             let valueA, valueB;
-                            
+
                             switch (currentSort) {
                                 case 'title':
                                     valueA = (a.title || '').toLowerCase();
@@ -618,7 +619,7 @@
                                     valueA = (a.title || '').toLowerCase();
                                     valueB = (b.title || '').toLowerCase();
                             }
-                            
+
                             if (typeof valueA === 'string' && typeof valueB === 'string') {
                                 if (sortOrder === 'asc') {
                                     return valueA > valueB ? 1 : valueA < valueB ? -1 : 0;
@@ -645,7 +646,7 @@
                                 state.currentTab = 'fav';
                                 const titleEl = document.getElementById('list-title');
                                 const contentHeader = document.querySelector('.content-header');
-                                
+
                                 // 立即更新收藏夹标题，避免显示默认文本
                                 if (titleEl) {
                                     // 查找对应收藏夹名称
@@ -653,19 +654,19 @@
                                     const currentPlaylist = playlists.find(p => String(p.id) === String(selectedPlaylistId));
                                     titleEl.innerText = currentPlaylist ? currentPlaylist.name : '收藏夹详情';
                                 }
-                                
+
                                 // 立即隐藏添加收藏夹按钮：在收藏夹详情页隐藏
                                 const playlistFilterContainer = document.getElementById('playlist-filter-container');
                                 if (playlistFilterContainer) {
                                     playlistFilterContainer.classList.add('hidden');
                                 }
-                                
+
                                 // 立即隐藏排序按钮：在收藏夹详情页隐藏排序功能
                                 const sortControls = document.querySelector('.sort-controls');
                                 if (sortControls) {
                                     sortControls.classList.add('hidden');
                                 }
-                                
+
                                 // 添加返回按钮
                                 if (contentHeader) {
                                     // 检查是否已存在返回按钮
@@ -674,7 +675,7 @@
                                         backBtn = document.createElement('button');
                                         backBtn.className = 'back-to-favorites-btn';
                                         backBtn.innerHTML = '<i class="fas fa-arrow-left"></i> 返回';
-                                        
+
                                         // 在标题前添加返回按钮
                                         const sectionTitle = contentHeader.querySelector('.section-title');
                                         if (sectionTitle) {

@@ -39,7 +39,8 @@ def get_cover(m_hash: str, m_id: int|str) -> str:
         '_': str(round(time.time() * 1000))  # 时间戳
     }
     try:
-        json_data_r = requests.get(music_url, headers=headers, params=parameter, timeout=10)
+        session = tools.get_legacy_session()
+        json_data_r = session.get(music_url, headers=headers, params=parameter, timeout=10)
         json_data = json_data_r.json()
         if json_data.get("data"):
             return json_data['data'].get("img")
@@ -62,7 +63,8 @@ def search(title='', artist='', album=''):
     limit = 3
     
     try:
-        response = requests.get(
+        session = tools.get_legacy_session()
+        response = session.get(
             f"http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword={' '.join([item for item in [title, artist, album] if item])}&page=1&pagesize=2&showtype=1",
             headers=headers, timeout=10)
         
@@ -81,7 +83,7 @@ def search(title='', artist='', album=''):
                     ratio: float = (title_conform_ratio * (artist_conform_ratio+1)/2) ** 0.5
                     if ratio >= 0.2:
                         try:
-                            response2 = requests.get(
+                            response2 = session.get(
                                 f"https://krcs.kugou.com/search?ver=1&man=yes&client=mobi&keyword=&duration=&hash={song_hash}&album_audio_id=",
                                 headers=headers, timeout=10)
                             lyrics_info = response2.json()
@@ -91,7 +93,7 @@ def search(title='', artist='', album=''):
                             lyrics_key = lyrics_info["candidates"][0]["accesskey"]
                             
                             # 第三层Json，要求获得并解码Base64
-                            response3 = requests.get(
+                            response3 = session.get(
                                 f"http://lyrics.kugou.com/download?ver=1&client=pc&id={lyrics_id}&accesskey={lyrics_key}&fmt=lrc&charset=utf8",
                                 headers=headers, timeout=10)
                             lyrics_data = response3.json()
