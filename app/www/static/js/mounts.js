@@ -4,13 +4,16 @@ import { api } from './api.js';
 import { showToast, hideProgressToast, showConfirmDialog } from './utils.js';
 
 let scanInterval = null;
+const savedScraped = localStorage.getItem('scrapedPaths');
+const scrapedPaths = new Map(savedScraped ? JSON.parse(savedScraped) : []);
 
 export function startScanPolling(isUserAction = false, onRefreshSongs, onRefreshMounts) {
   if (state.isPolling) return;
   state.isPolling = true;
   let hasTrackedScan = false;
-  // let hasTrackedScrape = false; // Deprecated: active polling via loadMountPoints is enough or we rely on server status
-
+  let hasTrackedScrape = false;
+  let lastScrapingPath = null;
+  let lastScrapingMsg = null; // Store final message
 
   // 轮询函数，使用 setTimeout 实现动态间隔
   const poll = async () => {
@@ -39,30 +42,112 @@ export function startScanPolling(isUserAction = false, onRefreshSongs, onRefresh
         }
       }
 
-      // 1.1 处理后台刮削进度 (Simple trigger to reload mounts if scraping status changes?)
-      // Actually, since we now store status in DB, we should reload mount list if we detect global scraping activity
-      // or just periodically reload mount list?
-      // Better: If global status says "is_scraping", we might want to refresh mount list occasionally to show progress?
-      // Or relies on user refresh?
-      // Let's keep it simple: If global status indicates scraping activity (or finish), we trigger onRefreshMounts.
+      // 1.1 处理后台刮削进度 (Global status applied to all mount cards)
+      const bars = document.querySelectorAll('.mount-card-progress');
+      // Use explicit flag if available, fallback to string check
+      const isScraping = status.is_scraping === true || (status.current_file && status.current_file.includes('刮削'));
 
-      const isScraping = status.is_scraping === true;
+      if (bars.length > 0) {
+        if (isScraping) {
+          const pct = status.total > 0 ? Math.round((status.processed / status.total) * 100) : 0;
+          const text = status.current_file || '后台处理中...';
+          const currentPath = status.current_path || '';
 
-      // If we are scraping (or just finished), reload mounts to update progress/status texts
-      if (isScraping) {
-        if (onRefreshMounts) onRefreshMounts();
-      } else {
-        // If we *were* scraping but now stopped, reload once more to show "Success"
-        // We need a state tracker for this.
-        if (state.__wasScraping) {
-          if (onRefreshMounts) onRefreshMounts();
-          state.__wasScraping = false;
-          // Also refresh songs as scraping likely added covers
-          onRefreshSongs && onRefreshSongs();
+          // Capture potential completion message
+          if (text.includes('完成')) {
+            lastScrapingMsg = text;
+          }
+
+          bars.forEach(barContainer => {
+            const card = barContainer.closest('.mount-card');
+            let mountPath = card ? card.dataset.mountPath : null;
+            // Fallback for stale DOM
+            if (!mountPath && card) {
+              const pathSpan = card.querySelector('.mount-path-text');
+              if (pathSpan) mountPath = pathSpan.innerText.trim();
+            }
+
+            // Only show if currentPath starts with mountPath
+            let shouldShow = false;
+            if (mountPath && currentPath) {
+              if (currentPath.startsWith(mountPath)) {
+                shouldShow = true;
+                // Store this as the active scraping path
+                lastScrapingPath = mountPath;
+              }
+            } else if (!currentPath && !lastScrapingPath) {
+              // Initial fallback
+              shouldShow = true;
+            }
+
+            const fill = barContainer.querySelector('.progress-fill');
+            const label = barContainer.querySelector('.progress-text');
+
+            if (shouldShow) {
+              if (barContainer.classList.contains('hidden')) {
+                barContainer.classList.remove('hidden');
+              }
+              // Reset styles for active scraping (Blue)
+              if (fill) {
+                fill.style.width = pct + '%';
+                fill.style.background = 'var(--primary)';
+              }
+              if (label) label.innerText = `${text} (${pct}%)`;
+              barContainer.classList.remove('completed'); // Remove completed state if it starts scraping again
+            } else {
+              // Do NOT hide other bars, just leave them as is
+            }
+          });
+
+          // Mark that we are currently scraping
+          hasTrackedScrape = true;
+
+        } else {
+          // Scraping finished (or idle)
+
+          if (hasTrackedScrape) {
+            // Just finished!
+            hasTrackedScrape = false;
+            // Completion logic: Find the card for lastScrapingPath and mark green
+            if (lastScrapingPath) {
+              // Add to map to persist
+              const finalMsg = lastScrapingMsg || '刮削完成';
+              scrapedPaths.set(lastScrapingPath, finalMsg);
+              localStorage.setItem('scrapedPaths', JSON.stringify(Array.from(scrapedPaths.entries())));
+
+              const bars = document.querySelectorAll('.mount-card-progress');
+              bars.forEach(barContainer => {
+                const card = barContainer.closest('.mount-card');
+                let mountPath = card ? card.dataset.mountPath : null;
+                if (!mountPath && card) {
+                  const pathSpan = card.querySelector('.mount-path-text');
+                  if (pathSpan) mountPath = pathSpan.innerText.trim();
+                }
+
+                if (mountPath && lastScrapingPath.startsWith(mountPath)) {
+                  // This is the one
+                  barContainer.classList.remove('hidden');
+                  barContainer.classList.add('completed');
+
+                  const fill = barContainer.querySelector('.progress-fill');
+                  const label = barContainer.querySelector('.progress-text');
+
+                  if (fill) {
+                    fill.style.width = '100%';
+                    fill.style.background = '#28a745'; // Green
+                  }
+                  if (label) label.innerText = finalMsg;
+                }
+              });
+            }
+            // Do NOT show global toast
+            onRefreshSongs && onRefreshSongs();
+            lastScrapingPath = null;
+            lastScrapingMsg = null;
+          }
+          // Do NOT hide bars when idle
         }
       }
-      if (isScraping) state.__wasScraping = true;
-
 
       // 2. 处理库版本变更 (自动同步)
       if (status.library_version) {
@@ -105,11 +190,7 @@ export async function loadMountPoints() {
         ui.mountListContainer.innerHTML = '<div class="loading-text">暂无自定义目录</div>';
       } else {
         const frag = document.createDocumentFragment();
-        data.data.forEach(item => { // item is object now {path, scrape_status, scrape_msg}
-          const path = item.path;
-          const scrapeStatus = item.scrape_status;
-          const scrapeMsg = item.scrape_msg;
-
+        data.data.forEach(path => {
           const card = document.createElement('div');
           card.className = 'mount-card';
           card.dataset.mountPath = path; // Store path for progress matching
@@ -193,6 +274,9 @@ export async function loadMountPoints() {
           progressText.style.overflow = 'hidden';
           progressText.style.textOverflow = 'ellipsis';
 
+          // Check persistence
+          const completedMsg = scrapedPaths.get(path);
+
           const track = document.createElement('div');
           track.style.height = '4px';
           track.style.background = 'rgba(255,255,255,0.1)';
@@ -203,56 +287,48 @@ export async function loadMountPoints() {
           fill.className = 'progress-fill';
           fill.style.height = '100%';
 
-          // Status Logic based on API response
-          if (scrapeStatus === 'processing') {
-            progressText.innerText = scrapeMsg || '处理中...';
-            fill.style.width = '100%'; // Or indefinite animation if possible, but 100 with blue is fine for "active"
-            fill.style.background = 'var(--primary)';
-            progressContainer.classList.remove('completed');
-            progressContainer.classList.remove('hidden'); // Ensure visible
-          } else if (scrapeStatus === 'success') {
-            progressText.innerText = scrapeMsg || '刮削完成';
+          if (completedMsg) {
+            if (completedMsg.includes('失败')) {
+              progressText.style.display = 'flex';
+              progressText.style.justifyContent = 'space-between';
+              progressText.style.alignItems = 'center';
+
+              const txt = document.createElement('span');
+              txt.innerText = completedMsg;
+              txt.style.overflow = 'hidden';
+              txt.style.textOverflow = 'ellipsis';
+              progressText.appendChild(txt);
+
+              const retryBtn = document.createElement('button');
+              retryBtn.className = 'btn-primary';
+              retryBtn.style.fontSize = '0.7rem';
+              retryBtn.style.padding = '2px 8px';
+              retryBtn.style.height = 'auto';
+              retryBtn.style.marginLeft = '0.5rem';
+              retryBtn.innerHTML = '<i class="fas fa-redo"></i> 重试';
+              retryBtn.onclick = async (e) => {
+                e.stopPropagation();
+                try {
+                  const res = await api.mount.retryScrape(path);
+                  if (res.success) {
+                    showToast('已重新开始刮削...');
+                    scrapedPaths.delete(path);
+                    localStorage.setItem('scrapedPaths', JSON.stringify(Array.from(scrapedPaths.entries())));
+                    loadMountPoints();
+                  } else {
+                    showToast('操作失败: ' + res.error);
+                  }
+                } catch (err) { showToast('网络错误'); }
+              };
+              progressText.appendChild(retryBtn);
+            } else {
+              progressText.innerText = completedMsg;
+            }
+
             fill.style.width = '100%';
-            fill.style.background = '#28a745'; // Green
+            fill.style.background = completedMsg.includes('失败') ? '#ffc107' : '#28a745'; // Yellow for partial fail, Green for success
             progressContainer.classList.add('completed');
-          } else if (scrapeStatus === 'failed') {
-            progressText.style.display = 'flex';
-            progressText.style.justifyContent = 'space-between';
-            progressText.style.alignItems = 'center';
-
-            const txt = document.createElement('span');
-            txt.innerText = scrapeMsg || '刮削失败';
-            txt.style.overflow = 'hidden';
-            txt.style.textOverflow = 'ellipsis';
-            progressText.appendChild(txt);
-
-            const retryBtn = document.createElement('button');
-            retryBtn.className = 'btn-primary';
-            retryBtn.style.fontSize = '0.7rem';
-            retryBtn.style.padding = '2px 8px';
-            retryBtn.style.height = 'auto';
-            retryBtn.style.marginLeft = '0.5rem';
-            retryBtn.innerHTML = '<i class="fas fa-redo"></i> 重试';
-            retryBtn.onclick = async (e) => {
-              e.stopPropagation();
-              try {
-                const res = await api.mount.retryScrape(path);
-                if (res.success) {
-                  showToast('已重新开始刮削...');
-                  // Optimistic update
-                  progressText.innerText = '已开始重新刮削...';
-                  fill.style.background = 'var(--primary)';
-                } else {
-                  showToast('操作失败: ' + res.error);
-                }
-              } catch (err) { showToast('网络错误'); }
-            };
-            progressText.appendChild(retryBtn);
-
-            fill.style.width = '100%';
-            fill.style.background = '#ffc107'; // Yellow
           } else {
-            // Default / Initial state
             progressText.innerText = '已就绪';
             fill.style.width = '0%';
             fill.style.background = 'var(--primary)';
@@ -270,7 +346,6 @@ export async function loadMountPoints() {
       }
     } else { ui.mountListContainer.innerHTML = `<div class="loading-text">加载失败: ${data.error}</div>`; }
   } catch (err) {
-    console.error(err);
     ui.mountListContainer.innerHTML = '<div class="loading-text">网络错误</div>';
   }
 }

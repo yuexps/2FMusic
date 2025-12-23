@@ -114,20 +114,6 @@ LIBRARY_VERSION = time.time()
 # 辅助: 生成ID
 def generate_song_id(path):
     return hashlib.md5(path.encode('utf-8')).hexdigest()
-# Helper: Update mount scrape status
-def update_mount_scrape_status(path, status, msg=None):
-    if not path: return
-    try:
-         # Find the mount point record corresponding to this path (should be exact match or parent?)
-         # Here we assume scan is triggered on the mount point root exactly.
-         with get_db() as conn:
-             if msg:
-                 conn.execute("UPDATE mount_points SET scrape_status=?, scrape_msg=? WHERE path=?", (status, msg, path))
-             else:
-                 conn.execute("UPDATE mount_points SET scrape_status=? WHERE path=?", (status, path))
-             conn.commit()
-    except Exception as e:
-        logger.warning(f"更新挂载点状态失败 [{path}]: {e}")
 
 # --- 文件监听器 ---
 class MusicFileEventHandler(FileSystemEventHandler):
@@ -512,9 +498,7 @@ def init_db():
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS mount_points (
                     path TEXT PRIMARY KEY,
-                    created_at REAL,
-                    scrape_status TEXT,
-                    scrape_msg TEXT
+                    created_at REAL
                 )
             ''')
             
@@ -524,24 +508,6 @@ def init_db():
                     value TEXT
                 )
             ''')
-            
-            # --- 自动升级旧版数据库 ---
-            try:
-                # 1. 升级 mount_points 表
-                columns_mp = [info[1] for info in conn.execute("PRAGMA table_info(mount_points)").fetchall()]
-                if 'scrape_status' not in columns_mp:
-                    logger.info("数据库升级: 为 mount_points 添加 scrape_status 字段")
-                    conn.execute("ALTER TABLE mount_points ADD COLUMN scrape_status TEXT")
-                if 'scrape_msg' not in columns_mp:
-                    logger.info("数据库升级: 为 mount_points 添加 scrape_msg 字段")
-                    conn.execute("ALTER TABLE mount_points ADD COLUMN scrape_msg TEXT")
-                    
-                # 2. 升级 songs 表 (如果有字段变动可在此添加)
-                # columns_songs = ...
-                
-            except Exception as e:
-                logger.warning(f"数据库自动升级检查失败 (非致命错误): {e}")
-
             
             # 清理错误索引的非音频文件
             try:
@@ -553,9 +519,8 @@ def init_db():
 
     try:
         _init_db_core()
-        logger.info("数据库初始化与升级检查完成。")
+        logger.info("数据库初始化完成。")
     except Exception as e:
-
         logger.error(f"数据库初始化失败: {e}，尝试重建数据库...")
         try:
             if os.path.exists(DB_PATH):
@@ -1026,9 +991,6 @@ def auto_scrape_missing_metadata(target_dir=None):
     """后台任务：自动刮削缺失的封面和歌词"""
     with app.app_context():
         logger.info(f"开始自动刮削缺失元数据... {f'(目录: {target_dir})' if target_dir else ''}")
-        if target_dir:
-             update_mount_scrape_status(target_dir, 'processing', '正在准备自动刮削...')
-             
         SCAN_STATUS['current_file'] = "正在准备自动刮削..."
         SCAN_STATUS['is_scraping'] = True
         SCAN_STATUS['processed'] = 0
@@ -1066,7 +1028,6 @@ def auto_scrape_missing_metadata(target_dir=None):
                 logger.info("没有需要刮削的歌曲。")
                 # 强制显示完成状态一段时间，让前端捕获
                 SCAN_STATUS['current_file'] = "刮削完成"
-                if target_dir: update_mount_scrape_status(target_dir, 'success', '刮削完成')
                 time.sleep(1.5)
                 SCAN_STATUS['is_scraping'] = False
                 return
@@ -1095,7 +1056,6 @@ def auto_scrape_missing_metadata(target_dir=None):
 
         except Exception as e:
             logger.error(f"自动刮削任务异常: {e}")
-            if target_dir: update_mount_scrape_status(target_dir, 'failed', f"刮削异常: {str(e)[:50]}")
         finally:
             logger.info("自动刮削任务结束")
             
@@ -1103,10 +1063,8 @@ def auto_scrape_missing_metadata(target_dir=None):
             failed_count = SCAN_STATUS.get('failed', 0)
             if failed_count > 0:
                 SCAN_STATUS['current_file'] = f"刮削完成 ({failed_count}首失败)"
-                if target_dir: update_mount_scrape_status(target_dir, 'failed' if failed_count > 0 else 'success', f"刮削完成 ({failed_count}首失败)")
             else:
                 SCAN_STATUS['current_file'] = "刮削完成"
-                if target_dir: update_mount_scrape_status(target_dir, 'success', '刮削完成')
             
             time.sleep(1.5)
             
@@ -1127,7 +1085,6 @@ def retry_scrape_mount():
              return jsonify({'success': False, 'error': '后台任务进行中，请稍后'})
              
         threading.Thread(target=auto_scrape_missing_metadata, args=(path,), daemon=True).start()
-        update_mount_scrape_status(path, 'processing', '已开始重新刮削')
         return jsonify({'success': True, 'message': '已开始重新刮削'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -1162,10 +1119,6 @@ def scan_directory_single(target_dir):
         with app.app_context():
             SCAN_STATUS.update({'scanning': True, 'total': 0, 'processed': 0, 'current_file': '正在扫描目录...'})
             logger.info(f"开始单独扫描目录: {target_dir}")
-            
-            # Start status
-            update_mount_scrape_status(target_dir, 'processing', '正在扫描目录...')
-
             
             disk_files = {} # path -> info
             supported_exts = AUDIO_EXTS
@@ -1398,7 +1351,7 @@ def scan_library_incremental():
         # --- 自动刮削缺失元数据 (后台独立线程) ---
         SCAN_STATUS['is_scraping'] = True
         SCAN_STATUS['current_file'] = "正在准备自动刮削..."
-        threading.Thread(target=auto_scrape_missing_metadata, args=(None,)).start() # Pass None for global scan
+        threading.Thread(target=auto_scrape_missing_metadata).start()
         
         global LIBRARY_VERSION; LIBRARY_VERSION = time.time()
         
@@ -1482,8 +1435,8 @@ def play_music(song_id):
 def list_mount_points():
     try:
         with get_db() as conn:
-            rows = conn.execute("SELECT path, scrape_status, scrape_msg FROM mount_points ORDER BY created_at DESC").fetchall()
-            return jsonify({'success': True, 'data': [dict(row) for row in rows]})
+            rows = conn.execute("SELECT path FROM mount_points ORDER BY created_at DESC").fetchall()
+            return jsonify({'success': True, 'data': [row['path'] for row in rows]})
     except Exception as e: return jsonify({'success': False, 'error': str(e)})
 
 def check_has_music(path):
