@@ -28,8 +28,7 @@ class MiGuMusicClient:
                 "artist": song['singerName'],
                 "lrc": lyrics,
                 "cover": song['cover'],
-                "id": tools.calculate_md5(
-                    f"title:{song['songName']};artists:{song['singerName']};album:{song['albumName']}", base='decstr')
+                "id": tools.calculate_md5(f"title:{song['songName']};artists:{song['singerName']};album:{song['albumName']}", base='decstr')
             })
         return results
 

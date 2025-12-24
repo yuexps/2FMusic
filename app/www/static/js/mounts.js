@@ -160,7 +160,7 @@ export function startScanPolling(isUserAction = false, onRefreshSongs, onRefresh
           // 触发刷新
           onRefreshSongs && onRefreshSongs(false); // false 表示不显示全屏 loading
           // 可选：显示一个小提示
-          showToast('发现新文件，列表已更新');
+          //showToast('发现新文件，列表已更新');
         }
       }
 

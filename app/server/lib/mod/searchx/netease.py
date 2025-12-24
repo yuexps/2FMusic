@@ -146,7 +146,7 @@ def search_track(title, artist, album):
 
     song_info: dict = response.json()
     try:
-    	song_info: list[dict] = song_info["result"]["songs"]
+        song_info: list[dict] = song_info["result"]["songs"]
     except (TypeError, KeyError):
         return []
     if len(song_info) < 1:

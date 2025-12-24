@@ -106,8 +106,7 @@ def search(title='', artist='', album=''):
                                 "artist": singer_name,
                                 "lyrics": lrc_text,
                                 "cover": get_cover(song_hash, album_id),
-                                "id": tools.calculate_md5(
-                                    f"title:{song_name};artists:{singer_name};album:{album_name}", base='decstr')
+                                "id": tools.calculate_md5(f"title:{song_name};artists:{singer_name};album:{album_name}", base='decstr')
                             }
                             result_list.append({
                                 "data": music_json_data,
@@ -129,4 +128,3 @@ def search(title='', artist='', album=''):
 
 if __name__ == "__main__":
     print(search(album="十年"))
-

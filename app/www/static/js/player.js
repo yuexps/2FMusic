@@ -1168,7 +1168,7 @@ export function switchTab(tab) {
       if (ui.sidebar && ui.sidebar.classList.contains('open')) {
         ui.sidebar.classList.remove('open');
       }
-    }, 150); // 150ms延迟关闭，避免误触
+    }, 120); // 120ms延迟关闭，避免误触
   }
 
   // 保存当前标签状态
@@ -1955,9 +1955,9 @@ export function bindUiControls() {
           // 1. 设置全屏背景渐变
           ui.fullPlayerOverlay.style.background = `linear-gradient(to bottom, ${rgbaStr} 0%, #000 120%)`;
 
-          // 2. 设置动态菜单背景色 (使用提取的 RGB + 0.6 透明度)
+          // 2. 设置动态菜单背景色 (使用提取的 RGB + 0.7 透明度)
           // 这样 Action Menu 就有了跟随封面的半透明背景
-          document.documentElement.style.setProperty('--dynamic-glass-color', `rgba(${color.r}, ${color.g}, ${color.b}, 0.6)`);
+          document.documentElement.style.setProperty('--dynamic-glass-color', `rgba(${color.r}, ${color.g}, ${color.b}, 0.7)`);
         }
       }
     };
