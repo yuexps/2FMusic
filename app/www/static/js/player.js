@@ -1487,6 +1487,9 @@ function parseAndRenderLyrics(lrc) {
   // 更宽松的歌词解析逻辑，支持更多格式的时间戳
   const timeRegex = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\]/;
 
+  let prevTime = null;
+  let prevText = '';
+
   lines.forEach(line => {
     line = line.trim();
     if (!line) return;
@@ -1519,7 +1522,31 @@ function parseAndRenderLyrics(lrc) {
       const ms = match[3] ? parseInt(match[3]) : 0;
       const time = min * 60 + sec + (ms / (match[3] && match[3].length === 3 ? 1000 : 100));
       const text = line.replace(timeRegex, '').trim();
-      if (text) state.lyricsData.push({ time, text });
+      
+      // 过滤掉只包含 // 的空注释行
+      if (text && !/^\/\/.*/.test(text)) {
+        // 支持双语歌词：如果当前时间戳与上一个相同，则将当前文本作为第二语言
+        if (prevTime !== null && Math.abs(time - prevTime) < 0.1) {
+          // 更新上一个歌词条目为双语格式
+          const lastIndex = state.lyricsData.length - 1;
+          if (lastIndex >= 0) {
+            state.lyricsData[lastIndex] = {
+              time: prevTime,
+              text: prevText,
+              text2: text
+            };
+            // 重置临时变量
+            prevTime = null;
+            prevText = '';
+            return;
+          }
+        }
+        
+        // 普通单语歌词或新的双语歌词对的第一行
+        state.lyricsData.push({ time, text });
+        prevTime = time;
+        prevText = text;
+      }
     } else {
       // 如果没有时间戳但有文本，也作为一行歌词添加
       // Only add if it doesn't look like broken JSON AND is not a metadata tag
@@ -1527,6 +1554,8 @@ function parseAndRenderLyrics(lrc) {
 
       if (!line.startsWith('{') && !isMetadata) {
         state.lyricsData.push({ time: 0, text: line });
+        prevTime = null;
+        prevText = '';
       }
     }
   });
@@ -1543,9 +1572,17 @@ function parseAndRenderLyrics(lrc) {
 
   if (ui.lyricsContainer) {
     ui.lyricsContainer.classList.remove('no-lyrics');
-    ui.lyricsContainer.innerHTML = state.lyricsData.map((l, i) =>
-      `<p class="lyric-line" data-index="${i}" data-time="${l.time}">${l.text}</p>`
-    ).join('');
+    ui.lyricsContainer.innerHTML = state.lyricsData.map((l, i) => {
+      // 渲染双语歌词，如果有第二语言文本则显示为两行
+      if (l.text2) {
+        return `<p class="lyric-line bilingual" data-index="${i}" data-time="${l.time}">
+                  <span class="lyric-main">${l.text}</span>
+                  <span class="lyric-secondary">${l.text2}</span>
+                </p>`;
+      } else {
+        return `<p class="lyric-line" data-index="${i}" data-time="${l.time}">${l.text}</p>`;
+      }
+    }).join('');
     ui.lyricsContainer.querySelectorAll('.lyric-line').forEach(line => {
       line.addEventListener('click', (e) => {
         const time = parseFloat(e.target.getAttribute('data-time'));
