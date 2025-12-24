@@ -868,7 +868,7 @@ def scrape_single_song(item, idx, total):
 
         # 搜索 (顺序尝试: QQ音乐 -> 网易云 -> 酷狗)
         results = []
-        providers = [searchx.qq, searchx.netease, searchx.kugou]
+        providers = [searchx.qq_new, searchx.netease, searchx.kugou]
         
         for attempt in range(3):
             results = [] 
