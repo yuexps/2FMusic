@@ -7,6 +7,7 @@ from functools import lru_cache
 import functools
 import asyncio
 import time
+import re
 
 if getattr(sys, 'frozen', False):
     # 【打包模式】基准目录是二进制文件所在位置
@@ -167,9 +168,21 @@ async def get_lyrics(track_id: int):
     async with aiohttp.ClientSession(headers=headers) as session:
         async with session.get(url, timeout=10) as resp:
             json_data = await resp.json(content_type=None)
-    if json_data.get('lrc', False) and json_data.get('lrc').get('lyric', False):
-        return json_data['lrc']['lyric']
-    return None
+    origin_lyric = json_data.get('lrc', {}).get('lyric', '')
+    trans_lyric = json_data.get('tlyric', {}).get('lyric', '')
+    has_translation = bool(trans_lyric.strip())
+    # 生成双语歌词（与QQ逻辑一致）
+    if has_translation:
+        # 简单按行对齐，若行数不同则只拼接有的部分
+        origin_lines = origin_lyric.splitlines()
+        trans_lines = trans_lyric.splitlines()
+        bilingual_lines = []
+        for i, line in enumerate(origin_lines):
+            bilingual_lines.append(line)
+            if i < len(trans_lines):
+                bilingual_lines.append(trans_lines[i])
+        return '\n'.join(bilingual_lines), has_translation
+    return origin_lyric, False
 
 
 async def search_track(title, artist, album):
@@ -248,17 +261,30 @@ async def search_track(title, artist, album):
             cover_url = await get_cover_url(track['album_id'])
             t_cover = time.time() - t_cover_start
         t_lyric_start = time.time()
-        lyrics = await get_lyrics(track['trace_id'])
+        lyrics, has_translation = await get_lyrics(track['trace_id'])
         t_lyric = time.time() - t_lyric_start
         t1 = time.time()
         print(f"[netease] fetch_detail 歌曲: {track['title']} 总耗时: {(t1-t0)*1000:.1f}ms (cover:{(t_cover if t_cover is not None else 0)*1000:.1f}ms lyric:{t_lyric*1000:.1f}ms)")
+        # 权重加分：如歌曲名/歌手/专辑为非中文且有翻译
+        def is_non_chinese(text):
+            if not text:
+                return False
+            chinese_chars = re.findall(r'[\u4e00-\u9fff]', text)
+            return len(chinese_chars) / max(len(text), 1) < 0.5
+
+        score_bonus = 0.0
+        if (is_non_chinese(track['title']) or is_non_chinese(track['artist']) or is_non_chinese(track['album'])) and has_translation:
+            score_bonus = 0.2
+
         music_json_data: dict = {
             "title": track['title'],
             "album": track['album'],
             "artist": track['artist'],
             "lyrics": lyrics,
             "cover": cover_url,
-            "id": tools.calculate_md5(f"title:{track['title']};artists:{track['artist']};album:{track['album']}", base='decstr')
+            "id": tools.calculate_md5(f"title:{track['title']};artists:{track['artist']};album:{track['album']}", base='decstr'),
+            "has_translation": has_translation,
+            "score_bonus": score_bonus
         }
         return music_json_data
 

@@ -246,6 +246,17 @@ def search_track(title, artist, album, max_results=3, score_threshold=0.5):
         lyric_data = get_song_lyric(songmid, parse=True) if songmid else ''
         t_lyric_end = time.perf_counter()
         print(f"[qq] 单曲cover耗时: {(t_cover_end-t_cover_start)*1000:.2f} ms, lyric耗时: {(t_lyric_end-t_lyric_start)*1000:.2f} ms")
+        # 判断是否非中文（本语），且有翻译
+        def is_non_chinese(text):
+            # 简单判断：只要不是全中文就认为是非本语
+            import re
+            if not text:
+                return False
+            # 包含非中文字符比例大于50%则认为是非本语
+            chinese_chars = re.findall(r'[\u4e00-\u9fff]', text)
+            return len(chinese_chars) / max(len(text), 1) < 0.5
+
+        has_translation = False
         if isinstance(lyric_data, dict):
             lines = []
             for item in lyric_data.get('lyric', []):
@@ -256,9 +267,15 @@ def search_track(title, artist, album, max_results=3, score_threshold=0.5):
                     lines.append(f"[{time_tag}]{lyric_line}")
                     if trans_line:
                         lines.append(f"[{time_tag}]{trans_line}")
+                        has_translation = True
             lyrics = '\n'.join(lines)
         else:
             lyrics = lyric_data or ''
+
+        # 如果歌曲名、歌手、专辑三者都非中文，且有翻译，则提升分数
+        if (is_non_chinese(song_title) or is_non_chinese(artist_name) or is_non_chinese(album_name)) and has_translation:
+            score += 0.2
+
         music_json_data = dict(song_item)
         music_json_data.update({
             "title": song_title,
@@ -267,7 +284,8 @@ def search_track(title, artist, album, max_results=3, score_threshold=0.5):
             "lyrics": lyrics,
             "cover": cover_url,
             "id": tools.calculate_md5(f"title:{song_title};artists:{artist_name};album:{album_name}", base='decstr'),
-            "score": score
+            "score": score,
+            "has_translation": has_translation
         })
         return music_json_data
 

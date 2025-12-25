@@ -50,7 +50,9 @@ def main(title, artist, album):
             "lyrics": item.get("lyrics", ""),
             "cover": item.get("cover", ""),
             "id": item.get("id", ""),
-            "source": item.get("source", "")
+            "source": item.get("source", ""),
+            "has_translation": item.get("has_translation", False),
+            "score_bonus": item.get("score_bonus", 0.0)
         }
     scored = []
     for item in all_results:
@@ -60,6 +62,7 @@ def main(title, artist, album):
         album_score = textcompare.association(album, filtered.get('album', '')) if album else 1.0
         score = 0.6 * title_score + 0.3 * artist_score + 0.1 * album_score
         score += API_BONUS.get(filtered.get('source'), 0.0)
+        score += filtered.get('score_bonus', 0.0)
         scored.append((score, filtered))
     t_score_end = time.perf_counter()
     cost_msgs.append(f"[耗时] 结果打分耗时: {(t_score_end - t_score_start)*1000:.2f} ms")
@@ -77,12 +80,14 @@ def main(title, artist, album):
         best = scored[0][1]
     print('\n全部结果按相似度排序:')
     for s, item in scored:
-        print(f"[source={item.get('source')}] score={s:.3f} title={item.get('title')} artist={item.get('artist')} album={item.get('album')} cover={item.get('cover')}")
+        trans_mark = ' [翻译]' if item.get('has_translation') else ''
+        print(f"[source={item.get('source')}] score={s:.3f} title={item.get('title')} artist={item.get('artist')} album={item.get('album')} cover={item.get('cover')}{trans_mark}")
     if best:
         lyrics_preview = best.get('lyrics')
         if lyrics_preview:
             lyrics_preview = lyrics_preview[:20] + '...' if len(lyrics_preview) > 20 else lyrics_preview
-        print(f"[search_util] 最优结果: source={best.get('source')} title={best.get('title')} artist={best.get('artist')} album={best.get('album')} cover={bool(best.get('cover'))} lyrics_preview={lyrics_preview}")
+        trans_mark = ' [翻译]' if best.get('has_translation') else ''
+        print(f"[search_util] 最优结果: source={best.get('source')} title={best.get('title')} artist={best.get('artist')} album={best.get('album')} cover={bool(best.get('cover'))} lyrics_preview={lyrics_preview}{trans_mark}")
     t_all_end = time.perf_counter()
     cost_msgs.append(f"[耗时] main() 总耗时: {(t_all_end - t_all_start)*1000:.2f} ms")
     cost_msgs.append("\nAPI 耗时统计：")
@@ -92,4 +97,4 @@ def main(title, artist, album):
 
 if __name__ == "__main__":
     # 示例：
-    main(title="可能", artist="程响", album="")
+    main(title="恋爱循环", artist="花泽香菜", album="")
