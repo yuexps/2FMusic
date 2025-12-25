@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 import os
 import sys
 import time
@@ -16,7 +15,6 @@ from urllib.parse import quote, unquote, urlparse, parse_qs
 import hashlib
 import uuid
 from datetime import timedelta
-import mod
 
 if getattr(sys, 'frozen', False):
     # 【打包模式】基准目录是二进制文件所在位置
@@ -38,8 +36,16 @@ try:
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler
     from werkzeug.middleware.proxy_fix import ProxyFix
+    import mod
 except ImportError as e:
     print(f"错误：无法导入依赖库。\n详情: {e}")
+    # 额外写入当前目录 error_import.log
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'error_import.log'), 'w', encoding='utf-8') as f:
+            f.write(f"错误：无法导入依赖库。\n详情: {e}\n")
+    except Exception:
+        pass
+    
     sys.exit(1)
 
 # 计算 www 的绝对路径

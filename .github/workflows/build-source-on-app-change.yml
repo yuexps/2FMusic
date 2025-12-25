@@ -33,21 +33,11 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
-          cache: 'pip'
 
-      - name: Install dependencies
+      - name: Prepare fnpack
         run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller
-          if [ -f app/server/requirements.txt ]; then 
-             pip install -r app/server/requirements.txt
-          fi
-
-      - name: Install fnpack
-        run: |
-          wget https://static2.fnnas.com/fnpack/fnpack-1.0.4-linux-amd64 -O fnpack
-          chmod +x fnpack
-          sudo mv fnpack /usr/local/bin/
+          cp ./fnpack-1.0.4-linux-amd64 ./fnpack
+          chmod +x ./fnpack
 
       - name: Extract Version from Manifest
         id: version
