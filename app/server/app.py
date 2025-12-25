@@ -16,7 +16,7 @@ from urllib.parse import quote, unquote, urlparse, parse_qs
 import hashlib
 import uuid
 from datetime import timedelta
-from mod import searchx
+import mod
 
 if getattr(sys, 'frozen', False):
     # 【打包模式】基准目录是二进制文件所在位置
@@ -866,46 +866,11 @@ def scrape_single_song(item, idx, total):
             ok_lyrics = not item['need_lyrics'] or any_has_lyrics(res_list)
             return ok_cover and ok_lyrics
 
-        # 搜索 (顺序尝试: QQ音乐 -> 网易云 -> 酷狗)
-        results = []
-        providers = [searchx.qq, searchx.netease, searchx.kugou]
-        
-        for attempt in range(3):
-            results = [] 
-            
-            found_satisfactory = False
-            for prov in providers:
-                try:
-                    # 1. Strict Search
-                    p_res = prov.search(title=song['title'], artist=song['artist'], album=song['album'])
-                    if p_res:
-                        results.extend(p_res)
-                    
-                    if is_satisfied(results):
-                        found_satisfactory = True
-                        break
-                    
-                    # 2. Loose Search
-                    if item['need_cover'] and not any_has_cover(results) and song['album']:
-                         l_res = prov.search(title=song['title'], artist=song['artist'], album='')
-                         if l_res:
-                             results.extend(l_res)
-                         
-                         if is_satisfied(results):
-                             found_satisfactory = True
-                             break
-                except Exception as e:
-                    logger.warning(f"Provider {prov.__name__} failed: {e}")
-            
-            if results:
-                break
-            
-            if attempt < 2:
-                time.sleep(1) # Delay between retries
-
-        if not results:
+        # 搜索 (全部获取: QQ音乐 -> 网易云 -> 酷狗)
+        result = mod.search_all(title=song['title'], artist=song['artist'], album=song['album'])
+        if not result:
             with scan_status_lock:
-                 SCAN_STATUS['failed'] = SCAN_STATUS.get('failed', 0) + 1
+                SCAN_STATUS['failed'] = SCAN_STATUS.get('failed', 0) + 1
             return
         
         # 标记是否发生部分失败（例如没找到封面或歌词）
@@ -1914,27 +1879,20 @@ def get_lyrics_api():
 
     try:
         logger.info(f"本地调用 LrcApi 搜索歌词: title={title}, artist={artist}")
-        results = searchx.search_all(title=title, artist=artist, album='')
-        if results and len(results) > 0:
-            # 查找第一个包含歌词的结果
-            best_lrc = None
-            for res in results:
-                if res.get('lyrics'):
-                    best_lrc = res['lyrics']
-                    break
-            
-            if best_lrc:
-                if save_lrc_path:
-                    try:
-                        os.makedirs(os.path.dirname(save_lrc_path), exist_ok=True)
-                        with open(save_lrc_path, 'wb') as f:
-                            f.write(best_lrc.encode('utf-8'))
-                        logger.info(f"网络歌词保存: {save_lrc_path}")
-                    except Exception as e:
-                        logger.warning(f"保存网络歌词失败: {e}")
-                return jsonify({'success': True, 'lyrics': best_lrc})
-            else:
-                 logger.warning(f"LrcApi 未找到歌词: {title}")
+        result = mod.search_all(title=title, artist=artist, album='')
+        best_lrc = result.get('lyrics') if result and result.get('lyrics') else None
+        if best_lrc:
+            if save_lrc_path:
+                try:
+                    os.makedirs(os.path.dirname(save_lrc_path), exist_ok=True)
+                    with open(save_lrc_path, 'wb') as f:
+                        f.write(best_lrc.encode('utf-8'))
+                    logger.info(f"网络歌词保存: {save_lrc_path}")
+                except Exception as e:
+                    logger.warning(f"保存网络歌词失败: {e}")
+            return jsonify({'success': True, 'lyrics': best_lrc})
+        else:
+            logger.warning(f"LrcApi 未找到歌词: {title}")
     except Exception as e:
         logger.warning(f"LrcApi 搜索歌词异常: {e}")
 
@@ -1981,14 +1939,8 @@ def get_album_art_api():
     # 网络获取并保存 - Use integrated LrcApi
     try:
         logger.info(f"本地调用 LrcApi 搜索封面: title={title}, artist={artist}")
-        results = searchx.search_all(title=title, artist=artist, album='')
-        cover_url = None
-        if results:
-            for res in results:
-                if res.get('cover'):
-                    cover_url = res['cover']
-                    break
-        
+        result = mod.search_all(title=title, artist=artist, album='')
+        cover_url = result.get('cover') if result and result.get('cover') else None
         if cover_url:
             logger.info(f"LrcApi 找到封面 URL: {cover_url}")
             try:
@@ -2000,7 +1952,7 @@ def get_album_art_api():
                 else:
                     logger.warning(f"封面下载失败: {resp.status_code}")
             except Exception as dl_err:
-                 logger.warning(f"封面下载异常: {dl_err}")
+                logger.warning(f"封面下载异常: {dl_err}")
         else:
             logger.warning("LrcApi 未找到封面")
     except Exception as e:
