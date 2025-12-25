@@ -833,34 +833,20 @@ def scrape_single_song(item, idx, total):
     SCAN_STATUS['current_path'] = song['path']
     
     try:
-        #  先尝试提取内嵌封面 (Fix: 优先使用内嵌封面，避免无效刮削)
+        # 0. 先尝试提取内嵌封面 (Fix: 优先使用内嵌封面，避免无效刮削)
         if item['need_cover']:
-            if extract_embedded_cover(song['path']):
+             if extract_embedded_cover(song['path']):
                 with get_db() as conn:
                     conn.execute("UPDATE songs SET has_cover=1 WHERE id=?", (song['id'],))
                     conn.commit()
                 logger.info(f"刮削时发现内嵌封面，已提取: {song['title']}")
-                item['need_cover'] = False  # 已解决封面，不再网络下载封面
+                item['need_cover'] = False # 已解决封面，不再网络下载封面
 
-        #  再尝试提取内嵌歌词
-        if item['need_lyrics']:
-            embedded_lyrics = extract_embedded_lyrics(song['path'])
-            if embedded_lyrics:
-                base_name = os.path.splitext(song['filename'])[0]
-                save_lrc_path = os.path.join(MUSIC_LIBRARY_PATH, 'lyrics', f"{base_name}.lrc")
-                try:
-                    with open(save_lrc_path, 'w', encoding='utf-8') as f:
-                        f.write(embedded_lyrics)
-                    logger.info(f"刮削时发现内嵌歌词，已提取: {song['title']}")
-                    item['need_lyrics'] = False  # 已解决歌词，不再网络下载歌词
-                except Exception as e:
-                    logger.warning(f"保存内嵌歌词失败: {e}")
-
-        # 如果内嵌封面和歌词都已解决，则直接返回
+        # 如果内嵌封面解决了封面问题，且不需要歌词，则直接返回
         if not item['need_cover'] and not item['need_lyrics']:
             return
 
-        # 搜索
+        # 搜索 (增加重试机制)
         results = None
         # Helper functions
         def any_has_cover(res_list):
@@ -886,31 +872,64 @@ def scrape_single_song(item, idx, total):
             ok_lyrics = not item['need_lyrics'] or any_has_lyrics(res_list)
             return ok_cover and ok_lyrics
 
-        # 搜索 (全部获取: QQ音乐 -> 网易云 -> 酷狗)
-        results = mod.search_all(title=song['title'], artist=song['artist'], album=song['album'])
+        # 搜索 (顺序尝试: QQ音乐 -> 网易云 -> 酷狗)
+        results = []
+        providers = [mod.searchx.qq, mod.searchx.netease, mod.searchx.kugou]
+        
+        for attempt in range(3):
+            results = [] 
+            
+            found_satisfactory = False
+            for prov in providers:
+                try:
+                    # 1. Strict Search
+                    p_res = prov.search(title=song['title'], artist=song['artist'], album=song['album'])
+                    if p_res:
+                        results.extend(p_res)
+                    
+                    if is_satisfied(results):
+                        found_satisfactory = True
+                        break
+                    
+                    # 2. Loose Search
+                    if item['need_cover'] and not any_has_cover(results) and song['album']:
+                         l_res = prov.search(title=song['title'], artist=song['artist'], album='')
+                         if l_res:
+                             results.extend(l_res)
+                         
+                         if is_satisfied(results):
+                             found_satisfactory = True
+                             break
+                except Exception as e:
+                    logger.warning(f"Provider {prov.__name__} failed: {e}")
+            
+            if results:
+                break
+            
+            if attempt < 2:
+                time.sleep(1) # Delay between retries
+
         if not results:
             with scan_status_lock:
-                SCAN_STATUS['failed'] = SCAN_STATUS.get('failed', 0) + 1
+                 SCAN_STATUS['failed'] = SCAN_STATUS.get('failed', 0) + 1
             return
         
         # 标记是否发生部分失败（例如没找到封面或歌词）
         is_partial_fail = False
 
-
         # 处理歌词
         if item['need_lyrics']:
             found_lyrics = None
-            if isinstance(results, dict):
-                found_lyrics = results.get('lyrics')
-            elif isinstance(results, list):
-                for res in results:
-                    try:
-                        rec_lyrics = res.get('lyrics')
-                        if rec_lyrics:
-                            found_lyrics = rec_lyrics
-                            break
-                    except:
-                        pass
+            for res in results:
+                try:
+                    # Try accessing 'lyrics' safely
+                    rec_lyrics = res['lyrics'] if 'lyrics' in res else res.get('lyrics')
+                    if rec_lyrics:
+                        found_lyrics = rec_lyrics
+                        break
+                except:
+                   pass
+            
             if found_lyrics:
                 base_name = os.path.splitext(song['filename'])[0]
                 save_lrc_path = os.path.join(MUSIC_LIBRARY_PATH, 'lyrics', f"{base_name}.lrc")
@@ -922,22 +941,21 @@ def scrape_single_song(item, idx, total):
                     logger.warning(f"保存歌词失败: {e}")
                     is_partial_fail = True
             else:
-                is_partial_fail = True
+                 # Needed lyrics but didn't find them
+                 is_partial_fail = True
 
         # 处理封面
         if item['need_cover']:
             found_cover = None
-            if isinstance(results, dict):
-                found_cover = results.get('cover')
-            elif isinstance(results, list):
-                for res in results:
-                    try:
-                        rec_cover = res.get('cover')
-                        if rec_cover:
-                            found_cover = rec_cover
-                            break
-                    except:
-                        pass
+            for res in results:
+                try:
+                     rec_cover = res['cover'] if 'cover' in res else res.get('cover')
+                     if rec_cover:
+                         found_cover = rec_cover
+                         break
+                except:
+                     pass
+            
             if found_cover:
                 base_name = os.path.splitext(song['filename'])[0]
                 local_cover_path = os.path.join(MUSIC_LIBRARY_PATH, 'covers', f"{base_name}.jpg")

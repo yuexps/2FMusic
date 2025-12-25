@@ -97,4 +97,4 @@ def main(title, artist, album):
 
 if __name__ == "__main__":
     # 示例：
-    main(title="恋爱循环", artist="花泽香菜", album="")
+    main(title="红昭愿", artist="音阙诗听", album="")
