@@ -203,10 +203,8 @@ def search_track(title, artist, album):
             "artist": track['artist'],
             "lyrics": lyrics,
             "cover": cover_url,
-            "id": tools.calculate_md5(
-                f"title:{track['title']};artists:{track['artist']};album:{track['album']}", base='decstr')
+            "id": tools.calculate_md5(f"title:{track['title']};artists:{track['artist']};album:{track['album']}", base='decstr')
         }
-
         result_list.append(music_json_data)
     return result_list
 

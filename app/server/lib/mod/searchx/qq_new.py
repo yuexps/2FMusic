@@ -65,10 +65,36 @@ def get_song_lyric(songmid, parse=False, origin=False):
     except Exception:
         return None
 
-def get_album_cover_image(albummid):
-    if not albummid or not isinstance(albummid, str) or len(albummid) < 4:
-        return None
-    return ALBUM_COVER_URL_QQ.format(albummid=albummid)
+def get_album_cover_image(albummid=None, vs=None, singer_mid=None, songmid=None):
+    """
+    获取QQ音乐歌曲所有可能的封面图片链接，按优先级返回第一个有效图片（默认），或全部可用图片。
+    支持参数：
+        albummid: 专辑mid
+        vs: vs字段图片编号列表
+        singer_mid: 歌手mid
+        songmid: 歌曲mid
+    """
+    def check_url(url):
+        try:
+            resp = requests.head(url, timeout=2)
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    candidates = []
+    # 专辑封面
+    if albummid and isinstance(albummid, str) and len(albummid) >= 4:
+        candidates.append(ALBUM_COVER_URL_QQ.format(albummid=albummid))
+    # vs 字段图片
+    if vs and isinstance(vs, list):
+        for v in vs:
+            if v and isinstance(v, str) and len(v) >= 4:
+                candidates.append(f"https://y.qq.com/music/photo_new/T062R300x300M000{v}.jpg")
+
+    for url in candidates:
+        if check_url(url):
+            return url
+    return None
 
 def parse_lyric(data):
     parsed = {
@@ -112,7 +138,7 @@ def search_track(title, artist, album, max_results=3, score_threshold=0.5):
     智能筛选：多结果排序，分数高于阈值的都可返回，默认最多返回3个。
     """
     search_str = ' '.join([item for item in [title, artist, album] if item])
-    songs = search_with_keyword(search_str, searchType=0, resultNum=10)  # 拉取更多候选
+    songs = search_with_keyword(search_str, searchType=0, resultNum=10)
     if not songs or 'list' not in songs or not songs['list']:
         return []
     results = []
@@ -130,7 +156,12 @@ def search_track(title, artist, album, max_results=3, score_threshold=0.5):
             continue
         # 组装歌词
         songmid = song_item.get('mid')
-        cover_url = get_album_cover_image(song_item.get('album', {}).get('mid', ''))
+        cover_url = get_album_cover_image(
+            albummid=song_item.get('album', {}).get('mid', ''),
+            vs=song_item.get('vs', []),
+            singer_mid=(song_item.get('singer', [{}])[0].get('mid', '') if song_item.get('singer') else ''),
+            songmid=song_item.get('mid', '')
+        )
         lyric_data = get_song_lyric(songmid, parse=True) if songmid else ''
         if isinstance(lyric_data, dict):
             lines = []

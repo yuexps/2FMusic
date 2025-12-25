@@ -9,7 +9,7 @@ def search_api(api_func, title, artist, album, result_list, source):
     results = api_func(title=title, artist=artist, album=album)
     if results:
         for item in results:
-            item = dict(item)  # 拷贝，避免污染原数据
+            item = dict(item)
             item['source'] = source
             result_list.append(item)
 
@@ -20,8 +20,8 @@ def main(title, artist, album):
     threads = []
     all_results = []
     apis = [
-        (qq_new.search_track, 'qq'),
-        (netease.search_track, 'netease'),
+        (qq_new.search, 'qq'),
+        (netease.search, 'netease'),
         (kugou.search, 'kugou')
     ]
     for api, source in apis:
@@ -43,9 +43,9 @@ def main(title, artist, album):
     print('最有效结果:', best)
     print('\n全部结果按相似度排序:')
     for s, item in scored:
-        print(f"[source={item.get('source')}] score={s:.3f} title={item.get('title')} artist={item.get('artist')} album={item.get('album')}")
+        print(f"[source={item.get('source')}] score={s:.3f} title={item.get('title')} artist={item.get('artist')} album={item.get('album')} cover={item.get('cover')}")
     return best
 
 if __name__ == "__main__":
     # 示例：
-    main(title="勾指起誓", artist="鹿乃，hanser", album="")
+    main(title="可能", artist="程响", album="")
