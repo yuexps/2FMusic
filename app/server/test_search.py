@@ -1,6 +1,3 @@
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
 import threading
 from mod.searchx import qq, netease, kugou
 from mod import textcompare
@@ -43,22 +40,44 @@ def main(title, artist, album):
     t_join_end = time.perf_counter()
     print(f"[耗时] 等待所有线程完成耗时: {(t_join_end - t_join_start)*1000:.2f} ms")
     t_score_start = time.perf_counter()
+    def filter_music_json(item):
+        return {
+            "title": item.get("title", ""),
+            "album": item.get("album", ""),
+            "artist": item.get("artist", ""),
+            "lyrics": item.get("lyrics", ""),
+            "cover": item.get("cover", ""),
+            "id": item.get("id", ""),
+            "source": item.get("source", "")
+        }
     scored = []
     for item in all_results:
-        title_score = textcompare.association(title, item.get('title', ''))
-        artist_score = textcompare.assoc_artists(artist, item.get('artist', '')) if artist else 1.0
-        album_score = textcompare.association(album, item.get('album', '')) if album else 1.0
+        filtered = filter_music_json(item)
+        title_score = textcompare.association(title, filtered.get('title', ''))
+        artist_score = textcompare.assoc_artists(artist, filtered.get('artist', '')) if artist else 1.0
+        album_score = textcompare.association(album, filtered.get('album', '')) if album else 1.0
         score = 0.6 * title_score + 0.3 * artist_score + 0.1 * album_score
-        score += API_BONUS.get(item.get('source'), 0.0)  # 微小加分
-        scored.append((score, item))
+        score += API_BONUS.get(filtered.get('source'), 0.0)
+        scored.append((score, filtered))
     t_score_end = time.perf_counter()
     print(f"[耗时] 结果打分耗时: {(t_score_end - t_score_start)*1000:.2f} ms")
     t_sort_start = time.perf_counter()
     scored.sort(reverse=True, key=lambda x: x[0])
     t_sort_end = time.perf_counter()
     print(f"[耗时] 排序耗时: {(t_sort_end - t_sort_start)*1000:.2f} ms")
-    best = scored[0][1] if scored else None
-    print('最有效结果:', best)
+    # 优先选有cover的高分结果
+    best = None
+    for score, item in scored:
+        if item.get('cover'):
+            best = item
+            break
+    if not best and scored:
+        best = scored[0][1]
+    if best:
+        lyrics_preview = best.get('lyrics')
+        if lyrics_preview:
+            lyrics_preview = lyrics_preview[:20] + '...' if len(lyrics_preview) > 20 else lyrics_preview
+        print(f"[search_util] 最优结果: source={best.get('source')} title={best.get('title')} artist={best.get('artist')} album={best.get('album')} cover={bool(best.get('cover'))} lyrics_preview={lyrics_preview}")
     print('\n全部结果按相似度排序:')
     for s, item in scored:
         print(f"[source={item.get('source')}] score={s:.3f} title={item.get('title')} artist={item.get('artist')} album={item.get('album')} cover={item.get('cover')}")

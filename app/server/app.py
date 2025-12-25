@@ -16,6 +16,7 @@ from urllib.parse import quote, unquote, urlparse, parse_qs
 import hashlib
 import uuid
 from datetime import timedelta
+from mod import searchx
 
 if getattr(sys, 'frozen', False):
     # 【打包模式】基准目录是二进制文件所在位置
@@ -37,7 +38,6 @@ try:
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler
     from werkzeug.middleware.proxy_fix import ProxyFix
-    from mod import searchx
 except ImportError as e:
     print(f"错误：无法导入依赖库。\n详情: {e}")
     sys.exit(1)

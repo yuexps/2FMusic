@@ -132,7 +132,7 @@ jobs:
     - name: Compile and Cleanup for Binary
       run: |
         echo "🔨 Compiling app.py to binary..."
-        pyinstaller --clean --onefile --name "app" --paths "app/server/lib" --icon="app/www/static/images/ICON_256.PNG" --distpath "app/server" "app/server/app.py"
+        pyinstaller --clean --onefile --name "app" --paths "app/server/lib" --paths "app/server/mod" --icon="app/www/static/images/ICON_256.PNG" --distpath "app/server" "app/server/app.py"
         
         chmod +x app/server/app
         
