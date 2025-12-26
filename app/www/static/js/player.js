@@ -1363,7 +1363,9 @@ ui.audio.addEventListener('timeupdate', () => {
 
   // Process lyrics always
   if (state.lyricsData.length) {
-    let idx = state.lyricsData.findIndex(l => l.time > ui.audio.currentTime);
+    // 提前 0.3秒 滚动歌词
+    const advance = 0.3;
+    let idx = state.lyricsData.findIndex(l => l.time > (ui.audio.currentTime + advance));
     idx = idx === -1 ? state.lyricsData.length - 1 : idx - 1;
     // Before first lyric, highlight the first line (intro)
     if (idx < 0) idx = 0;
