@@ -1,3 +1,4 @@
+#原始源码项目地址：https://github.com/HisAtri/LrcApi
 import os
 import sys
 import json
@@ -21,6 +22,14 @@ from mod.ttscn import t2s
 from mod import textcompare, tools
 from mod.ttscn import t2s
 
+TEST_TIME_LOG = False #耗时统计
+if TEST_TIME_LOG:
+    def test_time_print(*args, **kwargs):
+        print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), *args, **kwargs)
+else:
+    def test_time_print(*args, **kwargs):
+        pass
+
 # 工具函数
 def no_error(throw=None, exceptions=(Exception,)):
     """
@@ -39,8 +48,6 @@ def no_error(throw=None, exceptions=(Exception,)):
                 return None
         return wrapper
     return decorator
-
-
 
 headers = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0',
@@ -213,7 +220,7 @@ async def search_track(title, artist, album):
                 return None
             song_info = await resp.json(content_type=None)
     t_api = time.time()
-    print(f"[netease] 搜索API耗时: {(t_api-t_start)*1000:.1f}ms")
+    test_time_print(f"[netease] 搜索API耗时: {(t_api-t_start)*1000:.1f}ms")
 
     # 打印原始API返回内容，便于调试
     #debug_str = json.dumps(song_info, ensure_ascii=False, indent=2)
@@ -236,7 +243,6 @@ async def search_track(title, artist, album):
         album_name = album_['name'] if album_ is not None else ''
         # 取所有名字中最高的相似度
         title_conform_ratio = max([textcompare.association(title, name) for name in song_names])
-
         artist_conform_ratio = textcompare.assoc_artists(artist, singer_name)
         album_conform_ratio = textcompare.association(album, album_name)
 
@@ -278,17 +284,7 @@ async def search_track(title, artist, album):
         lyrics, has_translation = await get_lyrics(track['trace_id'])
         t_lyric = time.time() - t_lyric_start
         t1 = time.time()
-        print(f"[netease] fetch_detail 歌曲: {track['title']} 总耗时: {(t1-t0)*1000:.1f}ms (cover:{(t_cover if t_cover is not None else 0)*1000:.1f}ms lyric:{t_lyric*1000:.1f}ms)")
-        # 权重加分：如歌曲名/歌手/专辑为非中文且有翻译
-        def is_non_chinese(text):
-            if not text:
-                return False
-            chinese_chars = re.findall(r'[\u4e00-\u9fff]', text)
-            return len(chinese_chars) / max(len(text), 1) < 0.5
-
-        score_bonus = 0.0
-        if (is_non_chinese(track['title']) or is_non_chinese(track['artist']) or is_non_chinese(track['album'])) and has_translation:
-            score_bonus = 0.2
+        test_time_print(f"[netease] fetch_detail 歌曲: {track['title']} 总耗时: {(t1-t0)*1000:.1f}ms (cover:{(t_cover if t_cover is not None else 0)*1000:.1f}ms lyric:{t_lyric*1000:.1f}ms)")
 
         music_json_data: dict = {
             "title": track['title'],
@@ -297,8 +293,7 @@ async def search_track(title, artist, album):
             "lyrics": lyrics,
             "cover": cover_url,
             "id": tools.calculate_md5(f"title:{track['title']};artists:{track['artist']};album:{track['album']}", base='decstr'),
-            "has_translation": has_translation,
-            "score_bonus": score_bonus
+            "has_translation": has_translation
         }
         return music_json_data
 
@@ -363,6 +358,5 @@ def search(title='', artist='', album=''):
     elif artist:
         result = asyncio.run(search_artist(artist))
     t_search_end = time.time()
-    print(f"[netease] search 总耗时: {(t_search_end-t_search_start)*1000:.1f}ms")
+    test_time_print(f"[netease] search 总耗时: {(t_search_end-t_search_start)*1000:.1f}ms")
     return result
-

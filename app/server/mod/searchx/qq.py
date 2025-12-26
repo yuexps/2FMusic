@@ -14,6 +14,14 @@ else:
 
 import aiohttp
 
+TEST_TIME_LOG = False #耗时统计
+if TEST_TIME_LOG:
+    def test_time_print(*args, **kwargs):
+        print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), *args, **kwargs)
+else:
+    def test_time_print(*args, **kwargs):
+        pass
+
 COMMON_SEARCH_URL_QQ = 'https://u.y.qq.com/cgi-bin/musicu.fcg'
 LYRIC_URL_QQ = 'https://i.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid={}&g_tk=5381&format=json&inCharset=utf8&outCharset=utf-8&nobase64=1'
 ALBUM_COVER_URL_QQ = 'https://y.qq.com/music/photo_new/T002R300x300M000{albummid}.jpg'
@@ -46,7 +54,7 @@ async def async_search_with_keyword(keyword, origin=False, session=None):
         resp_data = await resp.json(content_type=None)
     t_req_end = time.perf_counter()
     t_parse_end = time.perf_counter()
-    print(f"[qq] async_search_with_keyword: 网络请求耗时: {(t_req_end-t_req_start)*1000:.2f} ms, 解析耗时: {(t_parse_end-t_req_end)*1000:.2f} ms, 总耗时: {(t_parse_end-t_start)*1000:.2f} ms")
+    test_time_print(f"[qq] async_search_with_keyword: 网络请求耗时: {(t_req_end-t_req_start)*1000:.2f} ms, 解析耗时: {(t_parse_end-t_req_end)*1000:.2f} ms, 总耗时: {(t_parse_end-t_start)*1000:.2f} ms")
     if origin:
         return resp_data
     try:
@@ -65,7 +73,7 @@ async def async_get_song_lyric(songmid, parse=False, origin=False, session=None)
     
     t_req_end = time.perf_counter()
     t_parse_end = time.perf_counter()
-    print(f"[qq] async_get_song_lyric: 网络请求耗时: {(t_req_end-t_req_start)*1000:.2f} ms, 解析耗时: {(t_parse_end-t_req_end)*1000:.2f} ms, 总耗时: {(t_parse_end-t_start)*1000:.2f} ms")
+    test_time_print(f"[qq] async_get_song_lyric: 网络请求耗时: {(t_req_end-t_req_start)*1000:.2f} ms, 解析耗时: {(t_parse_end-t_req_end)*1000:.2f} ms, 总耗时: {(t_parse_end-t_start)*1000:.2f} ms")
     if origin:
         return data
     try:
@@ -126,7 +134,7 @@ async def async_search(title='', artist='', album=''):
     if title:
         res = await async_search_track(title=title, artist=artist, album=album)
         t_end = time.perf_counter()
-        print(f"[qq] async_search: 总耗时: {(t_end-t_start)*1000:.2f} ms")
+        test_time_print(f"[qq] async_search: 总耗时: {(t_end-t_start)*1000:.2f} ms")
         return res
     return None
 
@@ -138,7 +146,7 @@ async def async_search_track(title, artist, album, max_results=3, score_threshol
         songs = await async_search_with_keyword(search_str, session=session)
         t_search_end = time.perf_counter()
         if not songs or 'list' not in songs or not songs['list']:
-            print(f"[qq] async_search_track: 搜索耗时: {(t_search_end-t_start)*1000:.2f} ms (无结果)")
+            test_time_print(f"[qq] async_search_track: 搜索耗时: {(t_search_end-t_start)*1000:.2f} ms (无结果)")
             return []
 
         scored_items = []
@@ -149,7 +157,13 @@ async def async_search_track(title, artist, album, max_results=3, score_threshol
             title_score = textcompare.association(title, song_title)
             artist_score = textcompare.assoc_artists(artist, artist_name) if artist else 1.0
             album_score = textcompare.association(album, album_name) if album else 1.0
+            
+            # 基础分数
             score = 0.6 * title_score + 0.3 * artist_score + 0.1 * album_score
+            
+            # 为精确匹配的专辑名称提供额外加分，提高排名优先级
+            if album and album_name == album:
+                score += 0.2
             if score < score_threshold:
                 continue
             scored_items.append((score, song_item, song_title, album_name, artist_name))
@@ -168,14 +182,7 @@ async def async_search_track(title, artist, album, max_results=3, score_threshol
             t_lyric_start = time.perf_counter()
             lyric_data = await async_get_song_lyric(songmid, parse=True, session=session) if songmid else ''
             t_lyric_end = time.perf_counter()
-            print(f"[qq] 单曲cover耗时: {(t_cover_end-t_cover_start)*1000:.2f} ms, lyric耗时: {(t_lyric_end-t_lyric_start)*1000:.2f} ms")
-            # 判断是否非中文，且有翻译
-            def is_non_chinese(text):
-                import re
-                if not text:
-                    return False
-                chinese_chars = re.findall(r'[\u4e00-\u9fff]', text)
-                return len(chinese_chars) / max(len(text), 1) < 0.5
+            test_time_print(f"[qq] 单曲cover耗时: {(t_cover_end-t_cover_start)*1000:.2f} ms, lyric耗时: {(t_lyric_end-t_lyric_start)*1000:.2f} ms")
 
             has_translation = False
             if isinstance(lyric_data, dict):
@@ -219,9 +226,6 @@ async def async_search_track(title, artist, album, max_results=3, score_threshol
             else:
                 lyrics = lyric_data or ''
 
-            if (is_non_chinese(song_title) or is_non_chinese(artist_name) or is_non_chinese(album_name)) and has_translation:
-                score += 0.2
-
             music_json_data = dict(song_item)
             music_json_data.update({
                 "title": song_title,
@@ -230,7 +234,6 @@ async def async_search_track(title, artist, album, max_results=3, score_threshol
                 "lyrics": lyrics,
                 "cover": cover_url,
                 "id": tools.calculate_md5(f"title:{song_title};artists:{artist_name};album:{album_name}", base='decstr'),
-                "score": score,
                 "has_translation": has_translation
             })
             return music_json_data
@@ -239,36 +242,37 @@ async def async_search_track(title, artist, album, max_results=3, score_threshol
         top_items = scored_items[:max_results]
         results = await asyncio.gather(*(fetch_detail(item) for item in top_items))
         t_end = time.perf_counter()
-        print(f"[qq] async_search_track: 总耗时: {(t_end-t_start)*1000:.2f} ms")
+        test_time_print(f"[qq] async_search_track: 总耗时: {(t_end-t_start)*1000:.2f} ms")
         return results
 
 async def async_get_album_cover_image(albummid=None, vs=None, session=None):
     t_start = time.perf_counter()
+
     async def async_check_album_url(url, timeout=0.7, idx=None):
         try:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
                 if idx is not None:
-                    print(f"[debug] check album[{idx}] {url} status: {resp.status}")
+                    test_time_print(f"[debug] check album[{idx}] {url} status: {resp.status}")
                 else:
-                    print(f"[debug] check album {url} status: {resp.status}")
+                    test_time_print(f"[debug] check album {url} status: {resp.status}")
                 return resp.status == 200
         except Exception as e:
             if idx is not None:
-                print(f"[debug] check album[{idx}] {url} exception: {repr(e)}")
+                test_time_print(f"[debug] check album[{idx}] {url} exception: {repr(e)}")
             else:
-                print(f"[debug] check album {url} exception: {repr(e)}")
+                test_time_print(f"[debug] check album {url} exception: {repr(e)}")
             return False
 
     if albummid and isinstance(albummid, str) and len(albummid) >= 4:
         album_url = ALBUM_COVER_URL_QQ.format(albummid=albummid)
         if await async_check_album_url(album_url, timeout=0.7):
             t_end = time.perf_counter()
-            print(f"[qq] async_get_album_cover_image: 命中album封面，总耗时: {(t_end-t_start)*1000:.2f} ms")
+            test_time_print(f"[qq] async_get_album_cover_image: 命中album封面，总耗时: {(t_end-t_start)*1000:.2f} ms")
             return album_url
         else:
-            print(f"[qq] async_get_album_cover_image: album封面无效，尝试vs图")
+            test_time_print(f"[qq] async_get_album_cover_image: album封面无效，尝试vs图")
     else:
-        print(f"[qq] async_get_album_cover_image: 无albummid，尝试vs图")
+        test_time_print(f"[qq] async_get_album_cover_image: 无albummid，尝试vs图")
 
     if vs and isinstance(vs, list):
         vs_urls = []
@@ -281,16 +285,16 @@ async def async_get_album_cover_image(albummid=None, vs=None, session=None):
                 idx, url_real = url if isinstance(url, tuple) else (None, url)
                 async with session.get(url_real, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
                     if idx is not None:
-                        print(f"[debug] check vs[{idx}] {url_real} status: {resp.status}")
+                        test_time_print(f"[debug] check vs[{idx}] {url_real} status: {resp.status}")
                     else:
-                        print(f"[debug] check {url_real} status: {resp.status}")
+                        test_time_print(f"[debug] check {url_real} status: {resp.status}")
                     return resp.status == 200
             except Exception as e:
                 idx, url_real = url if isinstance(url, tuple) else (None, url)
                 if idx is not None:
-                    print(f"[debug] check vs[{idx}] {url_real} exception: {repr(e)}")
+                    test_time_print(f"[debug] check vs[{idx}] {url_real} exception: {repr(e)}")
                 else:
-                    print(f"[debug] check {url_real} exception: {repr(e)}")
+                    test_time_print(f"[debug] check {url_real} exception: {repr(e)}")
                 return False
 
         async def check_vs_images(urls):
@@ -298,7 +302,7 @@ async def async_get_album_cover_image(albummid=None, vs=None, session=None):
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for result, url in zip(results, urls):
                 if result is True:
-                    idx, url_real = url if isinstance(url, tuple) else (None, url)
+                    url_real = url if isinstance(url, tuple) else (None, url)
                     return url_real
             return None
 
@@ -306,11 +310,11 @@ async def async_get_album_cover_image(albummid=None, vs=None, session=None):
             url = await check_vs_images(vs_urls)
             t_end = time.perf_counter()
             if url:
-                print(f"[qq] async_get_album_cover_image: 命中vs封面，总耗时: {(t_end-t_start)*1000:.2f} ms")
+                test_time_print(f"[qq] async_get_album_cover_image: 命中vs封面，总耗时: {(t_end-t_start)*1000:.2f} ms")
                 return url
 
     t_end = time.perf_counter()
-    print(f"[qq] async_get_album_cover_image: 未命中封面，总耗时: {(t_end-t_start)*1000:.2f} ms")
+    test_time_print(f"[qq] async_get_album_cover_image: 未命中封面，总耗时: {(t_end-t_start)*1000:.2f} ms")
     return None
 
 def search(title='', artist='', album=''):

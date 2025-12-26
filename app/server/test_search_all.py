@@ -1,4 +1,5 @@
 import mod
 
-result = mod.search_all("エウテルペ", "EGOIST","")
+result = mod.search_all("Stronger", "Kelly Clarkson","Stronger (Deluxe Version)")
+
 print(result)

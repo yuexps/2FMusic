@@ -1,3 +1,4 @@
+#原始源码项目地址：https://github.com/HisAtri/LrcApi
 import os
 import sys
 import base64
@@ -16,6 +17,14 @@ else:
 from mod import textcompare
 from mod import tools
 import aiohttp
+
+TEST_TIME_LOG = False #耗时统计
+if TEST_TIME_LOG:
+    def test_time_print(*args, **kwargs):
+        print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), *args, **kwargs)
+else:
+    def test_time_print(*args, **kwargs):
+        pass
 
 # 工具函数
 def no_error(throw=None, exceptions=(Exception,)):
@@ -90,7 +99,7 @@ async def search_async(title='', artist='', album=''):
                 cover_time_start = time.time()
                 # cover_url 已直接从 song_item 获取，如需后续异步获取可在此处加耗时统计
                 cover_time_end = time.time()
-                print(f"[kugou] cover 获取: {round((cover_time_end - cover_time_start) * 1000)} ms [{song_name}]")
+                test_time_print(f"[kugou] cover 获取: {round((cover_time_end - cover_time_start) * 1000)} ms [{song_name}]")
 
                 lrc_text = ""
                 try:
@@ -112,9 +121,9 @@ async def search_async(title='', artist='', album=''):
                         if lyrics_encode:
                             lrc_text = tools.standard_lrc(base64.b64decode(lyrics_encode).decode('utf-8'))
                     lyric_time_end = time.time()
-                    print(f"[kugou] 歌词获取: {round((lyric_time_end - lyric_time_start) * 1000)} ms [{song_name}]")
+                    test_time_print(f"[kugou] 歌词获取: {round((lyric_time_end - lyric_time_start) * 1000)} ms [{song_name}]")
                 except Exception as e:
-                    print(f"[kugou] 歌词获取错误: {e}")
+                    test_time_print(f"[kugou] 歌词获取错误: {e}")
                 music_json_data = {
                     "title": song_name,
                     "album": album_name,
@@ -130,7 +139,7 @@ async def search_async(title='', artist='', album=''):
         return None
     sort_li = sorted(result_list, key=lambda x: x['ratio'], reverse=True)
     time_end = time.time()
-    print(f"[kugou] search_async: {round((time_end - time_start) * 1000)} ms")
+    test_time_print(f"[kugou] search_async: {round((time_end - time_start) * 1000)} ms")
     return [i.get('data') for i in sort_li[:limit]]
 
 # 同步包装器
@@ -138,5 +147,5 @@ def search(*args, **kwargs):
     time_start = time.time()
     result = asyncio.run(search_async(*args, **kwargs))
     time_end = time.time()
-    print(f"[kugou] search 总耗时: {round((time_end - time_start) * 1000)} ms")
+    test_time_print(f"[kugou] search 总耗时: {round((time_end - time_start) * 1000)} ms")
     return result
