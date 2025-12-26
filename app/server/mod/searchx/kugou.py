@@ -8,12 +8,9 @@ import functools
 import asyncio
 
 if getattr(sys, 'frozen', False):
-    # 【打包模式】基准目录是二进制文件所在位置
     BASE_DIR = os.path.dirname(sys.executable)
 else:
-    # 【源码模式】基准目录是脚本所在位置
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    # 仅在源码模式下加载 lib
     sys.path.insert(0, os.path.join(BASE_DIR, 'lib'))
 
 from mod import textcompare
