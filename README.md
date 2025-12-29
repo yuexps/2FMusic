@@ -2,7 +2,7 @@
 
 > 这是一个轻量的本地音乐播放器，基于 Flask + 原生 Web 技术构建。
 
- <img src="https://img.shields.io/github/v/release/yuexps/2FMusic?label=pre--release&amp;include_prereleases" alt="pre-release"> <img src="https://img.shields.io/github/actions/workflow/status/yuexps/2FMusic/test-build.yml?label=latest%20action" alt="latest action">
+[![pre-release](https://img.shields.io/github/v/release/yuexps/2FMusic?label=pre--release&include_prereleases)](https://github.com/yuexps/2FMusic/releases/latest) [![latest action](https://img.shields.io/github/actions/workflow/status/yuexps/2FMusic/test-build.yml?label=latest%20action)](https://github.com/yuexps/2FMusic/actions/workflows/test-build.yml)
 
 🚧 **目前项目处于早期开发阶段，功能暂不稳定，欢迎提交 PR 完善项目 或 Issue 反馈 Bug！**
 
