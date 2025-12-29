@@ -1,10 +1,10 @@
 # 🎵 2FMusic
 
-> **本项目是基于 Gemini 3 Pro 协助开发的实验性产物。**
->
 > 这是一个轻量的本地音乐播放器，基于 Flask + 原生 Web 技术构建。
 
- - 最新构建(未测试)：[![Build Source on App Change](https://github.com/yuexps/2FMusic/actions/workflows/build-source-on-app-change.yml/badge.svg)](https://github.com/yuexps/2FMusic/actions/workflows/build-source-on-app-change.yml)
+ - <img src="https://img.shields.io/github/v/release/yuexps/2FMusic?label=pre--release&amp;include_prereleases" alt="pre-release">
+
+ - <img src="https://img.shields.io/github/actions/workflow/status/yuexps/2FMusic/test-build.yml?label=latest%20action" alt="latest action"> <sub>极不稳定，仅供测试最新更改</sub>
 
 🚧 **目前项目处于早期开发阶段，功能暂不稳定，欢迎提交 PR 完善项目 或 Issue 反馈 Bug！**
 

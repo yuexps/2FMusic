@@ -1,4 +1,4 @@
-name: Build Source on App Change
+name: Auto Build Test Package
 
 on:
   workflow_dispatch:
