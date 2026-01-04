@@ -178,6 +178,31 @@ export const api = {
         body: JSON.stringify({ song_id, playlist_id })
       });
       return jsonOrThrow(res);
+    },
+    // 批量操作 API
+    async batchAdd(song_ids, playlist_ids, songs = {}) {
+      const res = await fetch('/api/favorites/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ song_ids, playlist_ids, songs })
+      });
+      return jsonOrThrow(res);
+    },
+    async batchRemove(song_ids, playlist_ids) {
+      const res = await fetch('/api/favorites/batch', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ song_ids, playlist_ids })
+      });
+      return jsonOrThrow(res);
+    },
+    async batchMove(song_ids, from_playlist_id, to_playlist_id) {
+      const res = await fetch('/api/favorites/batch/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ song_ids, from_playlist_id, to_playlist_id })
+      });
+      return jsonOrThrow(res);
     }
   },
   favoritePlaylists: {

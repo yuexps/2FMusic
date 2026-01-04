@@ -5,6 +5,7 @@ import { api } from './api.js';
 import { initNetease } from './netease.js';
 import { initMounts, loadMountPoints, startScanPolling } from './mounts.js';
 import { initPlayer, loadSongs, performDelete, handleExternalFile, renderPlaylist, switchTab } from './player.js';
+import { batchManager } from './batch-manager.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   // 版本检查
@@ -286,6 +287,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   initSettings();
+
+  // 初始化批量操作模块
+  // 批量操作现在由 batch-manager.js 的右键菜单处理
 
   // 初始化模块
   initMounts(loadSongs);

@@ -4,6 +4,7 @@ import { api } from './api.js';
 import { showToast, showConfirmDialog, hideProgressToast, updateDetailFavButton, formatTime, renderNoLyrics, updateSliderFill, flyToElement, throttle, extractColorFromImage } from './utils.js';
 import { startScanPolling, loadMountPoints } from './mounts.js';
 import { showPlaylistSelectDialog, loadPlaylistFilter, handlePlaylistFilterChange, showCreatePlaylistDialog, clearPlaylistCache } from './favorites.js';
+import { batchManager } from './batch-manager.js';
 
 // 收藏功能相关函数已部分移至 favorites.js
 
@@ -431,30 +432,25 @@ export function renderPlaylist() {
       card.dataset.index = index;
       if (song.isExternal) card.style.border = '1px dashed var(--primary)';
 
-      // 使用 ID 判断收藏状态
-      const isFav = state.favorites.has(song.id);
-
-      let favHtml = `<button class="card-fav-btn ${isFav ? 'active' : ''}" title="收藏"><i class="${isFav ? 'fas' : 'far'} fa-heart"></i></button>`;
-      if (song.isExternal) favHtml = '';
-      card.innerHTML = `${favHtml}<img src="${song.cover}" loading="lazy"><div class="card-info"><div class="title" title="${song.title}">${song.title}</div><div class="artist">${song.artist}</div></div>`;
+      // 卡片内容（不包含复选框和收藏按钮）
+      card.innerHTML = `<img src="${song.cover}" loading="lazy"><div class="card-info"><div class="title" title="${song.title}">${song.title}</div><div class="artist">${song.artist}</div></div>`;
 
       card.addEventListener('click', (e) => {
-        if (!e.target.closest('.card-fav-btn')) {
-          state.playQueue = [...state.displayPlaylist];
-          playTrack(index);
+        // 防止点击复选框时触发播放
+        if (e.target.closest('.song-checkbox')) {
+          return;
         }
+        state.playQueue = [...state.displayPlaylist];
+        playTrack(index);
       });
-
-      if (!song.isExternal) {
-        const favBtn = card.querySelector('.card-fav-btn');
-        favBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          toggleFavorite(song, favBtn);
-        });
-      }
       frag.appendChild(card);
     });
     ui.songContainer.appendChild(frag);
+
+    // 恢复批量选择状态
+    if (batchManager && batchManager.restoreBatchState) {
+      batchManager.restoreBatchState();
+    }
 
     // 重置渲染标记
     isRendering = false;
@@ -992,38 +988,34 @@ function renderPlaylistSongs(songs) {
   }
 
   const frag = document.createDocumentFragment();
-  sortedSongs.forEach((song, index) => {
+  sortedSongs.forEach((song) => {
     const card = document.createElement('div');
     card.className = 'song-card';
-    card.dataset.index = state.displayPlaylist.indexOf(song);
+    const songIndex = state.displayPlaylist.indexOf(song);
+    card.dataset.index = songIndex;
     if (song.isExternal) card.style.border = '1px dashed var(--primary)';
 
-    // 使用 ID 判断收藏状态
-    const isFav = state.favorites.has(song.id);
-
-    let favHtml = `<button class="card-fav-btn ${isFav ? 'active' : ''}" title="收藏"><i class="${isFav ? 'fas' : 'far'} fa-heart"></i></button>`;
-    if (song.isExternal) favHtml = '';
-    card.innerHTML = `${favHtml}<img src="${song.cover}" loading="lazy"><div class="card-info"><div class="title" title="${song.title}">${song.title}</div><div class="artist">${song.artist}</div></div>`;
+    // 卡片内容（不包含复选框和收藏按钮）
+    card.innerHTML = `<img src="${song.cover}" loading="lazy"><div class="card-info"><div class="title" title="${song.title}">${song.title}</div><div class="artist">${song.artist}</div></div>`;
 
     card.addEventListener('click', (e) => {
-      if (!e.target.closest('.card-fav-btn')) {
-        state.playQueue = [...songs];
-        playTrack(index);
+      // 防止点击复选框时触发播放
+      if (e.target.closest('.song-checkbox')) {
+        return;
       }
+      state.playQueue = [...songs];
+      playTrack(songIndex);
     });
-
-    if (!song.isExternal) {
-      const favBtn = card.querySelector('.card-fav-btn');
-      favBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleFavorite(song, favBtn);
-      });
-    }
     frag.appendChild(card);
   });
 
   songListContainer.appendChild(frag);
   highlightCurrentTrack();
+
+  // 恢复批量选择状态
+  if (batchManager && batchManager.restoreBatchState) {
+    batchManager.restoreBatchState();
+  }
 }
 
 export function switchTab(tab) {

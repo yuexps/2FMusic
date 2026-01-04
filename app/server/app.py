@@ -88,6 +88,7 @@ DB_PATH = os.path.join(MUSIC_LIBRARY_PATH, 'data.db')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.handlers.clear()
+logger.propagate = False  # 防止日志传播到根logger
 file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
 file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 console_handler = logging.StreamHandler()
@@ -491,6 +492,8 @@ def init_db():
                 CREATE TABLE IF NOT EXISTS favorites (
                    song_id TEXT,
                    playlist_id TEXT,
+                   title TEXT DEFAULT '',
+                   artist TEXT DEFAULT '',
                    created_at REAL,
                    PRIMARY KEY (song_id, playlist_id)
                 )
@@ -1435,12 +1438,17 @@ def get_music_list():
 
 @app.route('/api/music/play/<song_id>')
 def play_music(song_id):
-    logger.info(f"API请求: 播放音乐 ID={song_id}")
     try:
         with get_db() as conn:
-            row = conn.execute("SELECT path FROM songs WHERE id=?", (song_id,)).fetchone()
-            if row and os.path.exists(row['path']):
-                return send_file(row['path'], conditional=True)
+            row = conn.execute("SELECT path, title, artist FROM songs WHERE id=?", (song_id,)).fetchone()
+            if row:
+                title = row['title'] or '未知'
+                artist = row['artist'] or '未知'
+                logger.info(f"API请求: 播放音乐 ID={song_id} ({title} - {artist})")
+                if os.path.exists(row['path']):
+                    return send_file(row['path'], conditional=True)
+            else:
+                logger.info(f"API请求: 播放音乐 ID={song_id}")
             
     except Exception as e:
         logger.error(f"播放失败: {e}")
@@ -2318,16 +2326,18 @@ def add_favorite():
         data = request.get_json()
         song_id = data.get('song_id')
         playlist_id = data.get('playlist_id', 'default')  # 默认添加到默认收藏夹
+        title = data.get('title', '')
+        artist = data.get('artist', '')
         
         if not song_id:
             logger.warning("添加收藏失败: 歌曲ID不能为空")
             return jsonify({'success': False, 'error': "歌曲ID不能为空"})
         
         with get_db() as conn:
-            conn.execute("INSERT OR IGNORE INTO favorites (song_id, playlist_id, created_at) VALUES (?, ?, ?)", 
-                        (song_id, playlist_id, time.time()))
+            conn.execute("INSERT OR IGNORE INTO favorites (song_id, playlist_id, title, artist, created_at) VALUES (?, ?, ?, ?, ?)", 
+                        (song_id, playlist_id, title, artist, time.time()))
             conn.commit()
-        logger.info(f"添加到收藏夹成功: 歌曲ID: {song_id} -> 收藏夹ID: {playlist_id}")
+        logger.info(f"添加到收藏夹成功: 歌曲ID: {song_id} ({title} - {artist}) -> 收藏夹ID: {playlist_id}")
         return jsonify({'success': True})
     except Exception as e:
         logger.error(f"添加收藏失败: {e}")
@@ -2369,6 +2379,209 @@ def get_favorites():
     except Exception as e:
         logger.error(f"获取所有收藏夹歌曲失败: {e}")
         return jsonify({'success': False, 'error': str(e)})
+
+# 批量添加歌曲到收藏夹
+@app.route('/api/favorites/batch', methods=['POST'])
+def batch_add_favorites():
+    logger.info("API请求: 批量添加歌曲到收藏夹")
+    try:
+        data = request.get_json()
+        song_ids = data.get('song_ids', [])
+        playlist_ids = data.get('playlist_ids', ['default'])
+        songs = data.get('songs', {})  # 歌曲信息映射: {song_id: {title, artist}}
+        
+        if not song_ids:
+            logger.warning("批量添加收藏失败: 歌曲ID列表不能为空")
+            return jsonify({'success': False, 'error': "歌曲ID列表不能为空"})
+        
+        if not playlist_ids:
+            logger.warning("批量添加收藏失败: 收藏夹ID列表不能为空")
+            return jsonify({'success': False, 'error': "收藏夹ID列表不能为空"})
+        
+        successful_count = 0
+        failed_count = 0
+        
+        with get_db() as conn:
+            try:
+                # 使用事务确保原子性
+                for song_id in song_ids:
+                    for playlist_id in playlist_ids:
+                        try:
+                            song_info = songs.get(song_id, {})
+                            title = song_info.get('title', '')
+                            artist = song_info.get('artist', '')
+                            conn.execute("INSERT OR IGNORE INTO favorites (song_id, playlist_id, title, artist, created_at) VALUES (?, ?, ?, ?, ?)", 
+                                        (song_id, playlist_id, title, artist, time.time()))
+                            successful_count += 1
+                        except Exception as e:
+                            logger.warning(f"添加收藏失败: 歌曲{song_id}到收藏夹{playlist_id}: {e}")
+                            failed_count += 1
+                conn.commit()
+            except Exception as e:
+                logger.error(f"批量添加收藏事务失败: {e}")
+                conn.rollback()
+                return jsonify({'success': False, 'error': "批量添加失败，事务已回滚"})
+        
+        logger.info(f"批量添加歌曲成功: 成功{successful_count}条，失败{failed_count}条")
+        return jsonify({'success': True, 'data': {'successful': successful_count, 'failed': failed_count}})
+    except Exception as e:
+        logger.error(f"批量添加收藏失败: {e}")
+        return jsonify({'success': False, 'error': "批量添加失败"})
+
+# 批量从收藏夹移除歌曲
+@app.route('/api/favorites/batch', methods=['DELETE'])
+def batch_remove_favorites():
+    logger.info("API请求: 批量从收藏夹移除歌曲")
+    try:
+        data = request.get_json()
+        song_ids = data.get('song_ids', [])
+        playlist_ids = data.get('playlist_ids', [])
+        
+        if not song_ids:
+            logger.warning("批量移除收藏失败: 歌曲ID列表不能为空")
+            return jsonify({'success': False, 'error': "歌曲ID列表不能为空"})
+        
+        if not playlist_ids:
+            logger.warning("批量移除收藏失败: 收藏夹ID列表不能为空")
+            return jsonify({'success': False, 'error': "收藏夹ID列表不能为空"})
+        
+        successful_count = 0
+        failed_count = 0
+        
+        with get_db() as conn:
+            try:
+                # 使用事务确保原子性
+                for song_id in song_ids:
+                    for playlist_id in playlist_ids:
+                        try:
+                            # 执行DELETE
+                            cursor = conn.execute("DELETE FROM favorites WHERE song_id=? AND playlist_id=?", (song_id, playlist_id))
+                            # 检查是否真的删除了行（rowcount > 0）
+                            if cursor.rowcount > 0:
+                                successful_count += 1
+                                logger.debug(f"成功删除: 歌曲{song_id}从收藏夹{playlist_id}")
+                            else:
+                                # rowcount=0 说明没找到这个记录（可能已经被删除或不存在）
+                                logger.warning(f"记录不存在或已删除: 歌曲{song_id}在收藏夹{playlist_id}")
+                                successful_count += 1  # 视为成功（结果一致）
+                        except Exception as e:
+                            logger.warning(f"移除收藏失败: 歌曲{song_id}从收藏夹{playlist_id}: {e}")
+                            failed_count += 1
+                conn.commit()
+                
+                # 数据库验证：删除后查询确认记录不存在
+                verify_failed = 0
+                for song_id in song_ids:
+                    for playlist_id in playlist_ids:
+                        remaining = conn.execute(
+                            "SELECT COUNT(*) as count FROM favorites WHERE song_id=? AND playlist_id=?", 
+                            (song_id, playlist_id)
+                        ).fetchone()
+                        if remaining and remaining['count'] > 0:
+                            verify_failed += 1
+                            logger.error(f"验证失败: 歌曲{song_id}仍在收藏夹{playlist_id}中，DELETE操作未生效！")
+                
+                if verify_failed > 0:
+                    logger.error(f"批量移除验证失败: {verify_failed}条记录验证失败")
+                    return jsonify({'success': False, 'error': f"移除失败，有{verify_failed}条记录删除未生效"})
+                    
+            except Exception as e:
+                logger.error(f"批量移除收藏事务失败: {e}")
+                conn.rollback()
+                return jsonify({'success': False, 'error': "批量移除失败，事务已回滚"})
+        
+        logger.info(f"批量移除歌曲成功: 成功{successful_count}条，失败{failed_count}条，验证通过")
+        return jsonify({'success': True, 'data': {'successful': successful_count, 'failed': failed_count}})
+    except Exception as e:
+        logger.error(f"批量移除收藏失败: {e}")
+        return jsonify({'success': False, 'error': "批量移除失败"})
+
+# 批量移动歌曲到另一个收藏夹
+@app.route('/api/favorites/batch/move', methods=['POST'])
+def batch_move_favorites():
+    logger.info("API请求: 批量移动歌曲到另一个收藏夹")
+    try:
+        data = request.get_json()
+        song_ids = data.get('song_ids', [])
+        from_playlist_id = data.get('from_playlist_id')
+        to_playlist_id = data.get('to_playlist_id')
+        
+        if not song_ids:
+            logger.warning("批量移动收藏失败: 歌曲ID列表不能为空")
+            return jsonify({'success': False, 'error': "歌曲ID列表不能为空"})
+        
+        if not from_playlist_id:
+            logger.warning("批量移动收藏失败: 源收藏夹ID不能为空")
+            return jsonify({'success': False, 'error': "源收藏夹ID不能为空"})
+        
+        if not to_playlist_id:
+            logger.warning("批量移动收藏失败: 目标收藏夹ID不能为空")
+            return jsonify({'success': False, 'error': "目标收藏夹ID不能为空"})
+        
+        if from_playlist_id == to_playlist_id:
+            logger.warning("批量移动收藏失败: 源收藏夹和目标收藏夹不能相同")
+            return jsonify({'success': False, 'error': "源收藏夹和目标收藏夹不能相同"})
+        
+        successful_count = 0
+        failed_count = 0
+        
+        with get_db() as conn:
+            try:
+                # 使用事务确保原子性
+                for song_id in song_ids:
+                    try:
+                        # 先从源收藏夹删除
+                        delete_cursor = conn.execute("DELETE FROM favorites WHERE song_id=? AND playlist_id=?", 
+                                    (song_id, from_playlist_id))
+                        # 再添加到目标收藏夹
+                        conn.execute("INSERT OR IGNORE INTO favorites (song_id, playlist_id, created_at) VALUES (?, ?, ?)", 
+                                    (song_id, to_playlist_id, time.time()))
+                        if delete_cursor.rowcount > 0:
+                            successful_count += 1
+                            logger.debug(f"成功移动: 歌曲{song_id}从{from_playlist_id}到{to_playlist_id}")
+                        else:
+                            logger.warning(f"源记录不存在: 歌曲{song_id}在{from_playlist_id}（可能已移动）")
+                            successful_count += 1  # 视为成功
+                    except Exception as e:
+                        logger.warning(f"移动收藏失败: 歌曲{song_id}从{from_playlist_id}到{to_playlist_id}: {e}")
+                        failed_count += 1
+                conn.commit()
+                
+                # 数据库验证：确保歌曲已从源移除，已添加到目标
+                verify_failed = 0
+                for song_id in song_ids:
+                    # 验证1：歌曲应该不在源收藏夹
+                    remaining_in_source = conn.execute(
+                        "SELECT COUNT(*) as count FROM favorites WHERE song_id=? AND playlist_id=?",
+                        (song_id, from_playlist_id)
+                    ).fetchone()
+                    if remaining_in_source and remaining_in_source['count'] > 0:
+                        verify_failed += 1
+                        logger.error(f"验证失败: 歌曲{song_id}仍在源收藏夹{from_playlist_id}中")
+                    
+                    # 验证2：歌曲应该在目标收藏夹
+                    in_target = conn.execute(
+                        "SELECT COUNT(*) as count FROM favorites WHERE song_id=? AND playlist_id=?",
+                        (song_id, to_playlist_id)
+                    ).fetchone()
+                    if not in_target or in_target['count'] == 0:
+                        verify_failed += 1
+                        logger.error(f"验证失败: 歌曲{song_id}未在目标收藏夹{to_playlist_id}中")
+                
+                if verify_failed > 0:
+                    logger.error(f"批量移动验证失败: {verify_failed}个验证点失败")
+                    return jsonify({'success': False, 'error': f"移动失败，有{verify_failed}个验证点失败"})
+                    
+            except Exception as e:
+                logger.error(f"批量移动收藏事务失败: {e}")
+                conn.rollback()
+                return jsonify({'success': False, 'error': "批量移动失败，事务已回滚"})
+        
+        logger.info(f"批量移动歌曲成功: 成功{successful_count}条，失败{failed_count}条，验证通过")
+        return jsonify({'success': True, 'data': {'successful': successful_count, 'failed': failed_count}})
+    except Exception as e:
+        logger.error(f"批量移动收藏失败: {e}")
+        return jsonify({'success': False, 'error': "批量移动失败"})
 
 @app.route('/api/netease/search')
 def search_netease_music():

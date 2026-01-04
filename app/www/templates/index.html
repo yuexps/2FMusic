@@ -117,6 +117,29 @@
                             </div>
                         </div>
                     </div>
+                    <!-- 右键菜单 -->
+                    <div class="batch-context-menu hidden" id="batch-context-menu">
+                        <div class="context-menu-item" id="batch-context-select-one">
+                            <i class="fas fa-square"></i> 单选
+                        </div>
+                        <div class="context-menu-item" id="batch-context-select-all">
+                            <i class="fas fa-check-square"></i> 全选
+                        </div>
+                        <div class="context-menu-divider"></div>
+                        <div class="context-menu-item" id="batch-context-add">
+                            <i class="fas fa-plus"></i> 添加到收藏夹
+                        </div>
+                        <div class="context-menu-item" id="batch-context-remove">
+                            <i class="fas fa-trash"></i> 从收藏夹移除
+                        </div>
+                        <div class="context-menu-item" id="batch-context-move">
+                            <i class="fas fa-arrows"></i> 移动到收藏夹
+                        </div>
+                        <div class="context-menu-divider"></div>
+                        <div class="context-menu-item" id="batch-context-clear">
+                            <i class="fas fa-times"></i> 取消选择
+                        </div>
+                    </div>
                     <div class="song-list" id="song-list-container">
                         <div class="loading">
                             <div class="loading-box">
@@ -704,8 +727,10 @@
                                 let favHtml = `<button class="card-fav-btn ${isFav ? 'active' : ''}">${isFav ? '<i class="fas fa-heart"></i>' : '<i class="far fa-heart"></i>'}</button>`;
                                 if (isExt) favHtml = '';
                                 const borderStyle = isExt ? 'border:1px dashed var(--primary);' : '';
+                                const checkboxHtml = `<input type="checkbox" class="song-checkbox" aria-label="选择歌曲">`;
 
                                 html += `<div class="song-card" data-index="${index}" style="${borderStyle}">
+                                    ${checkboxHtml}
                                     ${favHtml}
                                     <img src="${song.cover || '/static/images/ICON_256.PNG'}" loading="lazy">
                                     <div class="card-info">

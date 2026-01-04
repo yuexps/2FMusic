@@ -191,6 +191,44 @@
   background-color: white;
 }
 
+/* 美化复选按钮 */
+.playlist-select-dialog .playlist-item input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  outline: none;
+  margin-right: 0.8rem;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.playlist-select-dialog .playlist-item input[type="checkbox"]:hover {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.playlist-select-dialog .playlist-item input[type="checkbox"]:checked {
+  border-color: #6c5ce7;
+  background-color: #6c5ce7;
+}
+
+.playlist-select-dialog .playlist-item input[type="checkbox"]:checked::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+  line-height: 1;
+}
+
 .playlist-select-dialog .playlist-item label {
   color: #fff;
   cursor: pointer;
@@ -749,4 +787,213 @@
     bottom: 1.5rem;
     right: 1rem;
   }
+}
+
+/* ===== 右键菜单样式 ===== */
+.batch-context-menu {
+  position: fixed;
+  z-index: 99999;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  padding: 0.5rem 0;
+  min-width: 200px;
+  animation: contextMenuShow 0.15s ease-out;
+}
+
+@keyframes contextMenuShow {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.batch-context-menu.hidden {
+  display: none;
+}
+
+.context-menu-item {
+  padding: 0.8rem 1.2rem;
+  cursor: pointer;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 0.95rem;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.context-menu-item:hover {
+  background: rgba(108, 92, 231, 0.2);
+  color: var(--primary);
+}
+
+.context-menu-item i {
+  width: 1.2rem;
+  text-align: center;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: var(--glass-border);
+  margin: 0.3rem 0;
+}
+
+/* 选中状态的歌曲卡片样式 */
+.song-card.has-selections {
+  position: relative;
+}
+
+.song-card.has-selections::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 2px solid var(--primary);
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.song-card.selected::after {
+  opacity: 1;
+}
+
+/* 移动设备菜单调整 */
+@media (max-width: 768px) {
+  .batch-context-menu {
+    min-width: 180px;
+    max-width: 90vw;
+  }
+
+  .context-menu-item {
+    padding: 0.7rem 1rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* 歌曲卡片复选框样式 */
+.song-checkbox {
+  position: absolute;
+  left: 0.15rem;
+  top: 0.15rem;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  cursor: pointer;
+  z-index: 10;
+  display: none;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+/* 复选框的背景框 */
+.song-checkbox::before {
+  content: '';
+  position: absolute;
+  left: 0.4rem;
+  top: 0.4rem;
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 2px solid rgba(108, 92, 231, 0.5);
+  border-radius: 0.25rem;
+  background: white;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+}
+
+/* 复选框的勾选符号 */
+.song-checkbox::after {
+  content: '✓';
+  position: absolute;
+  left: 0.5rem;
+  top: 0.5rem;
+  width: 1rem;
+  height: 1rem;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: bold;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.5) translateY(-0.05rem);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 未选中状态的悬停效果 */
+.song-checkbox:not(:checked):hover::before {
+  border-color: var(--primary, #6c5ce7);
+  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
+}
+
+/* 选中状态 */
+.song-checkbox:checked::before {
+  background: var(--primary, #6c5ce7);
+  border-color: var(--primary, #6c5ce7);
+  box-shadow: 0 2px 4px rgba(108, 92, 231, 0.3);
+}
+
+.song-checkbox:checked::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* 选中状态的悬停效果 */
+.song-checkbox:checked:hover::before {
+  box-shadow: 0 4px 8px rgba(108, 92, 231, 0.4);
+}
+
+/* 聚焦状态 */
+.song-checkbox:focus-visible::before {
+  border-color: var(--primary, #6c5ce7);
+  box-shadow: 0 0 0 4px rgba(108, 92, 231, 0.15);
+}
+
+/* 显示复选框：有选择时 */
+.song-checkbox:not([style*="display: none"]),
+.song-card.selected .song-checkbox {
+  display: block;
+  opacity: 1;
+  animation: checkboxFadeIn 0.25s ease-out;
+}
+
+/* 复选框出现动画 */
+@keyframes checkboxFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+}
+
+.song-card.selected {
+  border: 2px solid var(--primary);
+  background: rgba(108, 92, 231, 0.1);
+}
+
+.song-card {
+  position: relative;
+  transition: all 0.2s ease;
 }
