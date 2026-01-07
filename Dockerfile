@@ -16,7 +16,7 @@ COPY app/ ./app/
 EXPOSE 23237
 
 # 设置默认命令
-CMD ["python", "app/server/app.py", "--music-library-path", "/music", "--port", "23237"]
+CMD ["python", "app/server/app.py", "--music-library-path", "./Music", "--log-path", "./app.log", "--port", "23237"]
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
