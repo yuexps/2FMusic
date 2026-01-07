@@ -43,7 +43,7 @@ python app/server/app.py --music-library-path ./Music --log-path ./app.log --por
 ```yaml
 services:
   2fmusic:
-    image: ghcr.io/yuexps/2FMusic:latest
+    image: ghcr.io/yuexps/2fmusic:latest
     container_name: 2fmusic
     ports:
       - "23237:23237"
