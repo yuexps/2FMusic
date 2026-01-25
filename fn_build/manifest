@@ -1,0 +1,23 @@
+appname               = 2fmusic
+version               = 0.0.8
+display_name          = 2FMusic
+desc                  = """
+<b>2FMusic</b> 简洁的本地音乐播放器。
+<ul>
+    <li>🎵 <b>本地音乐库</b>：自动扫描，支持识别提取 ID3 内嵌元数据 或 网络自动获取歌词、封面。</li>
+    <li>🖥️ <b>Web 播放器</b>：支持歌词滚动，播放器页自动取色。</li>
+    <li>🗂️ <b>目录管理</b>：支持将服务器任意文件夹添加到音乐库。</li>
+    <li>☁️ <b>网易云集成</b>：支持搜索、下载、链接解析及扫码登录。</li>
+    <li>🎧 <b>音频预览</b>：支持文件管理器双击预览播放（需安装2FMusic Preview）。</li>
+</ul>
+ """
+arch                  = x86_64
+source                = thirdparty
+maintainer            = yuexps,UCKET
+maintainer_url        = https://github.com/yuexps/2FMusic
+distributor           = yuexps
+distributor_url       = https://www.2fstore.cfd/?q=2fmusic
+desktop_uidir         = ui
+desktop_applaunchname = 2fmusic.Application
+service_port          = 23237
+install_dep_apps      = python312

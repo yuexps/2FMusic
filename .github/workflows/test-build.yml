@@ -1,0 +1,61 @@
+name: Auto Build Test Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'server/**'
+      - 'www/**'
+      - 'fn_build/manifest'
+    # 仅在 dev 分支且 server/ www/ 或 manifest 变动时触发
+
+jobs:
+  build-source-on-push:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare build environment
+        run: |
+          echo "📂 Preparing build directory..."
+          mkdir -p fn_build/app/server
+          mkdir -p fn_build/app/www
+          cp -r server/* fn_build/app/server/
+          cp -r www/* fn_build/app/www/
+          chmod +x fn_build/fnpack-1.2.1-linux-amd64
+
+      - name: Extract Version from Manifest
+        id: version
+        run: |
+          VERSION_NUM=$(grep "^version" fn_build/manifest | awk -F'=' '{print $2}' | xargs)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          VERSION="${VERSION_NUM}-${SHORT_SHA}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Build Source Package (Python)
+        id: build_source
+        run: |
+          echo "📦 Building Source (Python) Package..."
+          cd fn_build
+          ./fnpack-1.2.1-linux-amd64 build
+          SOURCE_FPK_NAME="2fmusic-${{ steps.version.outputs.version }}-python.fpk"
+          if [ -f "2fmusic.fpk" ]; then
+            mv 2fmusic.fpk "$SOURCE_FPK_NAME"
+            echo "Built: $SOURCE_FPK_NAME"
+          else
+            echo "Error: 2fmusic.fpk not found!"
+            exit 1
+          fi
+          echo "source_pkg=$SOURCE_FPK_NAME" >> $GITHUB_OUTPUT
+
+      - name: Upload Source FPK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2fmusic-source-fpk
+          path: fn_build/${{ steps.build_source.outputs.source_pkg }}
+          if-no-files-found: error

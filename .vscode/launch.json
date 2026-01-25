@@ -1,0 +1,32 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Debug 2FMusic Server",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/app/server/app.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--music-library-path",
+                "${workspaceFolder}/test_tmp/Music",
+                "--log-path",
+                "${workspaceFolder}/test_tmp/app.log",
+                "--port",
+                "23237",
+                "--password",
+                "123456"
+            ],
+            "justMyCode": true,
+            "rules": [
+                {
+                    "path": "${workspaceFolder}/app/server/lib",
+                    "include": false
+                }
+            ],
+            "env": {
+                "FLASK_DEBUG": "1"
+            }
+        }
+    ]
+}

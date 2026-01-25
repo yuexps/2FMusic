@@ -1,0 +1,11 @@
+#!/bin/bash
+
+### This script is called after the user uninstalls the application.
+
+wizard_data_action="$wizard_data_action"
+
+if [ "${wizard_data_action}" = "delete" ]; then
+    rm -rf "${TRIM_PKGVAR}"
+fi
+
+exit 0
