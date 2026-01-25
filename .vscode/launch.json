@@ -5,7 +5,7 @@
             "name": "Python: Debug 2FMusic Server",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/app/server/app.py",
+            "program": "${workspaceFolder}/server/app.py",
             "console": "integratedTerminal",
             "args": [
                 "--music-library-path",
@@ -20,7 +20,7 @@
             "justMyCode": true,
             "rules": [
                 {
-                    "path": "${workspaceFolder}/app/server/lib",
+                    "path": "${workspaceFolder}/server/lib",
                     "include": false
                 }
             ],
