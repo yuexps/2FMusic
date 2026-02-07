@@ -1058,8 +1058,8 @@ def auto_scrape_missing_metadata(target_dir=None):
         logger.info(f"开始自动刮削缺失元数据... {f'(目录: {target_dir})' if target_dir else ''}")
         SCAN_STATUS['current_file'] = "正在准备自动刮削..."
         SCAN_STATUS['is_scraping'] = True
-        SCAN_STATUS['processed'] = 0
-        SCAN_STATUS['total'] = 0
+        SCAN_STATUS['scrape_processed'] = 0
+        SCAN_STATUS['scrape_total'] = 0
         
         try:
             songs_to_scrape = []
