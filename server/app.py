@@ -430,11 +430,29 @@ def _auth_failed():
 
 @app.before_request
 def require_auth():
+
     if not APP_AUTH_PASSWORD:
         return
     path = request.path or ''
     if path.startswith('/static') or path.startswith('/login') or path == '/favicon.ico':
         return
+    
+    # 放行 OPTIONS 请求 (CORS 预检)
+    if request.method == 'OPTIONS':
+        return
+
+    # 检查 X-Password header 认证
+    password_header = request.headers.get('X-Password')
+    # 同时也检查 URL 参数 'auth' (用于音频流播放等不支持 header 的场景)
+    if not password_header:
+        password_header = request.args.get('auth')
+        
+    if password_header:
+        stored_hash = hashlib.sha256(APP_AUTH_PASSWORD.encode()).hexdigest()
+        if password_header == APP_AUTH_PASSWORD or password_header.lower() == stored_hash.lower():
+            session['authed'] = True
+            return
+    
     if session.get('authed'):
         return
     return _auth_failed()
@@ -442,7 +460,7 @@ def require_auth():
 @app.after_request
 def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Password'
     response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
     
     # 为Service Worker脚本添加特殊头，允许全局scope
