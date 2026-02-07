@@ -1,5 +1,5 @@
 appname               = 2fmusic
-version               = 0.0.8
+version               = 0.0.9
 display_name          = 2FMusic
 desc                  = """
 <b>2FMusic</b> 简洁的本地音乐播放器。
