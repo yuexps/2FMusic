@@ -430,13 +430,12 @@ def _auth_failed():
 
 @app.before_request
 def require_auth():
-
     if not APP_AUTH_PASSWORD:
         return
     path = request.path or ''
     if path.startswith('/static') or path.startswith('/login') or path == '/favicon.ico':
         return
-    
+
     # 放行 OPTIONS 请求 (CORS 预检)
     if request.method == 'OPTIONS':
         return
@@ -452,7 +451,7 @@ def require_auth():
         if password_header == APP_AUTH_PASSWORD or password_header.lower() == stored_hash.lower():
             session['authed'] = True
             return
-    
+            
     if session.get('authed'):
         return
     return _auth_failed()
@@ -460,7 +459,7 @@ def require_auth():
 @app.after_request
 def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Password'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
     response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
     
     # 为Service Worker脚本添加特殊头，允许全局scope
@@ -1446,6 +1445,18 @@ def get_system_status():
     """返回当前扫描状态和进度"""
     status = dict(SCAN_STATUS)
     status['library_version'] = LIBRARY_VERSION
+
+    # 实时获取准确数量
+    try:
+        with get_db() as conn:
+            music_cnt = conn.execute("SELECT COUNT(*) FROM songs").fetchone()[0]
+            pl_cnt = conn.execute("SELECT COUNT(*) FROM favorite_playlists").fetchone()[0]
+            status['music_count'] = music_cnt
+            status['playlist_count'] = pl_cnt
+    except Exception as e:
+        logger.error(f"Error counting stats: {e}")
+        pass
+        
     return jsonify(status)
 
 @app.route('/api/music', methods=['GET'])
