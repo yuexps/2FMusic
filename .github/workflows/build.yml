@@ -176,6 +176,7 @@ jobs:
       id: build_preview_cgi
       run: |
         echo "📦 Building Preview Extension (CGI)..."
+        mv ./fnpack extensions/preview-cgi/fnpack
         cd extensions/preview-cgi
         
         # Compile C Code
