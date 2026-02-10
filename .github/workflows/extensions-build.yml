@@ -15,8 +15,8 @@ jobs:
 
     - name: Install fnpack
       run: |
-        cp build/fnpack-1.2.1-linux-amd64 ./fnpack
-        chmod +x ./fnpack
+        cp build/fnpack-1.2.1-linux-amd64 extensions/preview-cgi/fnpack
+        chmod +x extensions/preview-cgi/fnpack
 
     # ===============================
     # Build 2FMusic Preview (CGI)
