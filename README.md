@@ -34,7 +34,12 @@ python server/app.py --music-library-path ./Music --port 23237
 
 ## 预览图
 
-<img width="2434" alt="screenshot" src="https://github.com/user-attachments/assets/ab26e903-0543-4a75-8155-6127e29fb440" />
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/1fea2a24-e433-4fba-9d80-6274ac944667" />
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/465f80cc-cbd2-480d-ae1f-f7dc62630c97" />
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/38586ddf-a421-4613-87ab-2b8b9743fc13" />
+
+
+
 
 ## 开源致谢
 
