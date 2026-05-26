@@ -69,7 +69,8 @@ class PrefixMiddleware:
                 path = path[len(self.prefix):]
                 if not path.startswith('/'):
                     path = '/' + path
-            environ['SCRIPT_NAME'] = self.prefix
+                environ['SCRIPT_NAME'] = self.prefix
+                environ['2FMUSIC_BASE_URL_ACTIVE'] = '1'
             
         environ['PATH_INFO'] = path
         return self.app(environ, start_response)
@@ -77,7 +78,6 @@ class PrefixMiddleware:
 if app_config.BASE_URL and app_config.BASE_URL != '/':
     try:
         app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix=app_config.BASE_URL)
-        app.config['APPLICATION_ROOT'] = app_config.BASE_URL
     except Exception as e:
         print(f"Error applying Base URL middleware: {e}")
 

@@ -5,10 +5,11 @@ from core.config import app_config
 auth_bp = Blueprint('auth', __name__)
 
 def get_safe_redirect_url(target):
-    """确保重定向地址包含 BASE_URL 前缀（如果是相对站内路径）"""
+    """确保重定向地址包含 BASE_URL 前缀（仅当请求确实来自反向代理子路径时）"""
     if not target:
         target = '/'
-    if app_config.BASE_URL and app_config.BASE_URL != '/' and target.startswith('/'):
+    base_url_active = request.environ.get('2FMUSIC_BASE_URL_ACTIVE') == '1'
+    if app_config.BASE_URL and app_config.BASE_URL != '/' and target.startswith('/') and base_url_active:
         # 幂等处理：避免重复拼接
         if not target.startswith(app_config.BASE_URL + '/') and target != app_config.BASE_URL:
             target = app_config.BASE_URL + target

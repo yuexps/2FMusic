@@ -91,7 +91,7 @@
             </div>
           </div>
 
-          <div class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0" v-if="preferencesStore.bgUrl">
+          <div class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
             <div class="flex-1 min-w-0">
               <h4 class="m-0 mb-1 text-sm font-semibold text-ink">将背景图片云同步</h4>
               <p class="m-0 text-xs text-body-muted leading-relaxed">开启后将当前背景同步至云端，在其他设备上登录时也会自动拉取应用该背景。</p>
