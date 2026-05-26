@@ -30,8 +30,7 @@
 
     <!-- 扫描进度与状态底栏 -->
     <div v-if="systemStore.status.scanning || systemStore.status.is_scraping" class="glass-card p-3 box-border mt-auto">
-      <div class="flex items-center gap-2 text-xs font-semibold text-primary mb-2">
-        <SvgIcon name="spinner" spin />
+      <div class="text-xs font-semibold text-primary mb-2">
         <span>{{ systemStore.status.scanning ? '正在扫描音乐库...' : '正在自动刮削元数据...' }}</span>
       </div>
       <div class="flex justify-between text-[11px] text-body-muted mb-1.5">
@@ -65,7 +64,7 @@ const systemStore = useSystemStore()
 
 const menuItems = [
   { path: '/', label: '本地音乐', icon: 'music' },
-  { path: '/favorites', label: '我的收藏', icon: 'heart' },
+  { path: '/favorites', label: '我的收藏', icon: 'heart-o' },
   { path: '/history', label: '播放记录', icon: 'history' },
   { path: '/mounts', label: '目录管理', icon: 'network' },
   { path: '/netease', label: '网易下载', icon: 'cloud-download' },

@@ -224,7 +224,7 @@
             class="w-45 h-45 rounded-xl product-cover-shadow" />
           <div v-else
             class="w-45 h-45 flex flex-col items-center justify-center gap-2 text-xs text-body-muted border border-hairline rounded-xl">
-            <SvgIcon name="spinner" spin class="text-[20px] text-primary" />
+            <n-spin :size="28" />
             <span>正在获取二维码...</span>
           </div>
           <div class="text-[13px] text-body-muted text-center font-medium py-1.5 px-4 rounded-full bg-canvas-parchment"

@@ -345,7 +345,7 @@ const cleanupResources = () => {
   cleanupDockerPoll()
 }
 
-onMounted(() => {
+onMounted(async () => {
   // 加载缩放
   const savedScale = localStorage.getItem('2fmusic_ui_scale')
   if (savedScale) {
@@ -366,8 +366,35 @@ onMounted(() => {
   }
 
   loadCacheSettings()
-  loadNeteaseSettings()
-  systemStore.checkDockerContainer()
+
+  // 加载网易云配置
+  await loadNeteaseSettings()
+
+  // 如果尚未配置 API，检查 Docker 并尝试自动连接
+  if (!systemStore.neteaseConfig.api_base) {
+    await systemStore.checkDockerContainer()
+
+    if (systemStore.dockerContainerStatus.docker_installed &&
+        systemStore.dockerContainerStatus.container_running) {
+      // 直接尝试保存默认 API 地址（含连通性测试），不走 install 流程
+      let connected = false
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const res = await systemStore.saveNeteaseConfig(neteaseDownloadDir.value.trim(), 'http://localhost:23236')
+        if (res.success) {
+          connected = true
+          neteaseApi.value = 'http://localhost:23236'
+          await systemStore.checkDockerContainer()
+          break
+        }
+        if (attempt < 2) {
+          await new Promise(r => setTimeout(r, 2000))
+        }
+      }
+      if (!connected) {
+        message.warning('自动连接本地 API 服务失败，请手动配置 API 地址')
+      }
+    }
+  }
 
   // 若当前正在部署 Docker，继续拉取状态
   if (systemStore.dockerInstallStatus.status === 'running') {

@@ -479,6 +479,11 @@ def handle_install_netease_service() -> tuple:
                 ], check=True)
             
             INSTALL_STATUS.update({'status': 'success', 'progress': 100, 'step': '服务启动成功！'})
+            # 保存默认 API 地址，使前端自动建立连接
+            try:
+                save_netease_config(api_base=app_config.NETEASE_API_BASE_DEFAULT)
+            except Exception as e:
+                logger.warning(f"保存默认 API 地址失败: {e}")
             logger.info("网易云服务安装/启动指令执行完成")
             
         except subprocess.CalledProcessError as e:

@@ -83,9 +83,9 @@
 
     <!-- 歌曲列表 -->
     <div class="song-list-container">
-      <div v-if="isLoading" class="loading-state">
-        <SvgIcon name="spinner" spin />
-        <span>正在加载歌曲...</span>
+      <div v-if="isLoading" class="flex flex-col items-center justify-center gap-3 py-15">
+        <n-spin :size="32" />
+        <span class="text-xs text-body-muted">正在加载歌曲...</span>
       </div>
 
       <div v-else-if="filteredSongs.length === 0" class="empty-state">
@@ -204,7 +204,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useSystemStore } from '../stores/system'
 import { usePlayerStore } from '../stores/player'
 import { useFavoritesStore } from '../stores/favorites'
-import { NDropdown, NCheckbox, NModal, NButton, NInput, NSpace, NVirtualList, useMessage } from 'naive-ui'
+import { NDropdown, NCheckbox, NModal, NButton, NInput, NSpace, NVirtualList, NSpin, useMessage } from 'naive-ui'
 import type { Song } from '../types'
 import SvgIcon from '../components/SvgIcon.vue'
 
