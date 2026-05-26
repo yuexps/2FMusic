@@ -1,0 +1,10 @@
+__pycache__
+test_tmp
+fnpack.exe
+yuexps.2fmusic.fpk
+.DS_Store
+**/.DS_Store
+.DS_Store?
+lib/
+node_modules
+.agent

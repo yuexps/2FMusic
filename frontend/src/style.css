@@ -1,0 +1,825 @@
+@import "tailwindcss";
+
+@theme {
+  /* 基础调色板与语义色值映射至 Tailwind */
+  --color-primary: #007aff;
+  --color-primary-hover: #3395ff;
+  --color-primary-active: #0062cc;
+  --color-primary-on-dark: #2997ff;
+
+  --color-danger: #ff3b30;
+  --color-danger-hover: #e03b30;
+  --color-danger-soft: rgba(255, 59, 48, 0.08);
+  --color-danger-border: rgba(255, 59, 48, 0.2);
+  --color-success: #34c759;
+  --color-vip: #ff2d55;
+  --color-warning: #ffcc00;
+
+  /* 核心背景和文字 Tailwind 类绑定至底层响应式变量 */
+  --color-ink: var(--ink);
+  --color-body-muted: var(--body-muted);
+  --color-hairline: var(--hairline);
+  --color-canvas: var(--canvas);
+  --color-canvas-parchment: var(--canvas-parchment);
+  --color-surface-pearl: var(--surface-pearl);
+  --color-surface-glass: var(--surface-glass);
+
+  --color-bg-app-layout: var(--bg-app-layout);
+  --color-bg-app-main: var(--bg-app-main);
+  --color-bg-sidebar: var(--bg-sidebar);
+  --color-bg-card: var(--bg-card);
+  --color-bg-card-hover: var(--bg-card-hover);
+  --color-bg-song-row-hover: var(--bg-song-row-hover);
+  --color-bg-input: var(--bg-input);
+  --color-bg-input-focus: var(--bg-input-focus);
+  --color-bg-action-btn: var(--bg-action-btn);
+  --color-bg-action-btn-hover: var(--bg-action-btn-hover);
+  --color-bg-dialog: var(--bg-dialog);
+  --color-bg-dialog-mask: var(--bg-dialog-mask);
+  --color-bg-toast: var(--bg-toast);
+  --color-bg-player: var(--bg-player);
+  --color-menu-active: var(--bg-menu-active);
+  --color-menu-hover: var(--bg-menu-hover);
+
+  --color-border-main: var(--border-main);
+  --color-border-card: var(--border-card);
+  --color-border-input: var(--border-input);
+  --color-border-dialog: var(--border-dialog);
+
+  --font-sans: "SF Pro Text", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "SF Pro Display", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --transition-fast: 0.15s cubic-bezier(0.25, 0.1, 0.25, 1);
+  --transition-normal: 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 11px;
+  --radius-lg: 18px;
+  --radius-xl: 20px;
+}
+
+:root {
+  /* ============================================================
+     2FMusic 基础定义（亮色模式）
+     ============================================================ */
+  --primary: #007aff;
+  --primary-hover: #3395ff;
+  --primary-active: #0062cc;
+  --primary-on-dark: #2997ff;
+
+  --bg-menu-active: rgba(0, 122, 255, 0.08);
+  --bg-menu-hover: rgba(0, 122, 255, 0.05);
+  --text-menu-active: var(--primary);
+
+  --ink: #1d1d1f;
+  --body: #1d1d1f;
+  --body-muted: #86868b;
+  --hairline: rgba(0, 0, 0, 0.08);
+  --canvas: #ffffff;
+  --canvas-parchment: #f5f5f7;
+  --surface-pearl: #fafafc;
+  --surface-glass: rgba(255, 255, 255, 0.75);
+  --on-primary: #ffffff;
+
+  /* 字号与行高 */
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 20px;
+  --font-size-3xl: 24px;
+  --font-size-4xl: 28px;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --leading-tight: 1.25;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.6;
+
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --space-4xl: 80px;
+
+  /* 全局自适应 UI 变量矩阵 - 默认浅色 */
+  --bg-app-layout: var(--canvas-parchment);
+  --bg-app-main: var(--canvas);
+  --bg-sidebar: var(--surface-glass);
+  --bg-card: var(--canvas);
+  --bg-card-hover: var(--surface-pearl);
+  --bg-song-row-hover: var(--canvas-parchment);
+  --bg-input: var(--canvas-parchment);
+  --bg-input-focus: #ffffff;
+  --bg-action-btn: var(--canvas-parchment);
+  --bg-action-btn-hover: rgba(0, 0, 0, 0.05);
+  --bg-dialog: #ffffff;
+  --bg-dialog-mask: rgba(0, 0, 0, 0.25);
+  --bg-toast: #ffffff;
+  --bg-player: rgba(255, 255, 255, 0.85);
+
+  --border-main: var(--hairline);
+  --border-card: var(--hairline);
+  --border-input: rgba(0, 0, 0, 0.12);
+  --border-dialog: rgba(0, 0, 0, 0.05);
+
+  --blur-main: none;
+  --blur-card: none;
+  --blur-sidebar: blur(20px);
+  --blur-dialog: none;
+  --blur-dialog-mask: none;
+  --blur-toast: none;
+  --blur-player: blur(20px);
+
+  --saturate-player: 180%;
+  --saturate-dialog: 100%;
+
+  /* 透明度变体 */
+  --primary-alpha-03: rgba(0, 102, 204, 0.03);
+  --primary-alpha-05: rgba(0, 102, 204, 0.05);
+  --primary-alpha-06: rgba(0, 102, 204, 0.06);
+  --primary-alpha-08: rgba(0, 102, 204, 0.08);
+  --primary-alpha-10: rgba(0, 102, 204, 0.1);
+  --primary-alpha-12: rgba(0, 102, 204, 0.12);
+  --primary-alpha-16: rgba(0, 102, 204, 0.16);
+
+  --primary-on-dark-alpha-08: rgba(41, 151, 255, 0.08);
+  --primary-on-dark-alpha-12: rgba(41, 151, 255, 0.12);
+  --primary-on-dark-alpha-16: rgba(41, 151, 255, 0.16);
+
+  --danger-alpha-08: rgba(255, 59, 48, 0.08);
+  --danger-alpha-12: rgba(255, 59, 48, 0.12);
+  --danger-alpha-22: rgba(255, 59, 48, 0.22);
+
+  --black-alpha-03: rgba(0, 0, 0, 0.03);
+  --black-alpha-04: rgba(0, 0, 0, 0.04);
+  --black-alpha-05: rgba(0, 0, 0, 0.05);
+  --black-alpha-08: rgba(0, 0, 0, 0.08);
+  --black-alpha-12: rgba(0, 0, 0, 0.12);
+  --black-alpha-24: rgba(0, 0, 0, 0.24);
+
+  --white-alpha-04: rgba(255, 255, 255, 0.04);
+  --white-alpha-05: rgba(255, 255, 255, 0.05);
+  --white-alpha-06: rgba(255, 255, 255, 0.06);
+  --white-alpha-08: rgba(255, 255, 255, 0.08);
+  --white-alpha-10: rgba(255, 255, 255, 0.1);
+  --white-alpha-12: rgba(255, 255, 255, 0.12);
+
+  --overlay-white-alpha-05: rgba(255, 255, 255, 0.05);
+  --overlay-white-alpha-08: rgba(255, 255, 255, 0.08);
+  --overlay-white-alpha-10: rgba(255, 255, 255, 0.1);
+  --overlay-white-alpha-12: rgba(255, 255, 255, 0.12);
+  --overlay-white-alpha-15: rgba(255, 255, 255, 0.15);
+  --overlay-white-alpha-20: rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================================
+   2FMusic 暗色模式
+   ============================================================ */
+
+/* 手动暗色模式类名触发 */
+:root.theme-dark {
+  --bg-menu-active: rgba(41, 151, 255, 0.16);
+  --bg-menu-hover: rgba(41, 151, 255, 0.10);
+  --text-menu-active: var(--primary-on-dark);
+
+  --ink: #ececf0;
+  --body: #ececf0;
+  --body-muted: #a0a0a6;
+  --hairline: rgba(255, 255, 255, 0.1);
+  --canvas: #16171d;
+  --canvas-parchment: #0f0f12;
+  --surface-pearl: #1c1c21;
+  --surface-glass: rgba(22, 23, 29, 0.75);
+
+  /* 覆盖 Naive UI 内置文本颜色，对齐 --ink */
+  --text-color-1: #ececf0;
+  --text-color-2: rgba(236, 236, 240, 0.82);
+  --text-color-3: rgba(236, 236, 240, 0.52);
+  --text-color-disabled: rgba(236, 236, 240, 0.38);
+  --placeholder-color: rgba(236, 236, 240, 0.38);
+  --placeholder-color-disabled: rgba(236, 236, 240, 0.28);
+
+  /* 全局自适应 UI 变量矩阵 - 暗色重写 */
+  --bg-app-layout: var(--canvas-parchment);
+  --bg-app-main: var(--canvas);
+  --bg-sidebar: var(--surface-glass);
+  --bg-card: var(--surface-pearl);
+  --bg-card-hover: rgba(255, 255, 255, 0.05);
+  --bg-song-row-hover: rgba(255, 255, 255, 0.05);
+  --bg-input: rgba(255, 255, 255, 0.05);
+  --bg-input-focus: rgba(255, 255, 255, 0.08);
+  --bg-action-btn: rgba(255, 255, 255, 0.08);
+  --bg-action-btn-hover: rgba(255, 255, 255, 0.12);
+  --bg-dialog: #1c1c21;
+  --bg-dialog-mask: rgba(0, 0, 0, 0.4);
+  --bg-toast: #1a1b22;
+  --bg-player: rgba(26, 27, 34, 0.88);
+
+  --border-main: var(--hairline);
+  --border-card: rgba(255, 255, 255, 0.08);
+  --border-input: rgba(255, 255, 255, 0.12);
+  --border-dialog: rgba(255, 255, 255, 0.08);
+}
+
+/* 系统跟随暗色模式 */
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-light) {
+    --bg-menu-active: rgba(41, 151, 255, 0.16);
+    --bg-menu-hover: rgba(41, 151, 255, 0.10);
+    --text-menu-active: var(--primary-on-dark);
+
+    --ink: #ececf0;
+    --body: #ececf0;
+    --body-muted: #a0a0a6;
+    --hairline: rgba(255, 255, 255, 0.1);
+    --canvas: #16171d;
+    --canvas-parchment: #0f0f12;
+    --surface-pearl: #1c1c21;
+    --surface-glass: rgba(22, 23, 29, 0.75);
+
+    --text-color-1: #ececf0;
+    --text-color-2: rgba(236, 236, 240, 0.82);
+    --text-color-3: rgba(236, 236, 240, 0.52);
+    --text-color-disabled: rgba(236, 236, 240, 0.38);
+    --placeholder-color: rgba(236, 236, 240, 0.38);
+    --placeholder-color-disabled: rgba(236, 236, 240, 0.28);
+
+    --bg-app-layout: var(--canvas-parchment);
+    --bg-app-main: var(--canvas);
+    --bg-sidebar: var(--surface-glass);
+    --bg-card: var(--surface-pearl);
+    --bg-card-hover: rgba(255, 255, 255, 0.05);
+    --bg-song-row-hover: rgba(255, 255, 255, 0.05);
+    --bg-input: rgba(255, 255, 255, 0.05);
+    --bg-input-focus: rgba(255, 255, 255, 0.08);
+    --bg-action-btn: rgba(255, 255, 255, 0.08);
+    --bg-action-btn-hover: rgba(255, 255, 255, 0.12);
+    --bg-dialog: #1c1c21;
+    --bg-dialog-mask: rgba(0, 0, 0, 0.4);
+    --bg-toast: #1a1b22;
+    --bg-player: rgba(26, 27, 34, 0.88);
+
+    --border-main: var(--hairline);
+    --border-card: rgba(255, 255, 255, 0.08);
+    --border-input: rgba(255, 255, 255, 0.12);
+    --border-dialog: rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* ============================================================
+   2FMusic 自定义背景毛玻璃
+   ============================================================ */
+.has-custom-bg {
+  --bg-app-layout: transparent;
+  --bg-app-main: rgba(255, 255, 255, 0.68);
+  --bg-sidebar: rgba(255, 255, 255, 0.45);
+  --bg-card: rgba(255, 255, 255, 0.6);
+  --bg-card-hover: rgba(255, 255, 255, 0.75);
+  --bg-song-row-hover: rgba(255, 255, 255, 0.45);
+  --bg-input: rgba(255, 255, 255, 0.55);
+  --bg-input-focus: rgba(255, 255, 255, 0.85);
+  --bg-action-btn: rgba(255, 255, 255, 0.55);
+  --bg-action-btn-hover: rgba(255, 255, 255, 0.75);
+  --bg-dialog: rgba(255, 255, 255, 0.78);
+  --bg-dialog-mask: rgba(0, 0, 0, 0.15);
+  --bg-toast: rgba(255, 255, 255, 0.8);
+  --bg-player: rgba(255, 255, 255, 0.75);
+
+  --border-main: rgba(0, 0, 0, 0.08);
+  --border-card: rgba(0, 0, 0, 0.08);
+  --border-input: rgba(0, 0, 0, 0.10);
+  --border-dialog: rgba(255, 255, 255, 0.5);
+
+  --blur-main: blur(20px);
+  --blur-card: blur(12px);
+  --blur-sidebar: blur(20px);
+  /* 注入高自适应侧边栏毛玻璃 */
+  --blur-dialog: blur(25px);
+  --blur-dialog-mask: blur(2px);
+  --blur-player: blur(35px);
+
+  --saturate-player: 210%;
+  --saturate-dialog: 180%;
+}
+
+/* 自定义背景毛玻璃 - 暗色模式（手动主题） */
+:root.theme-dark .has-custom-bg {
+  --bg-app-main: rgba(15, 15, 18, 0.65);
+  --bg-sidebar: rgba(22, 23, 29, 0.45);
+  --bg-card: rgba(28, 28, 33, 0.55);
+  --bg-card-hover: rgba(255, 255, 255, 0.1);
+  --bg-song-row-hover: rgba(255, 255, 255, 0.08);
+  --bg-input: rgba(255, 255, 255, 0.06);
+  --bg-input-focus: rgba(255, 255, 255, 0.15);
+  --bg-action-btn: rgba(255, 255, 255, 0.08);
+  --bg-action-btn-hover: rgba(255, 255, 255, 0.15);
+  --bg-dialog: rgba(22, 23, 29, 0.75);
+  --bg-dialog-mask: rgba(0, 0, 0, 0.4);
+  --bg-toast: rgba(26, 27, 34, 0.8);
+  --bg-player: rgba(26, 27, 34, 0.8);
+
+  --border-main: rgba(255, 255, 255, 0.08);
+  --border-card: rgba(255, 255, 255, 0.08);
+  --border-input: rgba(255, 255, 255, 0.08);
+  --border-dialog: rgba(255, 255, 255, 0.12);
+
+  --blur-main: blur(25px);
+  --blur-card: blur(16px);
+  --blur-sidebar: blur(20px);
+  --blur-dialog: blur(25px);
+  --blur-dialog-mask: blur(2px);
+  --blur-player: blur(35px);
+
+  --saturate-player: 210%;
+  --saturate-dialog: 180%;
+}
+
+/* 自定义背景毛玻璃 - 暗色模式（系统默认） */
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-light) .has-custom-bg {
+    --bg-app-main: rgba(15, 15, 18, 0.65);
+    --bg-sidebar: rgba(22, 23, 29, 0.45);
+    --bg-card: rgba(28, 28, 33, 0.55);
+    --bg-card-hover: rgba(255, 255, 255, 0.1);
+    --bg-song-row-hover: rgba(255, 255, 255, 0.08);
+    --bg-input: rgba(255, 255, 255, 0.06);
+    --bg-input-focus: rgba(255, 255, 255, 0.15);
+    --bg-action-btn: rgba(255, 255, 255, 0.08);
+    --bg-action-btn-hover: rgba(255, 255, 255, 0.15);
+    --bg-dialog: rgba(22, 23, 29, 0.75);
+    --bg-dialog-mask: rgba(0, 0, 0, 0.4);
+    --bg-toast: rgba(26, 27, 34, 0.8);
+    --bg-player: rgba(26, 27, 34, 0.8);
+
+    --border-main: rgba(255, 255, 255, 0.08);
+    --border-card: rgba(255, 255, 255, 0.08);
+    --border-input: rgba(255, 255, 255, 0.08);
+    --border-dialog: rgba(255, 255, 255, 0.12);
+
+    --blur-main: blur(25px);
+    --blur-card: blur(16px);
+    --blur-sidebar: blur(20px);
+    --blur-dialog: blur(25px);
+    --blur-dialog-mask: blur(2px);
+    --blur-player: blur(35px);
+
+    --saturate-player: 210%;
+    --saturate-dialog: 180%;
+  }
+}
+
+/* ============================================================
+   全局重置与骨架布局适配
+   ============================================================ */
+input[type="text"],
+input[type="password"],
+input[type="search"],
+input[type="number"],
+input[type="email"],
+textarea {
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+input:disabled,
+textarea:disabled {
+  opacity: 1;
+  -webkit-text-fill-color: currentcolor;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  color: var(--body);
+  background-color: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* 布局骨架 */
+.app-layout {
+  display: flex;
+  width: calc(100vw / var(--ui-scale, 1.0));
+  height: calc(100vh / var(--ui-scale, 1.0));
+  overflow: hidden;
+  background-color: var(--bg-app-layout);
+}
+
+.app-sidebar {
+  width: 260px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-sidebar);
+  backdrop-filter: saturate(180%) var(--blur-sidebar);
+  -webkit-backdrop-filter: saturate(180%) var(--blur-sidebar);
+  border-right: 1px solid var(--border-main);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.app-main {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background-color: var(--bg-app-main);
+  backdrop-filter: var(--blur-main);
+  -webkit-backdrop-filter: var(--blur-main);
+  transition: background-color var(--transition-normal);
+}
+
+.main-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-xl) var(--space-3xl);
+  box-sizing: border-box;
+}
+
+/* 移动端侧边栏滑动与输入框聚焦适配 */
+@media (max-width: 768px) {
+  .app-sidebar {
+    position: fixed;
+    left: -260px;
+    transition: transform var(--transition-normal);
+    background-color: var(--canvas);
+    background-image: none;
+  }
+
+  .has-custom-bg .app-sidebar {
+    background-color: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(35px) saturate(180%);
+    -webkit-backdrop-filter: blur(35px) saturate(180%);
+  }
+
+  /* 移动端暗色下侧边栏毛玻璃 */
+  :root.theme-dark .has-custom-bg .app-sidebar {
+    background-color: rgba(22, 23, 29, 0.92);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not(.theme-light) .has-custom-bg .app-sidebar {
+      background-color: rgba(22, 23, 29, 0.92);
+    }
+  }
+
+  .app-sidebar.sidebar-active {
+    transform: translateX(260px);
+  }
+
+  .main-scroll {
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  /* 解决 iOS 移动端 input 聚焦自动放大页面的问题 */
+  input[type="text"],
+  input[type="password"],
+  input[type="search"],
+  input[type="number"],
+  input[type="email"],
+  textarea {
+    font-size: 16px;
+  }
+
+  /* 优化自制输入框在移动端的排版 */
+  .path-input,
+  .search-input,
+  .manual-input,
+  .form-input,
+  .modal-text-input {
+    height: auto;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+}
+
+/* 极简扁平化滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 99px;
+}
+
+:root.theme-dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-light) ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+  }
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.24);
+}
+
+/* 软阴影：产品/歌曲封面图 */
+.product-cover-shadow {
+  box-shadow: rgba(0, 0, 0, 0.22) 3px 5px 30px 0px;
+}
+
+/* 移除所有按钮和交互阴影 */
+button,
+.n-button {
+  box-shadow: none;
+}
+
+/* 全局高颜值自定义磨砂高斯模糊背景底层 */
+.global-custom-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-size: cover;
+  background-position: center;
+  z-index: 0;
+  filter: blur(25px) brightness(0.8);
+  transform: scale(1.06);
+  pointer-events: none;
+  transition: background-image 0.6s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.global-custom-bg::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+  background-color: rgba(255, 255, 255, 0.1);
+  transition: background-color var(--transition-normal);
+}
+
+:root.theme-dark .global-custom-bg {
+  filter: blur(25px) brightness(0.45);
+}
+
+:root.theme-dark .global-custom-bg::after {
+  background-color: rgba(0, 0, 0, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-light) .global-custom-bg {
+    filter: blur(25px) brightness(0.45);
+  }
+
+  :root:not(.theme-light) .global-custom-bg::after {
+    background-color: rgba(0, 0, 0, 0.45);
+  }
+}
+
+.has-custom-bg {
+  background-color: transparent;
+}
+
+/* ============================================================
+   全局 Naive UI 弹窗、遮罩、提示深度适配
+   ============================================================ */
+.n-modal,
+.n-dialog,
+.n-card {
+  background: var(--bg-dialog);
+  border: 1px solid var(--border-dialog);
+  backdrop-filter: var(--blur-dialog) saturate(var(--saturate-dialog));
+  -webkit-backdrop-filter: var(--blur-dialog) saturate(var(--saturate-dialog));
+  box-shadow: var(--black-alpha-12) 0px 20px 50px 0px;
+  transform: translateZ(0);
+  will-change: backdrop-filter;
+}
+
+.n-modal-mask {
+  background-color: var(--bg-dialog-mask);
+  backdrop-filter: var(--blur-dialog-mask);
+  -webkit-backdrop-filter: var(--blur-dialog-mask);
+}
+
+.n-message {
+  background: var(--bg-toast);
+  border: 1px solid var(--border-dialog);
+  backdrop-filter: var(--blur-toast) saturate(180%);
+  -webkit-backdrop-filter: var(--blur-toast) saturate(180%);
+  color: var(--ink);
+  box-shadow: var(--black-alpha-08) 0px 8px 24px 0px;
+  border-radius: 99px;
+  padding: var(--space-sm) var(--space-lg);
+  line-height: var(--leading-snug);
+}
+
+.modal-input-wrapper label {
+  color: var(--ink);
+  opacity: 0.85;
+}
+
+/* 播放器底栏及播放队列 */
+.player-bar-container {
+  background: var(--bg-player);
+  backdrop-filter: var(--blur-player) saturate(var(--saturate-player));
+  -webkit-backdrop-filter: var(--blur-player) saturate(var(--saturate-player));
+  border-top: 1px solid var(--border-main);
+}
+
+.queue-drawer {
+  background: var(--bg-dialog);
+  backdrop-filter: var(--blur-dialog) saturate(var(--saturate-dialog));
+  -webkit-backdrop-filter: var(--blur-dialog) saturate(var(--saturate-dialog));
+  border: 1px solid var(--border-dialog);
+  box-shadow: var(--black-alpha-24) 0px 15px 35px 0px;
+}
+
+.queue-tabs {
+  background: var(--bg-action-btn);
+}
+
+.tab-btn.active {
+  background: var(--bg-input-focus);
+  backdrop-filter: var(--blur-card);
+  -webkit-backdrop-filter: var(--blur-card);
+  color: var(--primary);
+  box-shadow: 0 1px 4px var(--black-alpha-06);
+}
+
+:root.theme-dark .tab-btn.active {
+  color: var(--on-primary);
+  box-shadow: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-light) .tab-btn.active {
+    color: var(--on-primary);
+    box-shadow: none;
+  }
+}
+
+.queue-item.active {
+  background-color: var(--primary-alpha-12);
+  backdrop-filter: var(--blur-card);
+  -webkit-backdrop-filter: var(--blur-card);
+}
+
+:root.theme-dark .queue-item.active {
+  background-color: var(--primary-on-dark-alpha-12);
+  color: var(--primary-on-dark);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-light) .queue-item.active {
+    background-color: var(--primary-on-dark-alpha-12);
+    color: var(--primary-on-dark);
+  }
+}
+
+.q-remove:hover {
+  background-color: var(--danger-alpha-12);
+  backdrop-filter: var(--blur-card);
+  -webkit-backdrop-filter: var(--blur-card);
+}
+
+/* ============================================================
+   Naive UI 常用控件主题映射与自适应
+   ============================================================ */
+.n-input {
+  --n-color: var(--bg-input);
+  --n-border: 1px solid var(--border-input);
+  --n-text-color: var(--ink);
+  --n-placeholder-color: var(--body-muted);
+  --n-placeholder-color-disabled: var(--body-muted);
+  --n-caret-color: var(--primary);
+  --n-color-disabled: var(--bg-input);
+  --n-border-disabled: 1px solid var(--border-input);
+  --n-text-color-disabled: var(--body-muted);
+  --n-prefix-text-color: var(--body-muted);
+  --n-suffix-text-color: var(--body-muted);
+  --n-loading-color: var(--primary);
+}
+
+.n-input.n-input--focus {
+  --n-color: var(--bg-input-focus);
+  --n-border: 1px solid var(--primary);
+}
+
+.n-input.n-input--disabled {
+  --n-color: var(--bg-input);
+  --n-border: 1px solid var(--border-input);
+}
+
+.n-input .n-input-wrapper {
+  border-radius: var(--n-border-radius, 11px);
+}
+
+.n-input .n-input__suffix .n-base-icon,
+.n-input .n-input__prefix .n-base-icon {
+  color: var(--body-muted);
+}
+
+.n-input .n-input__clear {
+  color: var(--body-muted);
+}
+
+.n-input .n-input__clear:hover {
+  color: var(--ink);
+  background-color: var(--bg-action-btn-hover);
+  border-radius: 50%;
+}
+
+.n-input.n-input--round .n-input-wrapper {
+  border-radius: 9999px;
+}
+
+.n-radio-group {
+  --n-button-color: var(--bg-action-btn);
+  --n-button-color-active: var(--bg-input-focus);
+  --n-button-border-color: var(--border-input);
+  --n-button-border-color-active: var(--primary);
+  --n-button-text-color: var(--body-muted);
+  --n-button-text-color-active: var(--ink);
+  --n-button-text-color-hover: var(--ink);
+  --n-button-box-shadow: none;
+  --n-button-box-shadow-hover: 0 2px 8px var(--black-alpha-08);
+  --n-button-box-shadow-focus: 0 0 0 2px var(--primary-alpha-16);
+}
+
+:root.theme-dark .n-radio-group {
+  --n-button-box-shadow-hover: 0 2px 8px var(--black-alpha-24);
+  --n-button-box-shadow-focus: 0 0 0 2px var(--primary-on-dark-alpha-16);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-light) .n-radio-group {
+    --n-button-box-shadow-hover: 0 2px 8px var(--black-alpha-24);
+    --n-button-box-shadow-focus: 0 0 0 2px var(--primary-on-dark-alpha-16);
+  }
+}
+
+/* ============================================================
+   2FMusic 自定义背景下的 Naive UI 控件可见性与对比度强力穿透补强
+   ============================================================ */
+.has-custom-bg .n-slider .n-slider-rail {
+  background-color: rgba(0, 0, 0, 0.16) !important;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+:root.theme-dark .has-custom-bg .n-slider .n-slider-rail {
+  background-color: rgba(255, 255, 255, 0.24) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-light) .has-custom-bg .n-slider .n-slider-rail {
+    background-color: rgba(255, 255, 255, 0.24) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* 自定义背景下的 Naive UI Switch 开关轨道可见性 */
+.has-custom-bg .n-switch .n-switch__rail {
+  background-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.theme-dark .has-custom-bg .n-switch .n-switch__rail {
+  background-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-light) .has-custom-bg .n-switch .n-switch__rail {
+    background-color: rgba(255, 255, 255, 0.18) !important;
+  }
+}
+
+.has-custom-bg .n-switch.n-switch--active .n-switch__rail {
+  background-color: var(--primary) !important;
+}

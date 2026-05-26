@@ -1,0 +1,20 @@
+{
+    ".url": {
+        "yuexps.2fmusic.Application": {
+            "title": "2FMusic",
+            "icon": "images/icon_{0}.png",
+            "type": "iframe",
+            "protocol": "http",
+            "gatewaySocket": "app.sock",
+            "gatewayPrefix": "/app/yuexps-2fmusic",
+            "url": "/app/yuexps-2fmusic/",
+            "allUsers": false,
+            "noDisplay": false,
+            "control": {
+                "accessPerm": "readonly",
+                "portPerm": "readonly",
+                "pathPerm": "readonly"
+            }
+        }
+    }
+}

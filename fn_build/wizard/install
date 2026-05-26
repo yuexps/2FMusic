@@ -1,0 +1,22 @@
+[
+  {
+    "stepTitle": "访问密码设置",
+    "items": [
+      {
+        "type": "password",
+        "field": "wizard_password",
+        "label": "设置密码",
+        "rules": [
+          {
+            "required": true,
+            "message": "请输入密码"
+          },
+          {
+            "min": 6,
+            "message": "密码长度不能少于6位"
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="./ICON.PNG" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>登录 - 2FMusic</title>
+  <script>
+    window.nextPath = "{{ next_path or '' }}";
+    window.loginError = "{{ error or '' }}";
+    window.actionUrl = "{{ url_for('auth.login', next=next_path) }}";
+  </script>
+  <script type="module" crossorigin src="./assets/login-DwhyYgp9.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/style-0ZYwoUv4.js">
+  <link rel="stylesheet" crossorigin href="./assets/style-Dai2_RFC.css">
+  <link rel="stylesheet" crossorigin href="./assets/login-DU3Z9_yz.css">
+</head>
+
+<body>
+  <div id="app"></div>
+</body>
+
+</html>
