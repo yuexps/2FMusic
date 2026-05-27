@@ -1,5 +1,5 @@
 <template>
-  <n-icon :size="iconSize" :depth="depth" :class="['svg-icon', { 'svg-spin': spin }]">
+  <n-icon :size="iconSize" :depth="depth" :class="['inline-block align-[-0.15em] shrink-0', { 'animate-spin': spin }]">
     <component :is="iconComponent" />
   </n-icon>
 </template>
@@ -48,7 +48,7 @@ const iconSize = computed(() => {
   return typeof props.size === 'number' ? `${props.size}px` : props.size
 })
 
-// 图标组件映射表，兼容现存所有的 name 调用
+// 图标组件映射表
 const COMPONENT_MAP: Record<string, any> = {
   'play': Play48Filled,
   'pause': Pause48Filled,
@@ -119,24 +119,4 @@ export default {
 }
 </script>
 
-<style scoped>
-.svg-icon {
-  display: inline-block;
-  vertical-align: -0.15em;
-  flex-shrink: 0;
-}
 
-.svg-spin {
-  animation: svg-spin-anim 1s linear infinite;
-}
-
-@keyframes svg-spin-anim {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

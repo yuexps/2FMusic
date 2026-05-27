@@ -9,7 +9,7 @@ import {
 } from 'naive-ui'
 import type { GlobalThemeOverrides } from 'naive-ui'
 
-// 从全局 window 读取 Flask 注入的模板变量
+// 从 window 读取 Flask 注入的模板变量
 const loginError = (window as any).loginError || ''
 const actionUrl = (window as any).actionUrl || '/login'
 
@@ -21,7 +21,7 @@ const showError = ref(!!loginError)
 
 const formRef = ref<HTMLFormElement | null>(null)
 
-// 自定义 Naive UI 主题
+// Naive UI 主题
 const themeOverrides: GlobalThemeOverrides = {
   common: {
     primaryColor: '#0066cc',
@@ -76,44 +76,50 @@ const handleLogin = async (e: Event) => {
 
 <template>
   <n-config-provider :theme-overrides="themeOverrides">
-    <div class="login-container">
-      <div class="login-card product-cover-shadow">
-        <header class="login-header">
-          <div class="logo-container">
-            <img :src="getApiUrl('/ICON.PNG')" class="app-logo" width="60" height="60" alt="Logo" />
+    <div
+      class="flex items-center justify-center min-h-screen w-screen bg-[radial-gradient(circle_at_50%_25%,rgba(0,102,204,0.08),transparent_45%)] bg-bg-app-layout transition-colors duration-normal">
+      <div
+        class="w-[min(390px,90vw)] p-[42px_36px] rounded-xl bg-surface-glass backdrop-saturate-180 backdrop-blur-sidebar border border-border-main box-border text-ink flex flex-col gap-6 product-cover-shadow">
+        <header class="flex flex-col items-center text-center gap-2">
+          <div class="flex items-center justify-center mb-2">
+            <img :src="getApiUrl('/ICON.PNG')"
+              class="rounded-[14px] object-cover drop-shadow-[0_4px_12px_rgba(0,102,204,0.25)]" width="60" height="60"
+              alt="Logo" />
           </div>
-          <h1 class="app-title">2FMusic</h1>
-          <p class="app-subtitle">请输入您的访问密码以进入音乐库</p>
+          <h1 class="m-0 font-display text-[26px] font-bold tracking-[-0.5px]">2FMusic</h1>
+          <p class="m-0 text-[13px] text-body-muted">请输入您的访问密码以进入音乐库</p>
         </header>
 
-        <!-- 错误状态展示 -->
-        <transition name="fade">
-          <div v-if="showError" class="error-banner">
+        <!-- 错误提示 -->
+        <transition enter-active-class="transition-opacity duration-200 ease" enter-from-class="opacity-0"
+          leave-active-class="transition-opacity duration-200 ease" leave-to-class="opacity-0">
+          <div v-if="showError"
+            class="p-[10px_14px] bg-danger-soft border border-danger-border rounded-sm text-danger text-[13px] text-center font-medium">
             <span>{{ loginError }}</span>
           </div>
         </transition>
 
-        <!-- Vue 渲染的交互表单 (拦截 submit 并执行哈希计算) -->
-        <form class="interactive-form" @submit="handleLogin">
+        <!-- Vue 表单（拦截 submit 执行哈希） -->
+        <form class="flex flex-col gap-5" @submit="handleLogin">
           <div class="form-group">
             <n-input v-model:value="password" type="password" show-password-on="click" placeholder="访问密码" size="large"
               autofocus />
           </div>
 
-          <div class="form-options">
+          <div class="flex justify-start">
             <n-checkbox v-model:checked="rememberChecked">
               保持登录 (30天内免登)
             </n-checkbox>
           </div>
 
-          <div class="form-action">
+          <div class="mt-1">
             <n-button type="primary" size="large" block attr-type="submit" :loading="loading">
               登录
             </n-button>
           </div>
         </form>
 
-        <!-- 后端 Flask 接受的隐藏表单桥接 -->
+        <!-- 后端接收的隐藏表单 -->
         <form ref="formRef" method="POST" :action="actionUrl" style="display: none;">
           <input type="hidden" name="password" :value="hashedPassword">
           <input type="hidden" name="remember" :value="rememberChecked ? 'on' : ''">
@@ -122,103 +128,3 @@ const handleLogin = async (e: Event) => {
     </div>
   </n-config-provider>
 </template>
-
-<style scoped>
-.login-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  width: 100vw;
-  /* 极简背光效果 */
-  background: radial-gradient(circle at 50% 25%, rgba(0, 102, 204, 0.08), transparent 45%), var(--canvas-parchment);
-  transition: background-color var(--transition-normal);
-}
-
-.login-card {
-  width: min(390px, 90vw);
-  padding: 42px 36px;
-  border-radius: 20px;
-  background: var(--surface-glass);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border: 1px solid var(--hairline);
-  box-sizing: border-box;
-  color: var(--ink);
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.login-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 8px;
-}
-
-.logo-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 8px;
-}
-
-.app-logo {
-  border-radius: 14px;
-  object-fit: cover;
-  filter: drop-shadow(0 4px 12px rgba(0, 102, 204, 0.25));
-}
-
-.app-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-}
-
-.app-subtitle {
-  margin: 0;
-  font-size: 13px;
-  color: var(--body-muted);
-}
-
-.error-banner {
-  padding: 10px 14px;
-  background-color: var(--color-danger-soft);
-  border: 1px solid var(--color-danger-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-danger);
-  font-size: 13px;
-  text-align: center;
-  font-weight: 500;
-}
-
-.interactive-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.form-options {
-  display: flex;
-  justify-content: flex-start;
-}
-
-.form-action {
-  margin-top: 4px;
-}
-
-/* 动效过渡 */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-</style>

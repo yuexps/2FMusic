@@ -12,7 +12,7 @@ export const useHistoryStore = defineStore('history', () => {
   const historyList = ref<HistoryItem[]>([])
   const isLoading = ref(false)
 
-  // 获取云端历史纪录列表并同步本地 localStorage 缓存
+  // 获取云端历史记录
   const fetchHistory = async () => {
     isLoading.value = true
     try {
@@ -21,7 +21,7 @@ export const useHistoryStore = defineStore('history', () => {
       localStorage.setItem('2fmusic_history', JSON.stringify(historyList.value))
     } catch (e) {
       console.error('Failed to fetch play history via WS:', e)
-      // 离线/获取失败时，兜底使用本地 localStorage
+      // 失败时兜底使用本地缓存
       const saved = localStorage.getItem('2fmusic_history')
       if (saved) {
         historyList.value = JSON.parse(saved)
@@ -31,7 +31,7 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
-  // 触发播放记录上报
+  // 添加播放记录
   const addHistory = async (songId: string) => {
     try {
       await wsClient.sendRequest('history/add', { song_id: songId })
@@ -41,7 +41,7 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
-  // 清空全部播放历史
+  // 清空播放历史
   const clearHistory = async () => {
     try {
       await wsClient.sendRequest('history/clear')
@@ -54,7 +54,7 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
-  // 删除单条播放历史记录
+  // 删除单条播放记录
   const removeHistory = async (songId: string, playTime: number) => {
     try {
       await wsClient.sendRequest('history/remove', { song_id: songId, play_time: playTime })

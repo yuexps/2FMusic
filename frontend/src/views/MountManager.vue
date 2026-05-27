@@ -1,10 +1,10 @@
 <template>
-  <div class="flex flex-col">
+  <div class="flex flex-col max-w-[1040px] mx-auto w-full">
     <div class="view-header">
       <h1 class="view-title">音乐目录管理</h1>
     </div>
 
-    <!-- 添加挂载点区域 (Tailwind + glass-panel) -->
+    <!-- 添加挂载点 -->
     <div class="glass-panel p-6 rounded-2xl mb-8 box-border max-md:p-4 max-md:mb-5">
       <div class="mb-5">
         <h3 class="card-title">
@@ -18,8 +18,8 @@
       <div class="flex gap-3 items-center max-md:flex-col max-md:gap-2.5 max-md:items-stretch">
         <n-input type="text" v-model:value="newMountPath" placeholder="请输入服务器上的文件夹绝对路径..." round
           @keyup.enter="handleAddMount" />
-        <n-button round type="primary" size="large" @click="handleAddMount"
-          :disabled="!newMountPath.trim() || isAdding" :loading="isAdding" class="max-md:w-full">
+        <n-button round type="primary" size="large" @click="handleAddMount" :disabled="!newMountPath.trim() || isAdding"
+          :loading="isAdding" class="max-md:w-full">
           添加并扫描
         </n-button>
       </div>
@@ -29,13 +29,15 @@
     <div class="flex flex-col">
       <h2 class="section-title">已添加的监控目录</h2>
 
-      <div v-if="systemStore.mountPoints.length === 0" class="flex flex-col items-center py-12 text-center text-body-muted">
+      <div v-if="systemStore.mountPoints.length === 0"
+        class="flex flex-col items-center py-12 text-center text-body-muted">
         <SvgIcon name="network" class="text-[32px] mb-3 opacity-50" />
         <p>暂无外接监控目录，仅使用默认音乐库</p>
       </div>
 
       <div v-else class="flex flex-col gap-3">
-        <div v-for="path in systemStore.mountPoints" :key="path" class="glass-card p-4 rounded-xl flex justify-between items-center flex-wrap gap-4 max-md:p-3 max-md:gap-3 max-md:flex-nowrap">
+        <div v-for="path in systemStore.mountPoints" :key="path"
+          class="glass-card p-4 rounded-xl flex justify-between items-center flex-wrap gap-4 max-md:p-3 max-md:gap-3 max-md:flex-nowrap">
           <div class="flex items-center gap-3 flex-1 min-w-62.5 overflow-hidden max-md:min-w-0">
             <div class="text-warning text-[20px] shrink-0">
               <SvgIcon name="folder" />
@@ -44,16 +46,28 @@
           </div>
 
           <div class="mount-actions flex items-center gap-2 shrink-0">
-            <n-button round size="small" @click="handleTriggerScan(path)" title="手动触发增量扫描">
-              <template #icon><SvgIcon name="sync" /></template> 增量扫描
+            <n-button round size="small" @click="handleTriggerScan(path)" title="手动触发增量扫描"
+              class="max-md:w-8 max-md:h-8 max-md:p-0 max-md:rounded-full max-md:min-w-8 max-md:shrink-0 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!">
+              <template #icon>
+                <SvgIcon name="sync" class="max-md:m-0!" />
+              </template>
+              <span class="max-md:hidden">增量扫描</span>
             </n-button>
 
-            <n-button round size="small" @click="handleTriggerRescrape(path)" title="重新刮削封面与歌词">
-              <template #icon><SvgIcon name="magic" /></template> 重新刮削
+            <n-button round size="small" @click="handleTriggerRescrape(path)" title="重新刮削封面与歌词"
+              class="max-md:w-8 max-md:h-8 max-md:p-0 max-md:rounded-full max-md:min-w-8 max-md:shrink-0 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!">
+              <template #icon>
+                <SvgIcon name="magic" class="max-md:m-0!" />
+              </template>
+              <span class="max-md:hidden">重新刮削</span>
             </n-button>
 
-            <n-button round size="small" type="error" secondary @click="confirmRemoveMount(path)" title="移除该目录">
-              <template #icon><SvgIcon name="trash" /></template> 移除
+            <n-button round size="small" type="error" secondary @click="confirmRemoveMount(path)" title="移除该目录"
+              class="max-md:w-8 max-md:h-8 max-md:p-0 max-md:rounded-full max-md:min-w-8 max-md:shrink-0 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!">
+              <template #icon>
+                <SvgIcon name="trash" class="max-md:m-0!" />
+              </template>
+              <span class="max-md:hidden">移除</span>
             </n-button>
           </div>
         </div>
@@ -145,26 +159,3 @@ onMounted(() => {
   systemStore.fetchMountPoints()
 })
 </script>
-
-<style scoped>
-@media (max-width: 768px) {
-  /* 移动端下按钮极简为圆形加号或对应图标 */
-  .mount-actions :deep(.n-button) {
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    justify-content: center;
-    border-radius: 50%;
-    flex-shrink: 0;
-    min-width: 32px;
-  }
-  
-  .mount-actions :deep(.n-button .n-button__content) {
-    display: none !important;
-  }
-  
-  .mount-actions :deep(.n-button .n-button__icon) {
-    margin: 0 !important;
-  }
-}
-</style>

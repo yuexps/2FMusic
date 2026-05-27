@@ -1,5 +1,3 @@
-// 强类型定义
-
 export interface Song {
   id: string
   filename: string

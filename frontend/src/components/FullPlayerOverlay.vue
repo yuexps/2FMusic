@@ -1,13 +1,13 @@
 <template>
-  <div class="full-player-overlay" :class="{ active: show }">
-    <!-- 虚化背景封面图 (Tailwind 重塑) -->
+  <div class="fixed left-0 w-[calc(100vw/var(--ui-scale,1))] h-[calc(100vh/var(--ui-scale,1))] bg-black z-1000 flex flex-col transition-[top,visibility] duration-400 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden text-white" :class="[ show ? 'top-0 visible pointer-events-auto' : 'top-[120vh] invisible pointer-events-none' ]">
+    <!-- 虚化背景封面 -->
     <div class="absolute inset-0 -z-1 overflow-hidden">
       <img v-cached-src="{ id: playerStore.currentSong?.id, src: playerStore.currentSong?.album_art }"
         class="absolute top-[-10%] left-[-10%] w-[120%] h-[120%] object-cover blur-[50px] brightness-[0.4] saturate-[1.4] scale-110" alt="Background" />
       <div class="absolute inset-0 bg-linear-to-b from-black/40 to-black/70"></div>
     </div>
 
-    <!-- 头部：关闭及状态 (Tailwind 重塑) -->
+    <!-- 头部：关闭及状态 -->
     <header class="h-16 flex items-center justify-between px-6 box-border">
       <button class="bg-transparent border-none text-white text-[20px] cursor-pointer opacity-60 transition-all duration-150 hover:opacity-100 hover:translate-y-0.5 flex items-center justify-center" @click="emit('close')" title="收起">
         <SvgIcon name="chevron-down" />
@@ -21,30 +21,30 @@
       </n-dropdown>
     </header>
 
-    <!-- 主体：双列布局 (Tailwind 重塑，完美兼容平板及移动端响应式) -->
+    <!-- 主体：双列布局 -->
     <main class="fp-body flex-1 flex px-20 py-10 box-border overflow-hidden gap-20 max-md:flex-col max-md:p-5 max-md:gap-4 md:max-lg:px-10 md:max-lg:py-7 md:max-lg:gap-10">
-      <!-- Left column: cover and metadata (Tailwind 极简原子类) -->
+      <!-- 左侧：封面和元数据 -->
       <div class="flex-1 flex flex-col justify-center items-center text-center min-w-0 max-md:flex-[0_0_auto] max-md:flex-row max-md:items-center max-md:text-left max-md:gap-4 max-md:w-full">
-        <div class="w-[min(360px,70vw,45vh)] aspect-square mb-8 flex justify-center items-center max-md:w-18 max-md:h-18 max-md:mb-0 max-md:shrink-0 md:max-lg:w-[min(240px,45vw,35vh)] md:max-lg:mb-4">
+        <div class="w-[min(360px,45vw,42vh)] lg:w-[min(380px,45vw,42vh)] xl:w-[min(440px,48vw,46vh)] 2xl:w-[min(480px,50vw,50vh)] aspect-square mb-8 flex justify-center items-center max-md:w-18 max-md:h-18 max-md:mb-0 max-md:shrink-0 md:max-lg:w-[min(240px,40vw,35vh)] md:max-lg:mb-4 xl:mb-10 shadow-[0_20px_40px_rgba(0,0,0,0.35)] dark:shadow-[0_20px_40px_rgba(0,0,0,0.55)] max-md:shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
           <img v-cached-src="{ id: playerStore.currentSong?.id, src: playerStore.currentSong?.album_art }"
             class="w-full h-full object-cover rounded-md" alt="Cover" />
         </div>
         <div class="max-w-90 text-white max-md:flex-1 max-md:min-w-0 max-md:text-left">
-          <h2 class="font-display text-2xl font-semibold m-0 mb-2 tracking-[-0.3px] whitespace-nowrap overflow-hidden text-ellipsis max-md:text-lg max-md:mb-1 md:max-lg:text-[20px]">{{ playerStore.currentSong?.title || '未知标题' }}</h2>
-          <p class="text-white/60 text-sm m-0 mb-1 whitespace-nowrap overflow-hidden text-ellipsis max-md:text-xs max-md:mb-0.5 md:max-lg:text-sm">{{ playerStore.currentSong?.artist || '未知艺术家' }}</p>
-          <p class="text-white/40 text-xs m-0 whitespace-nowrap overflow-hidden text-ellipsis max-md:text-[11px] md:max-lg:text-xs" v-if="playerStore.currentSong?.album">{{ playerStore.currentSong.album }}</p>
+          <h2 class="font-display text-2xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-semibold m-0 mb-2 xl:mb-3 tracking-[-0.3px] whitespace-nowrap overflow-hidden text-ellipsis max-md:text-lg max-md:mb-1 md:max-lg:text-[20px]">{{ playerStore.currentSong?.title || '未知标题' }}</h2>
+          <p class="text-white/60 text-sm lg:text-sm xl:text-base 2xl:text-lg m-0 mb-1 whitespace-nowrap overflow-hidden text-ellipsis max-md:text-xs max-md:mb-0.5 md:max-lg:text-sm">{{ playerStore.currentSong?.artist || '未知艺术家' }}</p>
+          <p class="text-white/40 text-xs lg:text-xs xl:text-sm 2xl:text-base m-0 whitespace-nowrap overflow-hidden text-ellipsis max-md:text-[11px] md:max-lg:text-xs" v-if="playerStore.currentSong?.album">{{ playerStore.currentSong.album }}</p>
         </div>
       </div>
 
       <!-- Right column: lyrics scroll -->
       <div class="fp-right flex-[1.2] flex flex-col justify-center overflow-hidden max-md:flex-1 max-md:justify-start max-md:h-0">
-        <div ref="lyricsContainer" class="lyrics-scroll-container h-[85%] overflow-y-auto py-10 box-border lyrics-fade-mask max-md:h-full max-md:py-5" :class="{ 'no-lyrics': lyricLines.length === 0 }">
+        <div ref="lyricsContainer" class="lyrics-scroll-container h-[85%] overflow-y-auto py-10 box-border mask-[linear-gradient(180deg,transparent_0%,#000_15%,#000_85%,transparent_100%)] max-md:h-full max-md:py-5" :class="{ 'no-lyrics': lyricLines.length === 0 }">
           <div v-if="lyricLines.length === 0" class="empty-lyrics flex items-center justify-center h-full">
             <p class="text-[20px] font-semibold text-white px-4 py-3 text-center active">暂无歌词</p>
           </div>
           <div v-else v-for="(line, idx) in lyricLines" :key="idx"
-            :ref="el => { if (el) lyricElements[idx] = el as HTMLElement }" class="lyric-line group/lyric text-[20px] font-semibold text-white/45 px-4 py-3 rounded-lg cursor-pointer transition-all duration-300 origin-center leading-relaxed text-center hover:text-white/80 hover:bg-white/5 max-md:text-base max-md:px-2 max-md:py-2.5 max-md:leading-snug max-md:hover:bg-transparent max-md:hover:text-white/45 select-none touch-none"
-            :class="{ 'text-white! text-[24px] scale-[1.03] cursor-default hover:bg-transparent max-md:text-[18px]': currentLyricIndex === idx }" @click="seekToLyric(line.time)">
+            :ref="el => { if (el) lyricElements[idx] = el as HTMLElement }" class="lyric-line group/lyric text-[20px] lg:text-[19px] xl:text-[21px] 2xl:text-[24px] font-semibold text-white/45 px-4 py-3 rounded-lg cursor-pointer transition-all duration-300 origin-center leading-relaxed text-center hover:text-white/80 hover:bg-white/5 max-md:text-base max-md:px-2 max-md:py-2.5 max-md:leading-snug max-md:hover:bg-transparent max-md:hover:text-white/45 select-none touch-none"
+            :class="{ 'text-white! text-[24px] lg:text-[23px] xl:text-[25px] 2xl:text-[28px] scale-[1.03] cursor-default hover:bg-transparent max-md:text-[18px]': currentLyricIndex === idx }" @click="seekToLyric(line.time)">
             <template v-if="getLineTexts(line).length > 1">
               <span class="block lyric-main">{{ getLineTexts(line)[0] }}</span>
               <span class="block text-[0.75em] font-normal text-white/48 mt-1.5 tracking-wide transition-colors duration-300 group-hover/lyric:text-white/65 max-md:mt-1 max-md:text-[0.78em]" :class="{ 'text-white/72!': currentLyricIndex === idx }">{{ getLineTexts(line)[1] }}</span>
@@ -57,7 +57,7 @@
       </div>
     </main>
 
-    <!-- 底部：控制台 (Tailwind 重塑) -->
+    <!-- 底部：控制台 -->
     <footer class="h-40 flex flex-col items-center px-20 pb-10 box-border gap-4 max-md:px-5 max-md:pb-5 max-md:h-32.5">
       <div class="flex items-center gap-4 w-full max-w-180">
         <span class="text-[11px] opacity-50 min-w-9 text-center">{{ formatTime(playerStore.currentTime) }}</span>
@@ -90,7 +90,7 @@
       </div>
     </footer>
 
-    <!-- 歌曲详情弹窗 (Tailwind + glass-card 大一统重塑) -->
+    <!-- 歌曲详情弹窗 -->
     <n-modal v-model:show="showInfoModal" display-directive="show">
       <div class="glass-card w-[min(480px,90vw)] bg-dialog border border-dialog rounded-xl p-6 text-ink shadow-[0_20px_50px_rgba(0,0,0,0.12)] box-border">
         <h3 class="m-0 mb-5 text-lg font-semibold text-center tracking-wider text-ink">歌曲详情</h3>
@@ -165,10 +165,10 @@ const favoritesStore = useFavoritesStore()
 const systemStore = useSystemStore()
 const message = useMessage()
 
-// 歌词解析
+// 歌词行类型
 interface LyricLine {
   time: number
-  lines: string[]  // lines[0] = 原文, lines[1] = 翻译（可选）
+  lines: string[]  // lines[0]=原文, lines[1]=翻译（可选）
 }
 
 const rawLyrics = ref('')
@@ -181,7 +181,7 @@ onBeforeUpdate(() => {
   lyricElements.value = []
 })
 
-// 核心加载歌词逻辑
+// 加载歌曲歌词
 const loadLyricsForSong = async (song: any, skipCache: boolean = false) => {
   if (!song) {
     rawLyrics.value = ''
@@ -334,7 +334,6 @@ const seekToLyric = (time: number) => {
   playerStore.seek(time)
 }
 
-// 时间进度条双向绑定
 const sliderTime = ref(0)
 watch(() => playerStore.currentTime, (val) => {
   sliderTime.value = val
@@ -373,7 +372,7 @@ const formatSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-// 复制路径到剪切板
+// 复制路径到剪贴板
 const copyText = (text: string) => {
   if (navigator.clipboard) {
     navigator.clipboard.writeText(text).then(() => {
@@ -397,7 +396,6 @@ const copyText = (text: string) => {
   }
 }
 
-// 三点菜单选项
 const dropdownOptions = computed(() => {
   const song = playerStore.currentSong
   if (!song) return []
@@ -410,7 +408,7 @@ const dropdownOptions = computed(() => {
   ]
 })
 
-// 处理菜单项选择
+// 菜单项选择处理
 const handleMenuSelect = async (key: string) => {
   const song = playerStore.currentSong
   if (!song) return
@@ -538,7 +536,7 @@ const formatTime = (secs: number) => {
   return `${m}:${s < 10 ? '0' : ''}${s}`
 }
 
-// 获取单行歌词解析后的文本（支持单行用 " / " 或 " | " 分隔的双语歌词）
+// 获取歌词行文本（支持 " / " 或 " | " 分隔的双语歌词）
 const getLineTexts = (line: LyricLine): string[] => {
   if (!line || !line.lines || line.lines.length === 0) return []
   if (line.lines.length > 1) {
@@ -555,48 +553,3 @@ const getLineTexts = (line: LyricLine): string[] => {
 }
 </script>
 
-<style scoped>
-.full-player-overlay {
-  position: fixed;
-  top: 120vh;
-  /* 使用 120vh 作为缓冲区 */
-  left: 0;
-  width: calc(100vw / var(--ui-scale, 1.0));
-  height: calc(100vh / var(--ui-scale, 1.0));
-  background-color: #000;
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  transition: top 0.4s cubic-bezier(0.25, 1, 0.5, 1), visibility 0.4s;
-  overflow: hidden;
-  color: #fff;
-  visibility: hidden;
-  pointer-events: none;
-}
-
-.full-player-overlay.active {
-  top: 0;
-  visibility: visible;
-  pointer-events: auto;
-}
-
-/* 高雅的歌词边缘毛砂虚化渐隐 mask */
-.lyrics-fade-mask {
-  mask-image: linear-gradient(180deg, transparent 0%, #000 15%, #000 85%, transparent 100%);
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 15%, #000 85%, transparent 100%);
-}
-
-.product-cover-shadow {
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
-}
-
-:root.theme-dark .product-cover-shadow {
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.55);
-}
-
-@media (max-width: 768px) {
-  .product-cover-shadow {
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
-  }
-}
-</style>

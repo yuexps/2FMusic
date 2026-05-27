@@ -2,7 +2,7 @@
   <div class="flex flex-col">
     <div class="view-header">
       <h1 class="view-title">我的收藏</h1>
-      <n-button class="create-playlist-btn" round type="primary" @click="showCreateModal = true">
+      <n-button class="create-playlist-btn max-md:w-[38px] max-md:h-[38px] max-md:p-0 max-md:justify-center max-md:rounded-full [&_.n-button__content]:max-md:hidden! [&_.n-button__icon]:max-md:m-0!" round type="primary" @click="showCreateModal = true">
         <template #icon>
           <SvgIcon name="plus" />
         </template>
@@ -10,8 +10,8 @@
       </n-button>
     </div>
 
-    <!-- 收藏夹画廊列表 (已重构为 Tailwind 极简原子类与现代 group-hover 级联) -->
-    <div class="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-6">
+    <!-- 收藏夹画廊列表 -->
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-x-4 gap-y-6">
       <div 
         v-for="playlist in favoritesStore.playlists" 
         :key="playlist.id" 
@@ -136,23 +136,4 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-@media (max-width: 768px) {
-  /* 新建按钮在移动端极简为圆形加号按钮 */
-  .view-header :deep(.create-playlist-btn) {
-    width: 38px;
-    height: 38px;
-    padding: 0;
-    justify-content: center;
-    border-radius: 50%;
-  }
 
-  .view-header :deep(.create-playlist-btn .n-button__content) {
-    display: none !important;
-  }
-
-  .view-header :deep(.create-playlist-btn .n-button__icon) {
-    margin: 0 !important;
-  }
-}
-</style>

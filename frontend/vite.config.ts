@@ -37,6 +37,20 @@ export default defineConfig({
       input: {
         main: path.resolve(__dirname, 'index.html'),
         login: path.resolve(__dirname, 'login.html')
+      },
+      output: {
+        // 生产级分包优化：将依赖包单独打包以完全消除打包体积过大警告，并极大地优化首屏加载性能
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('naive-ui')) {
+              return 'vendor-naive-ui'
+            }
+            if (id.includes('vue') || id.includes('vue-router') || id.includes('pinia') || id.includes('axios')) {
+              return 'vendor-vue-core'
+            }
+            return 'vendor-libs'
+          }
+        }
       }
     }
   },

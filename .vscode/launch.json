@@ -18,12 +18,6 @@
                 "123456"
             ],
             "justMyCode": true,
-            "rules": [
-                {
-                    "path": "${workspaceFolder}/server/lib",
-                    "include": false
-                }
-            ],
             "env": {
                 "FLASK_DEBUG": "1"
             }

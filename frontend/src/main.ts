@@ -32,10 +32,10 @@ async function applyCachedSrc(el: HTMLImageElement, binding: any) {
     return
   }
 
-  // 记录请求 ID，解决异步任务可能造成的并发/时序错乱问题
+  // 记录请求 ID 避免异步时序错乱
   const currentReqId = (el as any)._lastReqId = ((el as any)._lastReqId || 0) + 1
 
-  // 清除旧的引用计数与关联 of Object URL
+  // 清除旧的引用
   releaseElCache(el)
 
   if (!id) {
@@ -52,8 +52,8 @@ async function applyCachedSrc(el: HTMLImageElement, binding: any) {
   try {
     const url = await coverCacheManager.getOrCreateUrl(id)
     
-    // 如果在异步加载期间，指令又触发了新的 applyCachedSrc，则抛弃本次老的回调
-    if ((el as any)._lastReqId !== currentReqId) {
+  // 若异步期间指令又触发新加载，抛弃本次回调
+  if ((el as any)._lastReqId !== currentReqId) {
       return
     }
 
@@ -65,7 +65,7 @@ async function applyCachedSrc(el: HTMLImageElement, binding: any) {
       return
     }
 
-    // 本地没有缓存图片时，为避免 el.src = src 导致浏览器直接下载一次，我们优先在 JS 中 fetch 下载并入库
+    // 无缓存时用 fetch 下载图片并入库，避免直接挂 src 触发浏览器下载
     if (src && !src.startsWith('blob:') && !src.startsWith('data:') && !src.endsWith('/ICON.PNG') && !src.endsWith('/ICON.png')) {
       el.src = getApiUrl('/ICON.PNG') // 暂时渲染默认占位符，不让 HTTP 链接挂到 src 上触发抢跑
       

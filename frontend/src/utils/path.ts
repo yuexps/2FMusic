@@ -4,9 +4,9 @@
  */
 export function getBaseUrl(): string {
   let path = window.location.pathname;
-  // 过滤掉 index.html、login.html 等常见静态入口文件名
+  // 过滤 index.html、login.html 等入口文件名
   path = path.replace(/\/(index|login)\.html$/, '');
-  // 过滤掉 /login 等单级路由路径（末尾没有扩展名的）
+  // 过滤 /login 单级路由
   path = path.replace(/\/(login)$/, '');
   
   if (!path.endsWith('/')) {
@@ -17,7 +17,7 @@ export function getBaseUrl(): string {
     return '';
   }
   
-  // 去掉尾部的斜杠，返回如 '/2fmusic' 
+  // 去掉尾斜杠，返回如 '/2fmusic'
   return path.slice(0, -1);
 }
 
@@ -27,7 +27,7 @@ export function getBaseUrl(): string {
 export function getApiUrl(path: string): string {
   if (!path) return path;
   
-  // 如果是外部完整链接、本地 blob URL、或 data URL，原样返回
+  // 外部链接、blob URL、data URL 原样返回
   if (/^(https?:|blob:|data:)/i.test(path)) {
     return path;
   }

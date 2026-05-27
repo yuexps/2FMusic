@@ -1,6 +1,6 @@
 <template>
   <div class="flex flex-col flex-1 min-h-0 netease-downloader-view">
-    <!-- 1. 网易云 API 未配置 - 提示前往设置页 -->
+    <!-- API 未配置时提示前往设置 -->
     <div v-if="!isApiConnected" class="flex justify-center items-center flex-1 py-15 max-sm:py-8">
       <div
         class="w-[min(480px,88vw)] text-center glass-panel p-[48px_32px] box-border flex flex-col items-center gap-4 rounded-2xl">
@@ -19,7 +19,6 @@
       </div>
     </div>
 
-    <!-- 2. 主页面内容 -->
     <div v-else class="flex flex-col flex-1 min-h-0">
       <!-- 头部：搜索、标题、用户信息、下载管理按钮 -->
       <header
@@ -30,7 +29,7 @@
 
         <div class="flex items-center gap-3 flex-1 min-w-0 justify-end max-md:flex-wrap">
           <n-input v-model:value="searchQuery" placeholder="搜索关键词或粘贴歌单等链接..." round clearable
-            class="w-72! max-md:flex-1 max-md:w-full" @keyup.enter="handleSearch">
+            class="w-[clamp(180px,24vw,288px)]! max-md:flex-1 max-md:w-full" @keyup.enter="handleSearch">
             <template #prefix>
               <SvgIcon name="search" class="mr-1 flex items-center" />
             </template>
@@ -110,10 +109,8 @@
             </div>
           </div>
 
-          <!-- 列表表格 -->
           <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
-            <!-- 列表表头 -->
-            <div class="song-grid-header max-md:hidden">
+            <div class="song-grid-header max-md:hidden" :style="{ paddingRight: `${16 + scrollbarWidth}px` }">
               <div class="col-check"></div>
               <div class="col-title">标题</div>
               <div class="col-artist">歌手</div>
@@ -122,37 +119,37 @@
               <div class="col-actions"></div>
             </div>
 
-            <!-- 高性能虚拟列表滚动区 -->
-            <n-virtual-list class="song-list-scroll-area flex-1 min-h-0 overflow-hidden" :item-size="60"
-              :items="songsList" key-field="id" :item-resizable="false">
+            <n-virtual-list ref="virtualListRef" class="song-list-scroll-area flex-1 min-h-0 overflow-hidden" :item-size="60"
+              :items="songsList" key-field="id" :item-resizable="false" :ignore-item-resize="true" @resize="updateScrollbarWidth">
               <template #default="{ item: song }">
-                <div class="song-row"
+                <div class="song-row max-md:grid! max-md:grid-cols-[auto_auto_1fr_auto] max-md:grid-rows-[auto_auto] max-md:[grid-template-areas:'check_cover_title_action'_'check_cover_artist_action'] max-md:items-center max-md:p-[8px_12px] max-md:gap-x-3 max-md:gap-y-[2px]"
                   :class="{ selected: selectedSongs.has(song.id), 'bg-primary/5!': selectedSongs.has(song.id) }"
                   @click="toggleSongSelection(song)">
-                  <div class="col-check" @click.stop>
+                  <div class="col-check max-md:[grid-area:check] max-md:w-auto max-md:flex max-md:items-center" @click.stop>
                     <n-checkbox :checked="selectedSongs.has(song.id)"
                       @update:checked="(val) => handleCheckboxChange(song, val)" />
                   </div>
 
-                  <div class="col-title">
-                    <img v-cached-src="{ id: song.id, src: song.cover }" loading="lazy"
-                      class="w-10 h-10 rounded-md shrink-0 object-cover" alt="Cover" />
-                    <div class="flex items-center gap-1.5 overflow-hidden">
+                  <div class="col-title max-md:contents!">
+                    <div class="cover-box max-md:[grid-area:cover] max-md:row-[span_2] max-md:w-9 max-md:h-9">
+                      <img class="w-full h-full object-cover" v-cached-src="{ id: song.id, src: song.cover }" loading="lazy" alt="Cover" />
+                    </div>
+                    <div class="flex items-center gap-1.5 overflow-hidden max-md:[grid-area:title] max-md:self-end max-md:overflow-hidden">
                       <span class="song-name">{{ song.title }}</span>
-                      <span v-if="song.is_vip" class="vip-tag">VIP</span>
+                      <span v-if="song.is_vip" class="text-[9px] font-semibold text-white bg-vip px-1 py-0.5 rounded-[3px] shrink-0">VIP</span>
                     </div>
                   </div>
 
-                  <div class="col-artist" :title="song.artist">{{ song.artist }}</div>
-                  <div class="col-album" :title="song.album">{{ song.album || '-' }}</div>
+                  <div class="col-artist max-md:[grid-area:artist] max-md:self-start max-md:min-w-0 max-md:text-[12px] max-md:text-body-muted max-md:m-0 max-md:p-0" :title="song.artist">{{ song.artist }}</div>
+                  <div class="col-album max-md:hidden!" :title="song.album">{{ song.album || '-' }}</div>
 
-                  <div class="col-quality">
+                  <div class="col-quality max-md:hidden!">
                     <n-tag :bordered="false" size="small" :type="getTagType(song.max_level)">
                       {{ formatQuality(song.max_level) }}
                     </n-tag>
                   </div>
 
-                  <div class="col-actions" @click.stop>
+                  <div class="col-actions max-md:[grid-area:action] max-md:row-[span_2] max-md:w-auto max-md:flex max-md:items-center max-md:[&_.sm-round-btn]:w-8 max-md:[&_.sm-round-btn]:h-8 max-md:[&_.sm-round-btn]:p-0 max-md:[&_.sm-round-btn]:justify-center max-md:[&_.sm-round-btn]:rounded-full max-md:[&_.sm-round-btn]:shrink-0 max-md:[&_.sm-round-btn_.n-button__content]:hidden! max-md:[&_.sm-round-btn_.n-button__icon]:m-0!" @click.stop>
                     <n-button class="sm-round-btn" round size="small" type="primary" secondary
                       @click="downloadSingleSong(song)">
                       <template #icon>
@@ -236,7 +233,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSystemStore } from '../stores/system'
 import { NDropdown, NCheckbox, NModal, NButton, NInput, NDrawer, NDrawerContent, NProgress, NSpin, NTag, NVirtualList, useMessage } from 'naive-ui'
@@ -251,8 +248,8 @@ const goToSettings = () => {
   router.push({ name: 'Settings' })
 }
 
-// 根据音质级别返回不同的 tag 状态颜色类型
-const getTagType = (level: string) => {
+  // 音质级别对应的 tag 颜色
+  const getTagType = (level: string) => {
   if (['hires', 'jymaster', 'dolby'].includes(level)) return 'error'
   if (['lossless'].includes(level)) return 'warning'
   if (['exhigh'].includes(level)) return 'info'
@@ -357,8 +354,8 @@ const cleanupQrTimer = () => {
   }
 }
 
-// 多选批量下载
-const selectedSongs = ref<Map<number | string, NeteaseSong>>(new Map())
+  // 批量选择
+  const selectedSongs = ref<Map<number | string, NeteaseSong>>(new Map())
 
 // 搜索与链接解析
 const searchQuery = ref('')
@@ -529,8 +526,7 @@ const downloadSelectedSongs = async () => {
   showTaskDrawer.value = true
 }
 
-// 任务管理抽屉
-const showTaskDrawer = ref(false)
+  const showTaskDrawer = ref(false)
 const tasksList = computed(() => {
   return Object.values(systemStore.downloadTasks)
 })
@@ -543,8 +539,8 @@ const totalTasksCount = computed(() => {
   return tasksList.value.length
 })
 
-// 把任务按状态排序：正在下载 > 排队 > 成功/失败
-const sortedTasks = computed(() => {
+  // 任务排序：下载中 > 排队 > 完成/失败
+  const sortedTasks = computed(() => {
   const list = [...tasksList.value]
   const statusWeight = {
     downloading: 0,
@@ -574,6 +570,22 @@ const formatQuality = (level: string) => {
   return map[level] || level.toUpperCase()
 }
 
+const scrollbarWidth = ref(0)
+const virtualListRef = ref<any>(null)
+
+const updateScrollbarWidth = () => {
+  if (virtualListRef.value?.$el) {
+    const el = virtualListRef.value.$el
+    scrollbarWidth.value = el.offsetWidth - el.clientWidth
+  }
+}
+
+watch(() => songsList.value, () => {
+  nextTick(() => {
+    setTimeout(updateScrollbarWidth, 50)
+  })
+}, { deep: true })
+
 onMounted(() => {
   systemStore.fetchNeteaseConfig()
   systemStore.fetchNeteaseUserStatus()
@@ -585,105 +597,11 @@ onMounted(() => {
   if (systemStore.dockerInstallStatus.status === 'running') {
     // 部署状态由 Settings 页面管理
   }
+
+  setTimeout(updateScrollbarWidth, 200)
 })
 
 onUnmounted(() => {
   cleanupQrTimer()
 })
 </script>
-
-<style scoped>
-/* 虚拟列表容器 - 与 LocalMusic 保持一致 */
-.virtual-list-container-netease {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-@media (max-width: 768px) {
-  .song-list-scroll-area :deep(.song-row) {
-    display: grid !important;
-    grid-template-areas:
-      "check cover title action"
-      "check cover artist action";
-    grid-template-columns: auto auto 1fr auto;
-    grid-template-rows: auto auto;
-    align-items: center;
-    padding: 8px 12px;
-    gap: 2px 12px;
-  }
-
-  .col-check {
-    grid-area: check;
-    display: flex;
-    align-items: center;
-    width: auto;
-  }
-
-  .col-title {
-    display: contents !important;
-  }
-
-  .col-title img {
-    grid-area: cover;
-    grid-row: span 2;
-    width: 36px;
-    height: 36px;
-  }
-
-  .col-title .flex {
-    grid-area: title;
-    align-self: end;
-    overflow: hidden;
-  }
-
-  .col-artist {
-    grid-area: artist;
-    align-self: start;
-    min-width: 0;
-    font-size: 12px;
-    color: var(--body-muted);
-    margin: 0;
-    padding: 0;
-  }
-
-  .col-album,
-  .col-quality {
-    display: none !important;
-  }
-
-  .col-actions {
-    grid-area: action;
-    grid-row: span 2;
-    display: flex;
-    align-items: center;
-    width: auto;
-  }
-
-  .col-actions :deep(.sm-round-btn) {
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    justify-content: center;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .col-actions :deep(.sm-round-btn .n-button__content) {
-    display: none !important;
-  }
-
-  .col-actions :deep(.sm-round-btn .n-button__icon) {
-    margin: 0 !important;
-  }
-}
-
-/* 锁定外层滚动 - 虚拟列表自行处理滚动 */
-:global(.main-scroll:has(.netease-downloader-view)) {
-  overflow: hidden !important;
-  display: flex !important;
-  flex-direction: column !important;
-  padding-bottom: 1px !important;
-}
-
-</style>

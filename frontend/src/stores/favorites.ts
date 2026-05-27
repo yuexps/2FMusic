@@ -8,25 +8,23 @@ export const useFavoritesStore = defineStore('favorites', () => {
   const favoriteSongIds = ref<string[]>([])
   const currentPlaylistId = ref<string>('default')
 
-  // 获取所有收藏夹
+  // 获取收藏夹
   const fetchPlaylists = async () => {
     try {
       const data = await wsClient.sendRequest('favorite/list_playlists')
       playlists.value = data
-      // 同步缓存以便于快速渲染
       localStorage.setItem('2fmusic_cached_playlists', JSON.stringify(playlists.value))
     } catch (e) {
       console.error('Failed to fetch playlists via WS:', e)
     }
   }
 
-  // 获取当前收藏夹的所有歌曲ID
+  // 获取收藏夹歌曲 ID
   const fetchPlaylistSongs = async (playlistId: string) => {
     try {
       const data = await wsClient.sendRequest('favorite/playlist_songs', { playlist_id: playlistId })
       favoriteSongIds.value = data
       if (playlistId === 'default') {
-        // 同步缓存
         localStorage.setItem('2fmusic_favs', JSON.stringify(favoriteSongIds.value))
       }
     } catch (e) {

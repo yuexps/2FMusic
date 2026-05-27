@@ -9,7 +9,7 @@ class CoverCacheManager {
   private cache = new Map<string, CoverCacheItem>()
 
   /**
-   * 获取或新建指定 id 的图片 Blob URL。此方法是幂等的。
+   * 获取或创建指定 id 的 Blob URL，幂等
    */
   async getOrCreateUrl(id: string): Promise<string | null> {
     let cached = this.cache.get(id)
@@ -44,7 +44,7 @@ class CoverCacheManager {
   }
 
   /**
-   * 递减引用计数。当无任何图片或播放器使用时，彻底释放 Object URL 内存占用
+   * 递减引用，无引用时释放 Object URL
    */
   release(id: string, url: string) {
     const cached = this.cache.get(id)
@@ -58,7 +58,7 @@ class CoverCacheManager {
   }
 
   /**
-   * 强制从缓存池中删除并销毁 Blob URL 缓存
+   * 强制删除并销毁 Blob URL
    */
   delete(id: string) {
     const cached = this.cache.get(id)

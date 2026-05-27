@@ -21,7 +21,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/favorites/:id',
     name: 'PlaylistDetail',
-    component: LocalMusic // 详情页直接复用 LocalMusic 组件，通过路由参数过滤
+    component: LocalMusic // 路由参数过滤，复用 LocalMusic
   },
   {
     path: '/history',

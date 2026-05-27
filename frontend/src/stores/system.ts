@@ -18,10 +18,10 @@ export const useSystemStore = defineStore('system', () => {
     playlist_count: 0
   })
 
-  // 下载任务管理
+  // 下载任务
   const downloadTasks = ref<Record<string, DownloadTask>>({})
 
-  // 网易云 API 配置与状态
+  // 网易云配置与状态
   const savedConfig = localStorage.getItem('2fmusic_netease_config')
   const neteaseConfig = ref(savedConfig ? JSON.parse(savedConfig) : {
     download_dir: '',
@@ -49,7 +49,6 @@ export const useSystemStore = defineStore('system', () => {
     error: null as string | null
   })
 
-  // Docker 容器存在状态（从后端实时检查）
   const dockerContainerStatus = ref({
     docker_installed: false,
     container_exists: false,
@@ -64,7 +63,7 @@ export const useSystemStore = defineStore('system', () => {
   const initWebSocket = () => {
     wsClient.connect()
 
-    // 订阅连接成功事件
+    // 连接成功时获取初始状态
     wsClient.subscribe('open', () => {
       console.log('WS Open: Fetching initial library state...')
       fetchSystemStatus()
@@ -74,7 +73,7 @@ export const useSystemStore = defineStore('system', () => {
       fetchNeteaseUserStatus()
     })
 
-    // 订阅库扫描状态
+    // 库扫描状态
     wsClient.subscribe('scan_status', (data: any) => {
       console.log('WS: Received scan status:', data)
       const oldVersion = status.value.library_version
@@ -87,7 +86,7 @@ export const useSystemStore = defineStore('system', () => {
       }
     })
 
-    // 订阅库文件变更通知
+    // 库文件变更通知
     wsClient.subscribe('library_changed', (data: any) => {
       console.log('WS: Received library changed:', data)
       if (data && data.library_version) {
@@ -97,7 +96,7 @@ export const useSystemStore = defineStore('system', () => {
       fetchSystemStatus() // 触发状态更新以获取最新音乐数量统计
     })
 
-    // 订阅下载任务实时进度
+    // 下载任务进度
     wsClient.subscribe('download_status', (data: any) => {
       console.log('WS: Received download task status:', data)
       if (data && data.task_id) {
@@ -106,7 +105,7 @@ export const useSystemStore = defineStore('system', () => {
     })
   }
 
-  // 2. 本地音乐库接口
+  // 本地音乐库接口
   const fetchSongs = async () => {
     try {
       const data = await wsClient.sendRequest('music/get_list')
@@ -159,7 +158,7 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
-  // 3. 目录管理接口
+  // 目录管理接口
   const fetchMountPoints = async () => {
     try {
       const data = await wsClient.sendRequest('mount/list')
@@ -207,7 +206,7 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
-  // 4. 系统运行状态接口
+  // 系统状态接口
   const fetchSystemStatus = async () => {
     try {
       const data = await wsClient.sendRequest('system/get_status')
@@ -217,7 +216,7 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
-  // 5. 网易云 API 客户端对接接口
+  // 网易云 API 接口
   const fetchNeteaseConfig = async () => {
     try {
       const data = await wsClient.sendRequest('netease/get_config')

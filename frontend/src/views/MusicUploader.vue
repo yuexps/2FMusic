@@ -4,16 +4,12 @@
       <h1 class="view-title">上传音乐</h1>
     </div>
 
-    <!-- 上传目录选择 (Tailwind + glass-panel) -->
+    <!-- 上传目录选择 -->
     <div class="glass-panel p-5 rounded-2xl mb-6 box-border max-md:p-4">
       <div class="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-2">
         <label for="upload-folder-select" class="text-sm font-semibold text-ink">目标保存目录</label>
         <div class="select-wrapper">
-          <n-dropdown
-            trigger="click"
-            :options="folderOptions"
-            @select="handleFolderSelect"
-          >
+          <n-dropdown trigger="click" :options="folderOptions" @select="handleFolderSelect">
             <n-button round class="min-w-55 max-md:w-full flex justify-between items-center">
               <div class="flex items-center gap-2">
                 <SvgIcon name="folder" />
@@ -26,24 +22,14 @@
       </div>
     </div>
 
-    <!-- 拖拽上传区域 (Tailwind + drag-drop-zone 全局底座) -->
-    <div 
+    <!-- 拖拽上传区域 -->
+    <div
       class="drag-drop-zone border-2 border-dashed border-border-input rounded-2xl h-60 flex items-center justify-center cursor-pointer bg-action-btn backdrop-blur-card text-center p-6 box-border mb-8 max-md:h-40 max-md:p-4"
-      :class="{ dragging: isDragging }"
-      @dragover.prevent="isDragging = true"
-      @dragleave.prevent="isDragging = false"
-      @drop.prevent="handleFileDrop"
-      @click="triggerFileSelect"
-    >
-      <input 
-        ref="fileInput"
-        type="file" 
-        multiple
-        accept=".mp3,.flac,.wav,.ogg,.m4a,.aac" 
-        class="hidden"
-        @change="handleFileSelect"
-      />
-      
+      :class="{ dragging: isDragging }" @dragover.prevent="isDragging = true" @dragleave.prevent="isDragging = false"
+      @drop.prevent="handleFileDrop" @click="triggerFileSelect">
+      <input ref="fileInput" type="file" multiple accept=".mp3,.flac,.wav,.ogg,.m4a,.aac" class="hidden"
+        @change="handleFileSelect" />
+
       <div class="flex flex-col items-center gap-3">
         <SvgIcon name="cloud-upload" class="text-[44px] text-primary opacity-80 max-md:text-[32px]" />
         <h3 class="m-0 text-base font-semibold text-ink max-md:text-sm">拖拽音乐文件到此区域</h3>
@@ -55,34 +41,37 @@
     <div v-if="uploadList.length > 0" class="flex flex-col gap-3">
       <div class="flex justify-between items-center border-b border-border-main pb-2 mb-2">
         <h2 class="m-0 text-sm font-semibold text-ink">上传进度 ({{ finishedCount }} / {{ uploadList.length }})</h2>
-        <n-button round text @click="clearFinished" :disabled="uploadingCount > 0">
-          清除已完成
+        <n-button round text @click="clearFinished" :disabled="uploadingCount > 0" class="max-md:w-8 max-md:h-8 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!">
+          <template #icon>
+            <SvgIcon name="trash" class="md:hidden!" />
+          </template>
+          <span class="max-md:hidden!">清除已完成</span>
         </n-button>
       </div>
 
       <div class="flex flex-col gap-2">
-        <div 
-          v-for="task in uploadList" 
-          :key="task.id" 
+        <div v-for="task in uploadList" :key="task.id"
           class="glass-card p-3 rounded-lg flex justify-between items-center gap-4 max-md:p-2.5 max-md:gap-2"
-          :class="task.status"
-        >
+          :class="task.status">
           <div class="overflow-hidden flex flex-col gap-1 flex-1">
             <div class="text-xs font-semibold text-ink truncate" :title="task.name">{{ task.name }}</div>
             <div class="text-[11px] text-body-muted">{{ formatSize(task.size) }}</div>
           </div>
-          
+
           <div class="w-37.5 flex justify-end max-md:w-25">
             <div v-if="task.status === 'uploading'" class="flex flex-col gap-1 w-full">
               <div class="text-[10px] text-primary font-medium text-right">{{ task.progress }}%</div>
               <div class="h-1 bg-border-input rounded-full overflow-hidden">
-                <div class="h-full bg-primary rounded-full transition-all duration-200" :style="{ width: task.progress + '%' }"></div>
+                <div class="h-full bg-primary rounded-full transition-all duration-200"
+                  :style="{ width: task.progress + '%' }"></div>
               </div>
             </div>
-            <div v-else-if="task.status === 'success'" class="text-xs font-semibold flex items-center gap-1 text-success">
+            <div v-else-if="task.status === 'success'"
+              class="text-xs font-semibold flex items-center gap-1 text-success">
               <SvgIcon name="check-circle" /> 成功
             </div>
-            <div v-else-if="task.status === 'error'" class="text-xs font-semibold flex items-center gap-1 text-danger cursor-help" :title="task.error">
+            <div v-else-if="task.status === 'error'"
+              class="text-xs font-semibold flex items-center gap-1 text-danger cursor-help" :title="task.error">
               <SvgIcon name="exclamation-circle" /> 失败
             </div>
             <div v-else class="text-xs font-semibold flex items-center gap-1 text-body-muted text-[11px]">
@@ -162,18 +151,18 @@ const handleFileSelect = (e: Event) => {
 
 const addFilesToList = (files: FileList) => {
   const allowedExts = ['.mp3', '.flac', '.wav', '.ogg', '.m4a', '.aac']
-  
+
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
     const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
-    
+
     if (!allowedExts.includes(ext)) {
       message.error(`不支持文件格式: ${file.name}`)
       continue
     }
 
     const taskId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-    
+
     uploadList.value.push({
       id: taskId,
       name: file.name,
@@ -188,8 +177,8 @@ const addFilesToList = (files: FileList) => {
   processQueue()
 }
 
-// 上传队列并发控制
-const MAX_CONCURRENT = 2
+  // 上传并发数限制
+  const MAX_CONCURRENT = 2
 
 const uploadingCount = computed(() => {
   return uploadList.value.filter(t => t.status === 'uploading').length
@@ -212,7 +201,7 @@ const processQueue = () => {
 
 const uploadFile = async (task: UploadTask) => {
   task.status = 'uploading'
-  
+
   const formData = new FormData()
   formData.append('file', task.file)
   if (selectedFolderPath.value) {
@@ -262,7 +251,3 @@ onMounted(() => {
   systemStore.fetchMountPoints()
 })
 </script>
-
-<style scoped>
-/* 本页面已实现 100% 纯粹 Tailwind CSS 重塑与全局 components.css 大一统，零 Scoped CSS 负累。 */
-</style>

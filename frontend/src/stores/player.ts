@@ -8,7 +8,7 @@ import { useHistoryStore } from './history'
 
 import { coverCacheManager } from '../utils/coverCache'
 
-// 记录 playerStore 持有的当前播放歌曲封面的 ID 与已 retain 的 URL
+// 跟踪当前播放歌曲封面的 retain 状态
 let lastRetainedSongId: string | null = null
 let lastRetainedSongUrl: string | null = null
 
@@ -20,7 +20,7 @@ function releaseSongCoverRetain() {
   }
 }
 
-// 缓存加载与后台抓取逻辑
+// 加载歌曲封面（本地缓存 or 后台抓取）
 const loadSongCover = async (song: Song): Promise<string> => {
   const cacheEnabled = localStorage.getItem('2fmusic_cache_covers') === 'true'
   if (!cacheEnabled) {
@@ -65,8 +65,8 @@ const loadSongCover = async (song: Song): Promise<string> => {
 }
 
 export const usePlayerStore = defineStore('player', () => {
-  const playlist = ref<Song[]>([]) // 当前播放列表
-  const queue = ref<Song[]>([]) // 播放队列
+  const playlist = ref<Song[]>([])
+  const queue = ref<Song[]>([])
   const currentSong = ref<Song | null>(null)
   const isPlaying = ref(false)
   const currentTime = ref(0)
@@ -115,7 +115,7 @@ export const usePlayerStore = defineStore('player', () => {
       console.error('Failed to restore player state:', e)
     }
 
-    // 绑定事件
+    // 绑定播放器事件
     audio.addEventListener('play', () => {
       isPlaying.value = true
       if ('mediaSession' in navigator) {
@@ -188,7 +188,7 @@ export const usePlayerStore = defineStore('player', () => {
       audio.src = getApiUrl(`/api/music/play/${song.id}`)
       recordPlayHistory(song)
       
-      // 优先异步加载本地 IndexedDB 中的封面并触发 MediaSession 刷新
+      // 异步加载本地封面并刷新 MediaSession
       loadSongCover(song).then(artUrl => {
         if (currentSong.value && currentSong.value.id === song.id) {
           currentSong.value.album_art = artUrl
@@ -291,6 +291,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  // 更新 MediaSession 元数据
   const updateMediaSession = () => {
     if (!('mediaSession' in navigator) || !currentSong.value) return
 
@@ -340,6 +341,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  // 请求专辑封面
   const fetchAlbumArt = async (song: Song) => {
     try {
       const data = await wsClient.sendRequest('music/album-art', {

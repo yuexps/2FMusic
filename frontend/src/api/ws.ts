@@ -42,7 +42,6 @@ class WSClient {
 
   constructor() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    // 如果是开发服务器（例如 localhost:3000），开发代理会转发 /api/ws
     this.url = `${protocol}//${window.location.host}${getBaseUrl()}/api/ws`
   }
 
@@ -56,13 +55,13 @@ class WSClient {
       this.ws.onopen = () => {
         console.log('WebSocket connection established')
         this.isConnecting = false
-        this.reconnectAttempt = 0 // 重置重连次数
+        this.reconnectAttempt = 0
         if (this.reconnectTimer) {
           clearTimeout(this.reconnectTimer)
           this.reconnectTimer = null
         }
         
-        // 1. 成功建立连接后，依次冲刷发送离线排队队列中的请求
+        // 冲刷离线排队队列
         const queue = [...this.offlineQueue]
         this.offlineQueue = []
         queue.forEach((item) => {
@@ -88,12 +87,12 @@ class WSClient {
       }
 
       this.ws.onmessage = (event) => {
-        this.lastActiveTime = Date.now() // 刷新活跃时间
+        this.lastActiveTime = Date.now()
         try {
           const payload: WSResponse = JSON.parse(event.data)
           if (!payload) return
 
-          // 核心：请求-响应匹配
+          // 请求-响应匹配
           if (payload.seq !== undefined && this.pendingRequests.has(payload.seq)) {
             const req = this.pendingRequests.get(payload.seq)!
             clearTimeout(req.timer)
@@ -112,7 +111,7 @@ class WSClient {
             return
           }
 
-          // 普通广播消息
+          // 广播消息
           if (payload.type) {
             this.dispatch(payload.type, payload.data)
           }
@@ -162,7 +161,6 @@ class WSClient {
       }, 15000)
 
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        // 已建立连接，直接发送并记入待挂起 Map
         const payload: WSRequest = { seq: currentSeq, action, data }
         this.pendingRequests.set(currentSeq, { resolve, reject, timer })
         try {
@@ -173,11 +171,11 @@ class WSClient {
           this.pendingRequests.delete(currentSeq)
         }
       } else {
-        // 未建立连接（包括连接中和重连状态），放入离线等待队列
+        // 未连接时放入离线等待队列
         console.log(`WebSocket not ready. Queueing request: ${action} (seq: ${currentSeq})`)
         this.offlineQueue.push({ action, data, resolve, reject, seq: currentSeq, timer })
         
-        // 自动拉起连接，防止未调用 connect
+        // 自动拉起连接
         if (!this.ws && !this.isConnecting) {
           this.connect()
         }
@@ -219,14 +217,13 @@ class WSClient {
         return
       }
 
-      // 如果超过 40 秒没有收到任何消息（包括 pong 或广播），判定断线
+      // 40 秒无消息判定断线
       if (Date.now() - this.lastActiveTime > 40000) {
         console.warn('WebSocket heartbeat timeout, closing connection...')
         this.ws.close()
         return
       }
 
-      // 发送 ping 帧
       try {
         this.ws.send(JSON.stringify({ action: 'ping' }))
       } catch (e) {
@@ -245,11 +242,8 @@ class WSClient {
   private scheduleReconnect() {
     if (this.reconnectTimer) return
 
-    const baseDelay = 1000 // 基础 1 秒
-    const maxDelay = 30000 // 最大 30 秒
-    let delay = Math.min(maxDelay, baseDelay * Math.pow(2, this.reconnectAttempt))
-    
-    // 引入 0-30% 抖动 (Jitter)
+    let delay = Math.min(30000, 1000 * Math.pow(2, this.reconnectAttempt))
+    // 引入 0-30% 抖动
     delay = delay + Math.random() * delay * 0.3
 
     console.log(`WebSocket reconnect scheduled in ${(delay / 1000).toFixed(2)}s (attempt ${this.reconnectAttempt + 1})`)
@@ -272,14 +266,14 @@ class WSClient {
     }
     this.isConnecting = false
 
-    // 清理所有 pending 挂起请求并 reject
+    // 清理所有 pending 请求
     this.pendingRequests.forEach((req) => {
       clearTimeout(req.timer)
       req.reject(new Error('WebSocket connection closed'))
     })
     this.pendingRequests.clear()
 
-    // 清理所有离线等待队列并 reject
+    // 清理离线等待队列
     this.offlineQueue.forEach((item) => {
       clearTimeout(item.timer)
       item.reject(new Error('WebSocket connection closed'))

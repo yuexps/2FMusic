@@ -73,7 +73,7 @@ const menuItems = [
 ]
 
 const currentPath = computed(() => {
-  // 如果是收藏夹详情页，侧边栏依然高亮“我的收藏”
+  // 收藏夹详情页时高亮"我的收藏"
   if (route.path.startsWith('/favorites')) {
     return '/favorites'
   }
@@ -82,7 +82,7 @@ const currentPath = computed(() => {
 
 const navigate = (path: string) => {
   router.push(path)
-  // 如果在移动端，点击菜单后应自动收起侧边栏
+  // 移动端点击菜单后自动收起侧边栏
   emit('close-sidebar')
 }
 

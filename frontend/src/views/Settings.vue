@@ -1,16 +1,11 @@
 <template>
-  <div class="flex flex-col flex-1 min-h-0 settings-view">
+  <div class="flex flex-col flex-1 min-h-0 settings-view max-w-[1040px] mx-auto w-full">
     <div class="view-header">
       <h1 class="view-title">系统设置</h1>
     </div>
 
-    <n-virtual-list 
-      class="settings-virtual-list flex-1 min-h-0"
-      :item-size="480"
-      :items="settingSections" 
-      key-field="id"
-      item-resizable
-    >
+    <n-virtual-list class="settings-virtual-list flex-1 min-h-0" :item-size="480" :items="settingSections"
+      key-field="id" item-resizable>
       <template #default="{ item }">
         <!-- 登录与维护 -->
         <div v-if="item.id === 'login'" class="glass-panel p-6 rounded-2xl mb-6 box-border">
@@ -18,7 +13,8 @@
             <SvgIcon name="user-shield" /> 登录与维护
           </h3>
 
-          <div class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
+          <div
+            class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
             <div class="flex-1 min-w-0">
               <h4 class="m-0 mb-1 text-sm font-semibold text-ink">清理应用缓存</h4>
               <p class="m-0 text-xs text-body-muted leading-relaxed">如果遇到封面显示异常或页面数据加载不出来，请清除应用浏览器缓存。</p>
@@ -26,7 +22,8 @@
             <n-button round @click="handleClearCache">清除应用缓存</n-button>
           </div>
 
-          <div class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
+          <div
+            class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
             <div class="flex-1 min-w-0">
               <h4 class="m-0 mb-1 text-sm font-semibold text-ink">退出播放器登录</h4>
               <p class="m-0 text-xs text-body-muted leading-relaxed">退出当前鉴权账号，清空 Session 会话，重新跳转至登录界面。</p>
@@ -41,41 +38,35 @@
             <SvgIcon name="palette" /> 外观设置
           </h3>
 
-          <div class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
+          <div
+            class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
             <div class="flex-1 min-w-0">
               <h4 class="m-0 mb-1 text-sm font-semibold text-ink">深浅主题模式</h4>
               <p class="m-0 text-xs text-body-muted leading-relaxed">切换系统界面的主题色彩风格。</p>
             </div>
-            <n-radio-group 
-              :value="preferencesStore.themeMode" 
-              @update:value="preferencesStore.setThemeMode"
-              size="medium"
-              name="themeMode"
-            >
+            <n-radio-group :value="preferencesStore.themeMode" @update:value="preferencesStore.setThemeMode"
+              size="medium" name="themeMode">
               <n-radio-button value="system" label="跟随系统" />
               <n-radio-button value="light" label="浅色" />
               <n-radio-button value="dark" label="深色" />
             </n-radio-group>
           </div>
 
-          <div class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
+          <div
+            class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
             <div class="flex-1 min-w-0">
               <h4 class="m-0 mb-1 text-sm font-semibold text-ink">全局界面缩放</h4>
               <p class="m-0 text-xs text-body-muted leading-relaxed">调整页面大小以适配不同分辨率的屏幕。</p>
             </div>
-            <n-radio-group 
-              :value="uiScalePercent" 
-              @update:value="setScale"
-              size="medium"
-              name="uiScale"
-            >
+            <n-radio-group :value="uiScalePercent" @update:value="setScale" size="medium" name="uiScale">
               <n-radio-button :value="90" label="缩小 (90%)" />
               <n-radio-button :value="100" label="默认 (100%)" />
               <n-radio-button :value="110" label="放大 (110%)" />
             </n-radio-group>
           </div>
 
-          <div class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
+          <div
+            class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
             <div class="flex-1 min-w-0">
               <h4 class="m-0 mb-1 text-sm font-semibold text-ink">自定义全屏背景</h4>
               <p class="m-0 text-xs text-body-muted leading-relaxed">上传你喜爱的图片作为专属背景。</p>
@@ -91,7 +82,8 @@
             </div>
           </div>
 
-          <div class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
+          <div
+            class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
             <div class="flex-1 min-w-0">
               <h4 class="m-0 mb-1 text-sm font-semibold text-ink">将背景图片云同步</h4>
               <p class="m-0 text-xs text-body-muted leading-relaxed">开启后将当前背景同步至云端，在其他设备上登录时也会自动拉取应用该背景。</p>
@@ -106,7 +98,8 @@
             <SvgIcon name="wifi" /> 缓存设置
           </h3>
 
-          <div class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
+          <div
+            class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
             <div class="flex-1 min-w-0">
               <h4 class="m-0 mb-1 text-sm font-semibold text-ink">本地缓存封面</h4>
               <p class="m-0 text-xs text-body-muted leading-relaxed">允许将播放音乐时远程获取的封面缓存在浏览器本地 IndexedDB 中，以提升二次加载效率。</p>
@@ -114,7 +107,8 @@
             <n-switch v-model:value="cacheCovers" @update:value="saveCacheSettings" />
           </div>
 
-          <div class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
+          <div
+            class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
             <div class="flex-1 min-w-0">
               <h4 class="m-0 mb-1 text-sm font-semibold text-ink">本地缓存歌词</h4>
               <p class="m-0 text-xs text-body-muted leading-relaxed">从云端搜刮的歌词直接持久化存入浏览器本地 IndexedDB 中，以提升二次加载效率。</p>
@@ -130,13 +124,15 @@
           </h3>
 
           <!-- Docker 自动部署 - 已连接 API 时隐藏 -->
-          <div v-if="!systemStore.neteaseConfig.api_base" class="flex justify-between items-center py-4 border-b border-border-main gap-4 max-sm:flex-col max-sm:items-start">
+          <div v-if="!systemStore.neteaseConfig.api_base"
+            class="flex justify-between items-center py-4 border-b border-border-main gap-4 max-sm:flex-col max-sm:items-start">
             <div class="flex-1 min-w-0">
               <h4 class="m-0 mb-1 text-sm font-semibold text-ink">自动部署本地 API (推荐)</h4>
               <p class="m-0 text-xs text-body-muted leading-relaxed">服务器需已安装并启用 Docker，自动拉取并启动 API 容器（端口 23236）。</p>
             </div>
             <div class="shrink-0 min-w-50 flex justify-end max-sm:w-full">
-              <div v-if="systemStore.dockerInstallStatus.status === 'running'" class="bg-canvas rounded-lg p-[10px_12px] box-border min-w-50">
+              <div v-if="systemStore.dockerInstallStatus.status === 'running'"
+                class="bg-canvas rounded-lg p-[10px_12px] box-border min-w-50">
                 <div class="text-xs mb-1.5 text-body-muted">{{ systemStore.dockerInstallStatus.step }}</div>
                 <n-progress type="line" :percentage="systemStore.dockerInstallStatus.progress" processing />
               </div>
@@ -158,7 +154,8 @@
 
             <div class="flex flex-col gap-2 w-full">
               <label for="netease-dir-input" class="text-xs font-semibold text-body-muted">歌曲下载保存绝对目录</label>
-              <n-input id="netease-dir-input" v-model:value="neteaseDownloadDir" placeholder="例如: /vol1/music/NetEase" />
+              <n-input id="netease-dir-input" v-model:value="neteaseDownloadDir"
+                placeholder="例如: /vol1/music/NetEase" />
             </div>
 
             <div class="flex justify-end gap-3 w-full mt-2">
@@ -188,7 +185,6 @@ const systemStore = useSystemStore()
 const preferencesStore = usePreferencesStore()
 const message = useMessage()
 
-// 虚拟列表数据源：4 张设置卡片
 const settingSections = [
   { id: 'login', label: '登录与维护' },
   { id: 'appearance', label: '外观设置' },
@@ -196,7 +192,6 @@ const settingSections = [
   { id: 'netease', label: '网易云下载全局设置' }
 ]
 
-// 自定义全屏背景文件选择引用
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const triggerBgUpload = () => {
   fileInputRef.value?.click()
@@ -213,8 +208,7 @@ const setScale = (val: number) => {
   message.success(`界面缩放比例已调整为 ${scale}`)
 }
 
-// 缓存及离线
-
+// 缓存设置
 const cacheCovers = ref(false)
 const cacheLyrics = ref(false)
 
@@ -375,7 +369,7 @@ onMounted(async () => {
     await systemStore.checkDockerContainer()
 
     if (systemStore.dockerContainerStatus.docker_installed &&
-        systemStore.dockerContainerStatus.container_running) {
+      systemStore.dockerContainerStatus.container_running) {
       // 直接尝试保存默认 API 地址（含连通性测试），不走 install 流程
       let connected = false
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -451,13 +445,3 @@ const handleClearBg = async () => {
   }
 }
 </script>
-
-<style scoped>
-/* 锁定外层滚动 - 由虚拟列表自行处理 */
-:global(.main-scroll:has(.settings-view)) {
-  overflow: hidden !important;
-  display: flex !important;
-  flex-direction: column !important;
-  padding-bottom: 1px !important;
-}
-</style>

@@ -1,5 +1,9 @@
 {
     "python.analysis.extraPaths": [
         "./server/lib"
-    ]
+    ],
+    "css.lint.unknownAtRules": "ignore",
+    "files.associations": {
+        "*.css": "tailwindcss"
+    }
 }

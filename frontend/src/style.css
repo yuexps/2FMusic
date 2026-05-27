@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+:root {
+  /* 移动端 (宽度 <= 768px)：基于宽度的自适应流式字号 */
+  /* 以 375px 设计稿下 font-size = 16px 为基准，4.26vw 正好是 16px */
+  font-size: clamp(12px, 4.26vw, 20px);
+}
+
+@media (min-width: 769px) {
+  :root {
+    /* 桌面端 & 平板大屏：恢复到固定的标准根字号 16px */
+    font-size: 16px;
+  }
+}
+
 @theme {
   /* 基础调色板与语义色值映射至 Tailwind */
   --color-primary: #007aff;
@@ -60,9 +73,7 @@
 }
 
 :root {
-  /* ============================================================
-     2FMusic 基础定义（亮色模式）
-     ============================================================ */
+  /* 亮色模式基础定义 */
   --primary: #007aff;
   --primary-hover: #3395ff;
   --primary-active: #0062cc;
@@ -82,16 +93,16 @@
   --surface-glass: rgba(255, 255, 255, 0.75);
   --on-primary: #ffffff;
 
-  /* 字号与行高 */
-  --font-size-xs: 11px;
-  --font-size-sm: 12px;
-  --font-size-base: 13px;
-  --font-size-md: 14px;
-  --font-size-lg: 16px;
-  --font-size-xl: 18px;
-  --font-size-2xl: 20px;
-  --font-size-3xl: 24px;
-  --font-size-4xl: 28px;
+  /* 字号与行高：从硬编码 px 升级为 rem，让其能跟随 root font-size 自适应 */
+  --font-size-xs: 0.6875rem;   /* 11px */
+  --font-size-sm: 0.75rem;     /* 12px */
+  --font-size-base: 0.8125rem; /* 13px */
+  --font-size-md: 0.875rem;    /* 14px */
+  --font-size-lg: 1rem;        /* 16px */
+  --font-size-xl: 1.125rem;    /* 18px */
+  --font-size-2xl: 1.25rem;    /* 20px */
+  --font-size-3xl: 1.5rem;     /* 24px */
+  --font-size-4xl: 1.75rem;    /* 28px */
 
   --font-weight-normal: 400;
   --font-weight-medium: 500;
@@ -103,15 +114,16 @@
   --leading-normal: 1.5;
   --leading-relaxed: 1.6;
 
-  --space-2xs: 4px;
-  --space-xs: 8px;
-  --space-sm: 12px;
-  --space-md: 16px;
-  --space-lg: 24px;
-  --space-xl: 32px;
-  --space-2xl: 48px;
-  --space-3xl: 64px;
-  --space-4xl: 80px;
+  /* 间距升级为 rem */
+  --space-2xs: 0.25rem;        /* 4px */
+  --space-xs: 0.5rem;          /* 8px */
+  --space-sm: 0.75rem;         /* 12px */
+  --space-md: 1rem;            /* 16px */
+  --space-lg: 1.5rem;          /* 24px */
+  --space-xl: 2rem;            /* 32px */
+  --space-2xl: 3rem;           /* 48px */
+  --space-3xl: 4rem;           /* 64px */
+  --space-4xl: 5rem;           /* 80px */
 
   /* 全局自适应 UI 变量矩阵 - 默认浅色 */
   --bg-app-layout: var(--canvas-parchment);
@@ -184,11 +196,7 @@
   --overlay-white-alpha-20: rgba(255, 255, 255, 0.2);
 }
 
-/* ============================================================
-   2FMusic 暗色模式
-   ============================================================ */
-
-/* 手动暗色模式类名触发 */
+/* 暗色模式 */
 :root.theme-dark {
   --bg-menu-active: rgba(41, 151, 255, 0.16);
   --bg-menu-hover: rgba(41, 151, 255, 0.10);
@@ -278,9 +286,7 @@
   }
 }
 
-/* ============================================================
-   2FMusic 自定义背景毛玻璃
-   ============================================================ */
+/* 自定义背景毛玻璃 */
 .has-custom-bg {
   --bg-app-layout: transparent;
   --bg-app-main: rgba(255, 255, 255, 0.68);
@@ -380,9 +386,7 @@
   }
 }
 
-/* ============================================================
-   全局重置与骨架布局适配
-   ============================================================ */
+/* 全局重置与布局 */
 input[type="text"],
 input[type="password"],
 input[type="search"],
@@ -423,77 +427,7 @@ body {
   background-color: var(--bg-app-layout);
 }
 
-.app-sidebar {
-  width: 260px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-sidebar);
-  backdrop-filter: saturate(180%) var(--blur-sidebar);
-  -webkit-backdrop-filter: saturate(180%) var(--blur-sidebar);
-  border-right: 1px solid var(--border-main);
-  box-sizing: border-box;
-  flex-shrink: 0;
-  z-index: 10;
-}
-
-.app-main {
-  position: relative;
-  z-index: 1;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-  background-color: var(--bg-app-main);
-  backdrop-filter: var(--blur-main);
-  -webkit-backdrop-filter: var(--blur-main);
-  transition: background-color var(--transition-normal);
-}
-
-.main-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: var(--space-xl) var(--space-3xl);
-  box-sizing: border-box;
-}
-
-/* 移动端侧边栏滑动与输入框聚焦适配 */
 @media (max-width: 768px) {
-  .app-sidebar {
-    position: fixed;
-    left: -260px;
-    transition: transform var(--transition-normal);
-    background-color: var(--canvas);
-    background-image: none;
-  }
-
-  .has-custom-bg .app-sidebar {
-    background-color: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(35px) saturate(180%);
-    -webkit-backdrop-filter: blur(35px) saturate(180%);
-  }
-
-  /* 移动端暗色下侧边栏毛玻璃 */
-  :root.theme-dark .has-custom-bg .app-sidebar {
-    background-color: rgba(22, 23, 29, 0.92);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root:not(.theme-light) .has-custom-bg .app-sidebar {
-      background-color: rgba(22, 23, 29, 0.92);
-    }
-  }
-
-  .app-sidebar.sidebar-active {
-    transform: translateX(260px);
-  }
-
-  .main-scroll {
-    padding: var(--space-lg) var(--space-md);
-  }
-
   /* 解决 iOS 移动端 input 聚焦自动放大页面的问题 */
   input[type="text"],
   input[type="password"],
@@ -607,9 +541,7 @@ button,
   background-color: transparent;
 }
 
-/* ============================================================
-   全局 Naive UI 弹窗、遮罩、提示深度适配
-   ============================================================ */
+/* Naive UI 弹窗、遮罩、提示适配 */
 .n-modal,
 .n-dialog,
 .n-card {
@@ -709,9 +641,7 @@ button,
   -webkit-backdrop-filter: var(--blur-card);
 }
 
-/* ============================================================
-   Naive UI 常用控件主题映射与自适应
-   ============================================================ */
+/* Naive UI 控件主题映射 */
 .n-input {
   --n-color: var(--bg-input);
   --n-border: 1px solid var(--border-input);
@@ -785,9 +715,7 @@ button,
   }
 }
 
-/* ============================================================
-   2FMusic 自定义背景下的 Naive UI 控件可见性与对比度强力穿透补强
-   ============================================================ */
+/* 自定义背景下控件对比度补强 */
 .has-custom-bg .n-slider .n-slider-rail {
   background-color: rgba(0, 0, 0, 0.16) !important;
   border: 1px solid rgba(0, 0, 0, 0.04);
@@ -822,4 +750,32 @@ button,
 
 .has-custom-bg .n-switch.n-switch--active .n-switch__rail {
   background-color: var(--primary) !important;
+}
+
+/* ==========================================================================
+   移动端圆形按钮物理对齐微调补强 (彻底清除 Naive UI 图标偏左瑕疵)
+   ========================================================================== */
+@media (max-width: 768px) {
+  /* 当 Naive UI 按钮在手机端简化为 w-8 或 w-9 圆形且隐藏文字时， */
+  /* 强行剥离其内部由组件库自带的 .n-button__icon 容器的 margin-right */
+  .n-button.max-md\:w-8 .n-button__icon,
+  .n-button.max-md\:w-9 .n-button__icon,
+  .n-button.max-md\:w-8 .n-button__icon-container,
+  .n-button.max-md\:w-9 .n-button__icon-container {
+    margin-right: 0px !important;
+    margin-left: 0px !important;
+    margin: 0px !important;
+    padding: 0px !important;
+  }
+
+  /* 强行使内容容器撑满并绝对 flex 居中 */
+  .n-button.max-md\:w-8 .n-button__content,
+  .n-button.max-md\:w-9 .n-button__content {
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0px !important;
+    padding: 0px !important;
+  }
 }

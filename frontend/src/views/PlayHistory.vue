@@ -1,6 +1,7 @@
 <template>
   <div class="flex flex-col flex-1 min-h-0 history-view">
-    <div class="view-header">
+    <div
+      class="view-header flex justify-between items-center mb-6 max-md:mb-4 [&_.n-button]:max-md:w-[38px] [&_.n-button]:max-md:h-[38px] [&_.n-button]:max-md:p-0 [&_.n-button]:max-md:justify-center [&_.n-button]:max-md:rounded-full [&_.n-button_.n-button__content]:max-md:hidden! [&_.n-button_.n-button__icon]:max-md:m-0!">
       <h1 class="view-title">播放记录</h1>
       <n-button v-if="historyList.length > 0" round type="error" text @click="showClearConfirm = true">
         <template #icon>
@@ -10,7 +11,6 @@
       </n-button>
     </div>
 
-    <!-- 历史记录列表 -->
     <div class="song-list-container">
       <div v-if="historyList.length === 0" class="empty-state">
         <SvgIcon name="history" />
@@ -20,7 +20,7 @@
 
       <template v-else>
         <!-- 固定在顶部的极简表头 -->
-        <div class="song-grid-header">
+        <div class="song-grid-header max-md:hidden!" :style="{ paddingRight: `${16 + scrollbarWidth}px` }">
           <div class="col-title">标题</div>
           <div class="col-artist">歌手</div>
           <div class="col-album">专辑</div>
@@ -29,29 +29,38 @@
         </div>
 
         <!-- 高性能虚拟列表滚动区 -->
-        <n-virtual-list class="song-list-scroll-area flex-1 min-h-0 overflow-hidden" :item-size="64"
-          :items="historyList" key-field="key" :item-resizable="false">
+        <n-virtual-list ref="virtualListRef" class="song-list-scroll-area flex-1 min-h-0 overflow-hidden" :item-size="64"
+          :items="historyList" key-field="key" :item-resizable="false" :ignore-item-resize="true" @resize="updateScrollbarWidth">
           <template #default="{ item }">
-            <div class="song-row" :class="{ playing: playerStore.currentSong?.id === item.song.id }"
-              @click="handleRowClick(item.song)" @dblclick="playSong(item.song)">
-              <div class="col-title">
-                <div class="cover-box" @click.stop="handlePlayBtnClick(item.song)">
-                  <img v-cached-src="{ id: item.song.id, src: item.song.album_art }" loading="lazy" alt="Cover" />
+            <div
+              class="song-row max-md:grid! max-md:grid-cols-[auto_1fr_auto_auto] max-md:grid-rows-[auto_auto] max-md:[grid-template-areas:'cover_title_time_action'_'cover_artist_time_action'] max-md:items-center max-md:p-[8px_12px] max-md:gap-x-3 max-md:gap-y-[2px]"
+              :class="{ playing: playerStore.currentSong?.id === item.song.id }" @click="handleRowClick(item.song)"
+              @dblclick="playSong(item.song)">
+              <div class="col-title max-md:contents!">
+                <div class="cover-box max-md:[grid-area:cover] max-md:row-[span_2] max-md:w-10 max-md:h-10"
+                  @click.stop="handlePlayBtnClick(item.song)">
+                  <img class="w-full h-full object-cover" v-cached-src="{ id: item.song.id, src: item.song.album_art }"
+                    loading="lazy" alt="Cover" />
                   <div class="play-hover">
                     <SvgIcon
                       :name="playerStore.currentSong?.id === item.song.id && playerStore.isPlaying ? 'pause' : 'play'" />
                   </div>
                 </div>
-                <div class="title-text-box">
+                <div class="title-text-box max-md:[grid-area:title] max-md:self-end max-md:overflow-hidden">
                   <span class="song-name">{{ item.song.title }}</span>
                 </div>
               </div>
-              <div class="col-artist" :title="item.song.artist">{{ item.song.artist }}</div>
-              <div class="col-album" :title="item.song.album">{{ item.song.album || '-' }}</div>
-              <div class="col-time">{{ formatPlayTime(item.time) }}</div>
+              <div
+                class="col-artist max-md:[grid-area:artist] max-md:self-start max-md:min-w-0 max-md:text-[12px] max-md:text-body-muted max-md:m-0 max-md:p-0"
+                :title="item.song.artist">{{ item.song.artist }}</div>
+              <div class="col-album max-md:hidden!" :title="item.song.album">{{ item.song.album || '-' }}</div>
+              <div
+                class="col-time max-md:[grid-area:time] max-md:row-[span_2] max-md:w-auto max-md:flex max-md:items-center max-md:text-[11px] max-md:text-body-muted">
+                {{ formatPlayTime(item.time) }}</div>
 
-              <!-- 右侧操作 -->
-              <div class="col-actions" @click.stop>
+          <div
+                class="col-actions max-md:[grid-area:action] max-md:row-[span_2] max-md:w-auto max-md:flex max-md:items-center"
+                @click.stop>
                 <n-dropdown trigger="click" :options="getRowDropdownOptions(item.song, item.time)"
                   @select="(key) => handleRowAction(key, item.song, item.time)">
                   <n-button circle text :depth="3" class="row-menu-btn">
@@ -96,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { usePlayerStore } from '../stores/player'
 import { useHistoryStore } from '../stores/history'
 import { NDropdown, NModal, NButton, NSpace, NVirtualList, useMessage } from 'naive-ui'
@@ -110,7 +119,7 @@ const playerStore = usePlayerStore()
 const historyStore = useHistoryStore()
 const message = useMessage()
 
-// 将页面数据绑定至包含唯一 key 属性的计算属性
+// 历史数据绑定唯一 key
 const historyList = computed(() => {
   return historyStore.historyList.map(item => ({
     ...item,
@@ -207,106 +216,24 @@ const formatPlayTime = (timestamp: number) => {
   }
 }
 
+const scrollbarWidth = ref(0)
+const virtualListRef = ref<any>(null)
+
+const updateScrollbarWidth = () => {
+  if (virtualListRef.value?.$el) {
+    const el = virtualListRef.value.$el
+    scrollbarWidth.value = el.offsetWidth - el.clientWidth
+  }
+}
+
+watch(() => historyList.value, () => {
+  nextTick(() => {
+    setTimeout(updateScrollbarWidth, 50)
+  })
+}, { deep: true })
+
 onMounted(() => {
   loadHistory()
+  setTimeout(updateScrollbarWidth, 200)
 })
 </script>
-
-<style scoped>
-/* 仅留存移动端响应式网格重构和虚拟列表的特定适配 */
-
-@media (max-width: 768px) {
-  .view-header {
-    margin-bottom: 16px;
-  }
-
-  .view-header :deep(.action-btn) {
-    width: 38px;
-    height: 38px;
-    padding: 0;
-    justify-content: center;
-    border-radius: 50%;
-  }
-
-  .view-header :deep(.action-btn .n-button__content) {
-    display: none !important;
-  }
-
-  .view-header :deep(.action-btn .n-button__icon) {
-    margin: 0 !important;
-  }
-
-  .song-grid-header {
-    display: none;
-  }
-
-  .song-row {
-    display: grid !important;
-    grid-template-areas:
-      "cover title time action"
-      "cover artist time action";
-    grid-template-columns: auto 1fr auto auto;
-    grid-template-rows: auto auto;
-    align-items: center;
-    padding: 8px 12px;
-    gap: 2px 12px;
-  }
-
-  .col-title {
-    display: contents !important;
-  }
-
-  .cover-box {
-    grid-area: cover;
-    grid-row: span 2;
-    width: 40px;
-    height: 40px;
-  }
-
-  .title-text-box {
-    grid-area: title;
-    align-self: end;
-    overflow: hidden;
-  }
-
-  .col-artist {
-    grid-area: artist;
-    align-self: start;
-    min-width: 0;
-    font-size: 12px;
-    color: var(--body-muted);
-    margin: 0;
-    padding: 0;
-  }
-
-  .col-album {
-    display: none !important;
-  }
-
-  .col-time {
-    grid-area: time;
-    grid-row: span 2;
-    display: flex;
-    align-items: center;
-    width: auto;
-    font-size: 11px;
-    color: var(--body-muted);
-  }
-
-  .col-actions {
-    grid-area: action;
-    grid-row: span 2;
-    display: flex;
-    align-items: center;
-    width: auto;
-  }
-}
-
-/* 锁定外层滚动 - 虚拟列表自行处理滚动 */
-:global(.main-scroll:has(.history-view)) {
-  overflow: hidden !important;
-  display: flex !important;
-  flex-direction: column !important;
-  padding-bottom: 1px !important;
-}
-</style>

@@ -14,7 +14,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
   // 跟踪当前 blob URL 以便后续释放
   let _currentBlobUrl: string | null = null
 
-  // 从 Blob 创建 blob URL，同时释放之前的
+  // 创建 Blob URL，先释放旧 URL
   const _createBlobUrl = (blob: Blob): string => {
     _revokeBlobUrl()
     const url = URL.createObjectURL(blob)
@@ -29,10 +29,10 @@ export const usePreferencesStore = defineStore('preferences', () => {
     }
   }
 
-  // 云端背景 URL，使用已持久化的时间戳实现缓存复用
+  // 云端背景 URL（带时间戳缓存）
   const _cloudBgUrl = () => getApiUrl(`/api/music/backgrounds/cloud_bg.webp?t=${bgTimestamp.value}`)
 
-  // 后台静默下载云端新图，保存到 IndexedDB 后无缝切换（不闪白）
+  // 静默下载云端新图，无缝切换
   const _silentDownloadCloudBg = async (timestamp: string) => {
     try {
       const resp = await fetch(_cloudBgUrl())
@@ -46,7 +46,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     }
   }
 
-  // 从 IndexedDB 读取背景 Blob 并生成 blob URL（同时恢复时间戳）
+  // 从 IndexedDB 读取背景 Blob 生成 URL
   const _loadLocalBlobUrl = async (): Promise<string | null> => {
     const record = await musicDB.getBackground()
     if (!record) return null
@@ -86,7 +86,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     customBgEnabled.value = !!bgUrl.value
     localStorage.setItem('2fmusic_custom_bg_enabled', String(customBgEnabled.value))
 
-    // 2. 发起 WebSocket 请求向服务端同步最权威的偏好数据
+    // 向服务端同步偏好数据
     try {
       const data = await wsClient.sendRequest('system/get_preferences')
       if (data) {
@@ -141,7 +141,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
       }
     })
 
-    // 更新状态
+    // 更新背景显示状态
     if (customBgEnabled.value) {
       if (customBgSync.value) {
         // 尝试自动将本地图片上传到云端
@@ -177,7 +177,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     }
   }
 
-  // 纯本地设置背景（原始 Blob，前端不做压缩）
+  // 本地设置背景（原始 Blob）
   const setLocalBackground = async (blob: Blob) => {
     const newTimestamp = String(Date.now())
     bgTimestamp.value = newTimestamp
@@ -261,7 +261,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     }
   }
 
-  // 切换主题模式并持久化
+  // 切换主题模式
   const setThemeMode = (mode: 'system' | 'light' | 'dark') => {
     themeMode.value = mode
     localStorage.setItem('2fmusic_theme_mode', mode)

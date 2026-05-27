@@ -1,14 +1,14 @@
 <template>
   <div class="flex flex-col flex-1 min-h-0 local-music-view">
-    <!-- 头部操作区 (重构为 Tailwind 极简原子类) -->
-    <div class="view-header flex justify-between items-center mb-6 max-md:flex-col max-md:items-stretch max-md:gap-3 max-md:mb-4">
+    <!-- 头部操作区 -->
+    <div class="flex justify-between items-center mb-6 max-md:flex-col max-md:items-stretch max-md:gap-3 max-md:mb-4">
       <div class="flex items-center gap-3 w-full">
         <n-button v-if="playlistId" circle secondary class="mr-2" @click="goBackToFavorites" title="返回收藏夹">
           <template #icon>
             <SvgIcon name="chevron-left" />
           </template>
         </n-button>
-        <h1 class="view-title">{{ pageTitle }}</h1>
+        <h1 class="font-display text-[28px] font-semibold text-ink m-0 tracking-[-0.5px]">{{ pageTitle }}</h1>
         <span class="text-sm text-body-muted font-normal" v-if="filteredSongs.length > 0">
           ({{ filteredSongs.length }} 首)
         </span>
@@ -16,7 +16,8 @@
 
       <div class="flex items-center gap-3 max-md:w-full max-md:justify-between max-md:gap-2">
         <!-- 搜索 -->
-        <n-input v-model:value="searchQuery" placeholder="搜索标题、歌手、专辑..." round clearable class="w-80! max-md:flex-1 max-md:w-full">
+        <n-input v-model:value="searchQuery" placeholder="搜索标题、歌手、专辑..." round clearable
+          class="w-[clamp(180px,24vw,320px)]! max-md:flex-1 max-md:w-full">
           <template #prefix>
             <SvgIcon name="search" class="mr-1.5" />
           </template>
@@ -36,44 +37,51 @@
       </div>
     </div>
 
-    <!-- 批量管理工具条 (直接套用 components.css 全新毛玻璃 batch-toolbar 底座) -->
-    <div v-if="isBatchMode" class="batch-toolbar">
-      <div class="batch-left">
+    <!-- 批量管理工具条 -->
+    <div v-if="isBatchMode"
+      class="h-[52px] bg-(--bg-player) border border-(--border-main) backdrop-blur-player rounded-md mb-4 flex items-center justify-between px-4 box-border">
+      <div>
         <n-checkbox :checked="isAllSelected" :indeterminate="isSomeSelected" @update:checked="toggleSelectAll">
           已选 {{ selectedSongIds.size }} 首
         </n-checkbox>
       </div>
-      <div class="batch-right">
+      <div class="flex items-center gap-2">
         <n-dropdown v-if="!playlistId" trigger="click" :options="batchPlaylistOptions"
           @select="handleBatchAddToPlaylist">
-          <n-button round secondary :disabled="selectedSongIds.size === 0">
+          <n-button round secondary :disabled="selectedSongIds.size === 0"
+            class="max-md:w-9 max-md:h-9 max-md:p-0 max-md:rounded-full max-md:min-w-9 max-md:shrink-0 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!">
             <template #icon>
-              <SvgIcon name="plus" />
-            </template> 添加到收藏夹
+              <SvgIcon name="plus" class="max-md:m-0!" />
+            </template>
+            <span class="max-md:hidden">添加到收藏夹</span>
           </n-button>
         </n-dropdown>
 
         <n-button v-else round type="error" secondary :disabled="selectedSongIds.size === 0"
-          @click="handleBatchRemoveFromPlaylist">
+          @click="handleBatchRemoveFromPlaylist"
+          class="max-md:w-9 max-md:h-9 max-md:p-0 max-md:rounded-full max-md:min-w-9 max-md:shrink-0 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!">
           <template #icon>
-            <SvgIcon name="trash" />
-          </template> 从收藏夹移除
+            <SvgIcon name="trash" class="max-md:m-0!" />
+          </template>
+          <span class="max-md:hidden">从收藏夹移除</span>
         </n-button>
 
         <n-button v-if="!playlistId" round type="error" secondary :disabled="selectedSongIds.size === 0"
-          @click="showBatchDeleteModal = true">
+          @click="showBatchDeleteModal = true"
+          class="max-md:w-9 max-md:h-9 max-md:p-0 max-md:rounded-full max-md:min-w-9 max-md:shrink-0 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!">
           <template #icon>
-            <SvgIcon name="trash" />
-          </template> 物理删除
+            <SvgIcon name="trash" class="max-md:m-0!" />
+          </template>
+          <span class="max-md:hidden">物理删除</span>
         </n-button>
 
-        <n-button class="clear-selection-btn" round text :disabled="selectedSongIds.size === 0" @click="clearSelection">
+        <n-button class="max-md:hidden!" round text :disabled="selectedSongIds.size === 0" @click="clearSelection">
           取消选择
         </n-button>
-        <n-button class="exit-batch-btn" round text @click="toggleBatchMode">
+        <n-button class="max-md:hidden!" round text @click="toggleBatchMode">
           退出管理
         </n-button>
-        <n-button class="mobile-exit-btn" circle secondary @click="toggleBatchMode" title="退出管理">
+        <n-button class="hidden! max-md:inline-flex!" circle secondary @click="toggleBatchMode" title="退出管理">
           <template #icon>
             <SvgIcon name="close" />
           </template>
@@ -82,24 +90,26 @@
     </div>
 
     <!-- 歌曲列表 -->
-    <div class="song-list-container">
+    <div class="flex flex-col flex-1 min-h-0">
       <div v-if="isLoading" class="flex flex-col items-center justify-center gap-3 py-15">
         <n-spin :size="32" />
         <span class="text-xs text-body-muted">正在加载歌曲...</span>
       </div>
 
-      <div v-else-if="filteredSongs.length === 0" class="empty-state">
-        <SvgIcon name="music" />
-        <h3>暂无音乐</h3>
-        <p v-if="searchQuery">没有匹配的歌曲，请尝试其他关键词</p>
-        <p v-else-if="playlistId">当前收藏夹为空，可在“本地音乐”列表中右键加入此收藏夹</p>
-        <p v-else>音乐库为空，请前往“目录管理”添加挂载路径或前往“网易下载”获取</p>
+      <div v-else-if="filteredSongs.length === 0" class="flex flex-col items-center justify-center py-16 text-center">
+        <SvgIcon name="music" class="text-[36px] text-body-muted mb-4" />
+        <h3 class="m-0 mb-2 text-lg font-semibold text-ink">暂无音乐</h3>
+        <p class="m-0 text-[13px] text-body-muted" v-if="searchQuery">没有匹配的歌曲，请尝试其他关键词</p>
+        <p class="m-0 text-[13px] text-body-muted" v-else-if="playlistId">当前收藏夹为空，可在“本地音乐”列表中右键加入此收藏夹</p>
+        <p class="m-0 text-[13px] text-body-muted" v-else>音乐库为空，请前往“目录管理”添加挂载路径或前往“网易下载”获取</p>
       </div>
 
       <template v-else>
         <!-- 固定在顶部的极简表头 -->
-        <div class="song-grid-header">
-          <div v-if="isBatchMode" class="col-checkbox"></div>
+        <div
+          class="song-grid-header max-md:hidden!"
+          :style="{ paddingRight: `${16 + scrollbarWidth}px` }">
+          <div v-if="isBatchMode" class="col-check"></div>
           <div class="col-title">标题</div>
           <div class="col-artist">歌手</div>
           <div class="col-album">专辑</div>
@@ -108,50 +118,68 @@
         </div>
 
         <!-- 高性能虚拟列表滚动区 -->
-        <n-virtual-list class="song-list-scroll-area virtual-list-container" :item-size="64"
-          :items="filteredSongs" key-field="id" :item-resizable="false">
+        <n-virtual-list ref="virtualListRef" class="flex-1 min-h-0 overflow-hidden" :item-size="64" :items="filteredSongs" key-field="id"
+          :item-resizable="false" :ignore-item-resize="true" @resize="updateScrollbarWidth">
           <template #default="{ item: song }">
-            <div class="song-row" :class="{
-              playing: playerStore.currentSong?.id === song.id,
-              selected: selectedSongIds.has(song.id)
-            }" @click="handleRowClick(song)" @dblclick="playSong(song)">
+            <div
+              class="group song-row max-md:grid! max-md:grid-cols-[auto_auto_1fr_auto] max-md:grid-rows-[auto_auto] max-md:[grid-template-areas:'check_cover_title_action'_'check_cover_artist_action'] max-md:items-center max-md:p-[8px_12px] max-md:gap-x-3 max-md:gap-y-[2px]"
+              :class="{
+                'text-(--primary) font-semibold': playerStore.currentSong?.id === song.id,
+                'bg-(--primary-alpha-16) backdrop-blur-card border border-(--primary-alpha-10) dark:bg-(--primary-on-dark-alpha-16) dark:border-(--primary-on-dark-alpha-12)': selectedSongIds.has(song.id)
+              }" @click="handleRowClick(song)" @dblclick="playSong(song)">
               <!-- 复选框 -->
-              <div v-if="isBatchMode" class="col-checkbox" @click.stop>
+              <div v-if="isBatchMode"
+                class="col-check max-md:[grid-area:check] max-md:w-auto max-md:flex max-md:items-center"
+                @click.stop>
                 <n-checkbox :checked="selectedSongIds.has(song.id)"
                   @update:checked="(val) => toggleSongSelection(song.id, val)" />
               </div>
 
               <!-- 标题（含封面、播放状态指示） -->
-              <div class="col-title">
-                <div class="cover-box" @click.stop="handlePlayBtnClick(song)">
-                  <img v-cached-src="{ id: song.id, src: song.album_art }" loading="lazy" alt="Cover" />
-                  <div class="play-hover">
+              <div
+                class="col-title max-md:contents!">
+                <div
+                  class="w-10 h-10 rounded-md overflow-hidden relative shrink-0 max-md:[grid-area:cover] max-md:row-[span_2] max-md:w-10 max-md:h-10"
+                  @click.stop="handlePlayBtnClick(song)">
+                  <img class="w-full h-full object-cover" v-cached-src="{ id: song.id, src: song.album_art }"
+                    loading="lazy" alt="Cover" />
+                  <div
+                    class="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 text-xs transition-opacity duration-200 group-hover:opacity-100">
                     <SvgIcon
                       :name="playerStore.currentSong?.id === song.id && playerStore.isPlaying ? 'pause' : 'play'" />
                   </div>
                 </div>
-                <div class="title-text-box">
-                  <span class="song-name">{{ song.title }}</span>
-                  <span v-if="playerStore.currentSong?.id === song.id" class="playing-gif">
+                <div
+                  class="flex items-center gap-2 overflow-hidden max-md:[grid-area:title] max-md:self-end max-md:overflow-hidden">
+                  <span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">{{ song.title }}</span>
+                  <span v-if="playerStore.currentSong?.id === song.id" class="text-[11px] text-(--primary)">
                     <SvgIcon name="volume-up" />
                   </span>
                 </div>
               </div>
 
               <!-- 歌手 -->
-              <div class="col-artist" :title="song.artist">{{ song.artist }}</div>
+              <div
+                class="col-artist max-md:[grid-area:artist] max-md:self-start max-md:min-w-0 max-md:text-[12px] max-md:text-body-muted max-md:m-0 max-md:p-0"
+                :title="song.artist">{{ song.artist }}</div>
 
               <!-- 专辑 -->
-              <div class="col-album" :title="song.album">{{ song.album || '-' }}</div>
+              <div
+                class="col-album max-md:hidden!"
+                :title="song.album">{{ song.album || '-' }}</div>
 
               <!-- 大小 -->
-              <div class="col-size">{{ formatSize(song.size) }}</div>
+              <div class="col-size max-md:hidden!">{{
+                formatSize(song.size) }}</div>
 
               <!-- 右侧操作 -->
-              <div class="col-actions" @click.stop>
+              <div
+                class="col-actions max-md:[grid-area:action] max-md:row-[span_2] max-md:w-auto max-md:flex max-md:items-center"
+                @click.stop>
                 <n-dropdown trigger="click" :options="getRowDropdownOptions(song)"
                   @select="(key) => handleRowAction(key, song)">
-                  <n-button circle text :depth="3" class="row-menu-btn">
+                  <n-button circle text :depth="3"
+                    class="bg-transparent border-none text-body-muted cursor-pointer opacity-60 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10">
                     <template #icon>
                       <SvgIcon name="ellipsis-h" />
                     </template>
@@ -199,7 +227,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSystemStore } from '../stores/system'
 import { usePlayerStore } from '../stores/player'
@@ -218,10 +246,9 @@ const message = useMessage()
 const searchQuery = ref('')
 const isLoading = ref(false)
 
-// 路由参数：如果存在 id，说明是某收藏夹详情
+// 路由 id 参数标识收藏夹详情
 const playlistId = computed(() => route.params.id as string)
 
-// 收藏夹元数据
 const currentPlaylist = computed(() => {
   if (!playlistId.value) return null
   return favoritesStore.playlists.find(p => String(p.id) === String(playlistId.value))
@@ -315,7 +342,7 @@ const clearSelection = () => {
   selectedSongIds.value.clear()
 }
 
-// 歌曲数据源（基于路由过滤）
+// 歌曲数据源（路由过滤）
 const currentSongsSource = computed(() => {
   if (playlistId.value) {
     // 收藏夹歌曲列表：过滤出 favoritesStore.favoriteSongIds 里的歌曲
@@ -387,6 +414,22 @@ const loadData = async () => {
   }
 }
 
+const scrollbarWidth = ref(0)
+const virtualListRef = ref<any>(null)
+
+const updateScrollbarWidth = () => {
+  if (virtualListRef.value?.$el) {
+    const el = virtualListRef.value.$el
+    scrollbarWidth.value = el.offsetWidth - el.clientWidth
+  }
+}
+
+watch(() => filteredSongs.value, () => {
+  nextTick(() => {
+    setTimeout(updateScrollbarWidth, 50)
+  })
+}, { deep: true })
+
 onMounted(() => {
   // 从本地存储恢复排序设置
   try {
@@ -401,6 +444,7 @@ onMounted(() => {
   }
 
   loadData()
+  setTimeout(updateScrollbarWidth, 200)
 })
 
 // 监听路由改变，重新拉取收藏夹歌曲ID
@@ -414,7 +458,7 @@ watch(() => playlistId.value, async (newVal) => {
   }
 })
 
-// 行点击：多选模式下直接勾选，常规模式下仅高亮或双击播放（移动端下单触直接播放）
+// 行点击：多选模式勾选，移动端单击播放
 const handleRowClick = (song: Song) => {
   if (isBatchMode.value) {
     const id = song.id
@@ -433,7 +477,7 @@ const playSong = (song: Song) => {
   playerStore.playSong(song, filteredSongs.value)
 }
 
-// 点击封面播放按钮：控制播放/暂停
+// 播放按钮：控制播放/暂停
 const handlePlayBtnClick = (song: Song) => {
   if (isBatchMode.value) {
     toggleSongSelection(song.id, !selectedSongIds.value.has(song.id))
@@ -453,26 +497,21 @@ const formatSize = (bytes: number) => {
   return `${mb.toFixed(1)} MB`
 }
 
-// 返回
 const goBackToFavorites = () => {
   router.push('/favorites')
 }
 
 // 行右键/操作菜单选项定义
-const getRowDropdownOptions = (song: Song) => {
-  // 临时读取属性以避免未使用参数报错
-  if (song.id) { }
+const getRowDropdownOptions = (_song: Song) => {
   const options = [
     { label: '播放', key: 'play' },
     { label: '添加至队列', key: 'queue' }
   ]
 
-  if (!playlistId.value) {
-    // 本地音乐：支持添加至各收藏夹
-    options.push({ label: '添加到收藏夹', key: 'fav' })
-  } else {
-    // 收藏夹详情：支持移出收藏夹
-    options.push({ label: '从收藏夹移出', key: 'remove_fav' })
+    if (!playlistId.value) {
+      options.push({ label: '添加到收藏夹', key: 'fav' })
+    } else {
+      options.push({ label: '从收藏夹移出', key: 'remove_fav' })
   }
 
   options.push({ label: '批量管理', key: 'batch' })
@@ -491,7 +530,6 @@ const handleRowAction = async (key: string, song: Song) => {
     playerStore.addToQueue(song)
     message.success('已添加到播放队列')
   } else if (key === 'fav') {
-    // 弹窗添加到指定收藏夹
     const res = await favoritesStore.addFavorite(song.id, 'default', song.title, song.artist)
     if (res.success) message.success('已成功添加至默认收藏夹')
     else message.error(res.error)
@@ -592,174 +630,3 @@ const confirmBatchDelete = async () => {
   selectedSongIds.value.clear()
 }
 </script>
-
-<style scoped>
-/* 仅留存为处理虚拟列表所必须的布局锁定与移动端响应式 Grid 重塑 */
-
-.virtual-list-container {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.back-icon-btn {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: 1px solid var(--hairline);
-  background-color: var(--canvas);
-  color: var(--ink);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast);
-  flex-shrink: 0;
-}
-
-.back-icon-btn:hover {
-  background-color: var(--canvas-parchment);
-  border-color: var(--body-muted);
-}
-
-.back-icon-btn :deep(.svg-icon) {
-  font-size: 16px;
-  transition: transform var(--transition-fast);
-}
-
-.back-icon-btn:hover :deep(.svg-icon) {
-  transform: translateX(-2px);
-}
-
-/* 移动端专用多选退出按钮，默认在 PC 宽屏端隐藏 */
-.batch-right :deep(.mobile-exit-btn) {
-  display: none !important;
-}
-
-/* 状态页 - 图标尺寸 */
-.empty-state :deep(.svg-icon) {
-  font-size: 40px;
-  color: var(--body-muted);
-  opacity: 0.5;
-  margin-bottom: 16px;
-}
-
-@media (max-width: 768px) {
-  .song-grid-header {
-    display: none;
-  }
-
-  .song-row {
-    display: grid !important;
-    grid-template-areas:
-      "check cover title action"
-      "check cover artist action";
-    grid-template-columns: auto auto 1fr auto;
-    grid-template-rows: auto auto;
-    align-items: center;
-    padding: 8px 12px;
-    gap: 2px 12px;
-  }
-
-  .col-checkbox {
-    grid-area: check;
-    display: flex;
-    align-items: center;
-    width: auto;
-  }
-
-  .col-title {
-    display: contents !important;
-  }
-
-  .cover-box {
-    grid-area: cover;
-    grid-row: span 2;
-    width: 40px;
-    height: 40px;
-  }
-
-  .title-text-box {
-    grid-area: title;
-    align-self: end;
-    overflow: hidden;
-  }
-
-  .col-artist {
-    grid-area: artist;
-    align-self: start;
-    min-width: 0;
-    font-size: 12px;
-    color: var(--body-muted);
-    margin: 0;
-    padding: 0;
-  }
-
-  .col-album,
-  .col-size {
-    display: none !important;
-  }
-
-  .col-actions {
-    grid-area: action;
-    grid-row: span 2;
-    display: flex;
-    align-items: center;
-    width: auto;
-  }
-
-  .view-header .header-actions :deep(.n-button) {
-    width: 38px;
-    height: 38px;
-    padding: 0;
-    justify-content: center;
-    border-radius: 50%;
-  }
-
-  .view-header .header-actions :deep(.n-button .n-button__content) {
-    display: none !important;
-  }
-
-  .view-header .header-actions :deep(.n-button .n-button__icon) {
-    margin: 0 !important;
-  }
-
-  /* 批量工具栏按钮深度穿透适配与移动端文字隐藏 */
-  .batch-right :deep(.n-button:not(.n-button--text-type)) {
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    justify-content: center;
-    border-radius: 50%;
-    min-width: 36px;
-    flex-shrink: 0;
-  }
-
-  .batch-right :deep(.n-button:not(.n-button--text-type) .n-button__content) {
-    display: none !important;
-  }
-
-  .batch-right :deep(.n-button:not(.n-button--text-type) .n-button__icon) {
-    margin: 0 !important;
-  }
-
-  /* 移动端下彻底隐藏 PC 端的“取消选择”与“退出管理”文本按钮 */
-  .batch-right :deep(.clear-selection-btn),
-  .batch-right :deep(.exit-batch-btn) {
-    display: none !important;
-  }
-
-  /* 移动端下显式唤醒退出按钮 */
-  .batch-right :deep(.mobile-exit-btn) {
-    display: inline-flex !important;
-  }
-}
-
-/* 锁定外层滚动 - 虚拟列表自行处理滚动 */
-:global(.main-scroll:has(.local-music-view)) {
-  overflow: hidden !important;
-  display: flex !important;
-  flex-direction: column !important;
-  padding-bottom: 1px !important;
-}
-</style>

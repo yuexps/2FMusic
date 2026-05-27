@@ -122,7 +122,7 @@ class MusicDB {
     })
   }
 
-  // --- 背景图片存储（blob + 时间戳统一存放在同一条记录） ---
+  // --- 背景图片存储 ---
   async getBackground(): Promise<{ blob: Blob; timestamp: string } | null> {
     const db = await this.init()
     return new Promise((resolve) => {

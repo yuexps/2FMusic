@@ -1,8 +1,17 @@
 <template>
-  <div class="player-bar-container glass-panel flex items-center justify-between px-6 box-border shrink-0 h-20">
-    <!-- 左侧：歌曲基本信息 (重构为 Tailwind 极简原子类) -->
-    <div class="flex items-center gap-3 w-1/4 min-w-45 cursor-pointer overflow-hidden" @click="emit('open-lyrics')"
-      title="点击查看歌词">
+  <div
+    class="player-bar-container glass-panel flex items-center justify-between px-6 box-border shrink-0 h-20 relative">
+    <!-- 移动端专用顶部极细进度指示条 (100% 空间利用率，贴顶展示播放进度) -->
+    <div
+      class="absolute top-0 left-0 w-full h-[2px] bg-black/5 dark:bg-white/10 hidden max-md:block overflow-hidden pointer-events-none">
+      <div class="h-full bg-primary dark:bg-primary-on-dark transition-all duration-100 ease-linear"
+        :style="{ width: (playerStore.currentTime / (playerStore.duration || 1)) * 100 + '%' }"></div>
+    </div>
+
+    <!-- 左侧：歌曲信息 -->
+    <div
+      class="flex items-center gap-3 w-1/4 min-w-45 cursor-pointer overflow-hidden max-md:min-w-0 max-md:w-auto max-md:flex-1 max-md:pr-4"
+      @click="emit('open-lyrics')" title="点击查看歌词">
       <img v-cached-src="{ id: playerStore.currentSong?.id, src: playerStore.currentSong?.album_art }"
         class="w-12 h-12 object-cover shrink-0 rounded-md" alt="Cover" />
       <div class="overflow-hidden">
@@ -16,11 +25,11 @@
       </div>
     </div>
 
-    <!-- 中间：播放控制及进度 (重构为 Tailwind 极简原子类) -->
-    <div class="flex flex-col items-center gap-2 w-[45%] max-w-145 max-md:w-auto max-md:grow max-md:max-w-none">
+    <!-- 中间：播放控制及进度 (移动端下直接隐藏以释出空间给歌名标题) -->
+    <div class="flex flex-col items-center gap-2 w-[45%] max-w-145 max-md:hidden">
       <div class="flex items-center gap-8">
         <!-- 播放模式切换 -->
-        <n-button circle text class="text-lg!" @click="togglePlayMode" :title="modeTitle">
+        <n-button circle text class="text-lg! max-md:hidden!" @click="togglePlayMode" :title="modeTitle">
           <template #icon>
             <SvgIcon :name="modeIcon" />
           </template>
@@ -44,40 +53,68 @@
             <SvgIcon name="forward" />
           </template>
         </n-button>
-
-        <!-- 播放队列 -->
-        <n-button circle text class="text-lg! queue-btn" :class="{ active: showQueue }"
-          @click="showQueue = !showQueue" title="播放队列" :type="showQueue ? 'primary' : 'default'">
-          <template #icon>
-            <SvgIcon name="tasks" />
-          </template>
-        </n-button>
       </div>
 
-      <div class="flex items-center gap-3 w-full max-md:hidden">
-        <span class="text-[11px] text-body-muted min-w-8 text-center">{{ formatTime(playerStore.currentTime)
-          }}</span>
-        <n-slider v-model:value="sliderTime" :max="playerStore.duration || 100" :step="0.1" :tooltip="false"
+      <div class="flex items-center gap-3 w-full">
+        <span class="text-[11px] text-body-muted min-w-8 text-center">{{ formatTime(playerStore.currentTime) }}</span>
+        <n-slider
+          class="[&_.n-slider-handle]:w-3 [&_.n-slider-handle]:h-3 [&_.n-slider-handle]:bg-primary dark:[&_.n-slider-handle]:bg-primary-on-dark [&_.n-slider-handle]:border-2 [&_.n-slider-handle]:border-white [&_.n-slider-rail]:h-1!"
+          v-model:value="sliderTime" :max="playerStore.duration || 100" :step="0.1" :tooltip="false"
           @update:value="onSliderChange" />
         <span class="text-[11px] text-body-muted min-w-8 text-center">{{ formatTime(playerStore.duration) }}</span>
       </div>
     </div>
 
-    <!-- 右侧：音量与队列 (重构为 Tailwind 极简原子类) -->
-    <div class="flex items-center gap-2 w-1/4 justify-end min-w-37.5 max-md:hidden">
-      <n-button circle text class="text-lg!" @click="toggleMute" title="静音">
+    <!-- 右侧：控制与音量 (移动端下合并展示核心操控) -->
+    <div
+      class="flex items-center gap-3 w-1/4 justify-end min-w-37.5 max-md:min-w-0 max-md:w-auto max-md:justify-end max-md:flex-none max-md:gap-3.5">
+      <!-- 移动端专用极简控制组件 (上一首、播放/暂停 和 下一首) -->
+      <div class="hidden max-md:flex items-center gap-3.5">
+        <n-button circle text class="text-xl!" @click="playerStore.prev" title="上一首">
+          <template #icon>
+            <SvgIcon name="backward" />
+          </template>
+        </n-button>
+        <!-- 主播放核心按键 -->
+        <n-button circle type="primary" class="w-9 h-9 flex items-center justify-center" @click="playerStore.togglePlay"
+          :title="playerStore.isPlaying ? '暂停' : '播放'">
+          <template #icon>
+            <SvgIcon :name="playerStore.isPlaying ? 'pause' : 'play'" class="text-white!" />
+          </template>
+        </n-button>
+        <n-button circle text class="text-xl!" @click="playerStore.next" title="下一首">
+          <template #icon>
+            <SvgIcon name="forward" />
+          </template>
+        </n-button>
+      </div>
+
+      <!-- 桌面端音量调节 -->
+      <div class="flex items-center gap-2 max-md:hidden">
+        <n-button circle text class="text-lg!" @click="toggleMute" title="静音">
+          <template #icon>
+            <SvgIcon :name="volumeIcon" />
+          </template>
+        </n-button>
+        <div class="w-22.5">
+          <n-slider
+            class="[&_.n-slider-handle]:w-3 [&_.n-slider-handle]:h-3 [&_.n-slider-handle]:bg-primary dark:[&_.n-slider-handle]:bg-primary-on-dark [&_.n-slider-handle]:border-2 [&_.n-slider-handle]:border-white [&_.n-slider-rail]:h-1!"
+            v-model:value="volumePercent" :max="100" :step="1" :tooltip="false" @update:value="onVolumeChange" />
+        </div>
+      </div>
+
+      <!-- 播放队列纯图标按钮 (移动端与桌面端通用) -->
+      <n-button circle text class="text-lg!" :class="{ 'text-primary dark:text-primary-on-dark': showQueue }"
+        @click="showQueue = !showQueue" title="播放队列">
         <template #icon>
-          <SvgIcon :name="volumeIcon" />
+          <SvgIcon name="tasks" />
         </template>
       </n-button>
-      <div class="w-22.5">
-        <n-slider v-model:value="volumePercent" :max="100" :step="1" :tooltip="false" @update:value="onVolumeChange" />
-      </div>
     </div>
 
     <!-- 播放队列抽屉 (Popover/Drawer) -->
     <div v-if="showQueue"
-      class="absolute bottom-22.5 right-6 w-[320px] h-100 max-h-[calc(100vh-120px)] glass-panel p-4 box-border flex flex-col rounded-2xl z-50">
+      class="absolute bottom-22.5 right-6 w-[320px] h-100 max-h-[calc(100vh-120px)] max-h-700:h-[280px]! glass-panel p-4 box-border flex flex-col rounded-2xl z-50 max-md:right-4 max-md:left-4 max-md:w-auto">
       <n-tabs type="segment" size="small" v-model:value="queueTab" class="mb-3">
         <n-tab name="playlist" :tab="`当前列表 (${playerStore.playlist.length})`" />
         <n-tab name="queue" :tab="`待播队列 (${playerStore.queue.length})`" />
@@ -157,7 +194,7 @@ const queueTab = ref<'playlist' | 'queue'>('playlist')
 
 const emit = defineEmits(['open-lyrics'])
 
-// 时间进度条状态双向绑定与节流
+// 时间进度条双向绑定与节流
 const sliderTime = ref(0)
 let isUserSeeking = false
 
@@ -247,41 +284,3 @@ onMounted(() => {
   playerStore.init()
 })
 </script>
-
-<style scoped>
-/* 仅保留无法被 Tailwind 直接声明的 Naive UI 局部穿透微调 */
-:deep(.n-slider .n-slider-handle) {
-  width: 12px;
-  height: 12px;
-  background-color: var(--primary);
-  border: 2px solid #ffffff;
-}
-
-:root.theme-dark :deep(.n-slider .n-slider-handle) {
-  background-color: var(--primary-on-dark);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not(.theme-light) :deep(.n-slider .n-slider-handle) {
-    background-color: var(--primary-on-dark);
-  }
-}
-
-:deep(.n-slider-rail) {
-  height: 4px !important;
-}
-
-/* 移动端隐藏播放队列按钮 */
-@media (max-width: 768px) {
-  :deep(.queue-btn) {
-    display: none !important;
-  }
-}
-
-/* 播放队列在小高度屏幕下的视口约束 */
-@media (max-height: 700px) {
-  .absolute {
-    height: 280px !important;
-  }
-}
-</style>

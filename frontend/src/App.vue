@@ -15,7 +15,7 @@ const systemStore = useSystemStore()
 const playerStore = usePlayerStore()
 const preferencesStore = usePreferencesStore()
 
-// 结合系统与用户偏好的暗色模式判定
+// 结合系统偏好与用户设置判定暗色模式
 const osThemeRef = useOsTheme()
 const isDark = computed(() => {
   if (preferencesStore.themeMode === 'system') {
@@ -82,7 +82,7 @@ const pageTitle = computed(() => {
   return map[route.path] || '2FMusic'
 })
 
-// 苹果设计规范自定义 Naive UI 亮暗双态主题定制（Premium Design）
+// Naive UI 亮暗双态主题定制（Apple 设计规范）
 const themeOverrides = computed<GlobalThemeOverrides>(() => {
   const isDarkVal = isDark.value
   const primary = isDarkVal ? '#2997ff' : '#007aff'
@@ -95,32 +95,32 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
       primaryColorHover: primaryHover,
       primaryColorPressed: primaryPressed,
       primaryColorSuppl: primary,
-      borderRadius: '11px',
+      borderRadius: 'var(--radius-md)',
       successColor: '#34c759',
       warningColor: '#ffcc00',
       errorColor: '#ff3b30',
-      fontSize: '14px',
+      fontSize: 'var(--font-size-md)',
       textColor1: isDarkVal ? '#ececf0' : '#1d1d1f',
       textColor2: isDarkVal ? 'rgba(236, 236, 240, 0.82)' : 'rgba(29, 29, 31, 0.82)',
       textColor3: isDarkVal ? 'rgba(236, 236, 240, 0.52)' : 'rgba(29, 29, 31, 0.52)',
     },
     Button: {
       borderRadiusMedium: '9999px',
-      borderRadiusSmall: '8px',
+      borderRadiusSmall: 'var(--radius-sm)',
       borderRadiusLarge: '9999px',
       fontWeightMedium: '500',
     },
     Card: {
-      borderRadius: '18px'
+      borderRadius: 'var(--radius-lg)'
     },
     Dialog: {
-      borderRadius: '18px'
+      borderRadius: 'var(--radius-lg)'
     },
     Modal: {
-      borderRadius: '18px'
+      borderRadius: 'var(--radius-lg)'
     },
     Input: {
-      borderRadius: '11px',
+      borderRadius: 'var(--radius-md)',
       borderHover: `1px solid ${primary}`,
       borderFocus: `1px solid ${primary}`,
     },
@@ -131,7 +131,7 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
     },
     Radio: {},
     Tag: {
-      borderRadius: '8px',
+      borderRadius: 'var(--radius-sm)',
     },
     Slider: {
       handleColor: '#ffffff',
@@ -157,7 +157,6 @@ onMounted(() => {
     console.error(e)
   }
 
-  // 延时加载以防资源未加载完
   systemStore.fetchSystemStatus()
   preferencesStore.fetchPreferences()
 
@@ -176,56 +175,55 @@ onUnmounted(() => {
     <n-message-provider placement="bottom">
       <n-dialog-provider>
         <div class="app-layout" :class="{ 'has-custom-bg': preferencesStore.customBgEnabled }">
-          <!-- 全局高颜值自定义磨砂毛玻璃背景底层 -->
-          <div 
-            v-if="preferencesStore.customBgEnabled && preferencesStore.bgUrl" 
-            class="global-custom-bg" 
-            :style="{ backgroundImage: `url(${preferencesStore.bgUrl})` }"
-          ></div>
+          <!-- 自定义磨砂毛玻璃背景 -->
+          <div v-if="preferencesStore.customBgEnabled && preferencesStore.bgUrl" class="global-custom-bg"
+            :style="{ backgroundImage: `url(${preferencesStore.bgUrl})` }"></div>
           <!-- 侧边栏 -->
-          <aside class="app-sidebar" :class="{ 'sidebar-active': isSidebarActive }">
+          <aside
+            class="w-[260px] h-full flex flex-col shrink-0 z-10 border-r border-border-main box-border bg-sidebar backdrop-saturate-180 backdrop-blur-sidebar max-md:fixed max-md:left-[-260px] max-md:transition-transform max-md:duration-300 max-md:bg-canvas max-md:bg-none"
+            :class="[
+              isSidebarActive ? 'max-md:translate-x-[260px]' : '',
+              preferencesStore.customBgEnabled ? 'max-md:bg-white/92 max-md:backdrop-blur-[35px] max-md:backdrop-saturate-180 dark:max-md:bg-[#16171d]/92' : ''
+            ]">
             <Sidebar @close-sidebar="isSidebarActive = false" />
           </aside>
 
-          <!-- 遮罩层 (移动端侧边栏展开时) -->
-          <div 
-            v-if="isSidebarActive" 
-            class="sidebar-overlay" 
-            @click="isSidebarActive = false"
-          ></div>
+          <div v-if="isSidebarActive"
+            class="fixed top-0 left-0 w-[calc(100vw/var(--ui-scale,1))] h-[calc(100vh/var(--ui-scale,1))] bg-black/30 z-9"
+            @click="isSidebarActive = false"></div>
 
           <!-- 主工作区 -->
-          <div class="app-main">
+          <div
+            class="relative z-1 flex-1 flex flex-col min-h-0 overflow-hidden bg-app-main backdrop-blur-main transition-colors duration-300">
             <!-- 移动端顶部标题栏 -->
-            <header class="mobile-top-bar">
-              <n-button circle text class="mobile-menu-btn" @click="isSidebarActive = true">
+            <header
+              class="hidden max-md:flex h-[52px] bg-sidebar backdrop-blur-sidebar border-b border-border-main items-center justify-between px-4 box-border z-5 shrink-0">
+              <n-button circle text
+                class="bg-transparent border-none text-ink text-xl cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5"
+                @click="isSidebarActive = true">
                 <template #icon>
                   <SvgIcon name="menu" />
                 </template>
               </n-button>
-              <div class="mobile-page-title">{{ pageTitle }}</div>
-              <div class="mobile-placeholder"></div> <!-- 占位平衡 -->
+              <div class="text-[15px] font-semibold text-ink">{{ pageTitle }}</div>
+              <div class="w-8"></div>
             </header>
 
-            <!-- 路由视图滚动区 -->
-            <div class="main-scroll">
+            <div class="main-scroll flex-1 min-h-0 overflow-y-auto p-[24px_28px] max-md:p-[16px_12px] box-border">
               <router-view />
             </div>
 
-            <!-- 底部播放栏 -->
             <PlayerBar @open-lyrics="showLyricsOverlay = true" />
           </div>
 
           <!-- 全屏歌词覆层 -->
-          <FullPlayerOverlay 
-            :show="showLyricsOverlay" 
-            @close="showLyricsOverlay = false" 
-          />
+          <FullPlayerOverlay :show="showLyricsOverlay" @close="showLyricsOverlay = false" />
         </div>
       </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>
 </template>
+
 
 <style>
 /* 响应式全局缩放支持 */
@@ -239,63 +237,5 @@ body {
 
 #app {
   transform-origin: top left;
-  /* 我们可以根据 --ui-scale 动态调节主要字体比例等，配合 naive ui 配置 */
-}
-
-/* 侧边遮罩 */
-.sidebar-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: calc(100vw / var(--ui-scale, 1.0));
-  height: calc(100vh / var(--ui-scale, 1.0));
-  background-color: rgba(0, 0, 0, 0.3);
-  z-index: 9;
-}
-
-/* 移动端顶栏 */
-.mobile-top-bar {
-  display: none;
-  height: 52px;
-  background: var(--bg-sidebar);
-  backdrop-filter: var(--blur-sidebar);
-  -webkit-backdrop-filter: var(--blur-sidebar);
-  border-bottom: 1px solid var(--border-main);
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  box-sizing: border-box;
-  z-index: 5;
-  flex-shrink: 0;
-}
-
-.mobile-menu-btn {
-  background: transparent;
-  border: none;
-  color: var(--ink);
-  font-size: var(--font-size-xl);
-  cursor: pointer;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* 移动端占位平衡元素 */
-.mobile-placeholder {
-  width: 32px;
-}
-
-.mobile-page-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-@media (max-width: 768px) {
-  .mobile-top-bar {
-    display: flex;
-  }
 }
 </style>
