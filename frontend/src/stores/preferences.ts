@@ -1,15 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { wsClient } from '../api/ws'
-import { getApiUrl } from '../utils/path'
 import { musicDB } from '../utils/indexedDB'
 
 export const usePreferencesStore = defineStore('preferences', () => {
   const customBgEnabled = ref(false)
-  const customBgSync = ref(false)
   const bgUrl = ref<string | null>(null)
   const bgTimestamp = ref<string>('0')
   const themeMode = ref<'system' | 'light' | 'dark'>('system')
+  const lyricsSourcePref = ref<'embedded' | 'network'>('embedded')
 
   // 跟踪当前 blob URL 以便后续释放
   let _currentBlobUrl: string | null = null
@@ -26,23 +25,6 @@ export const usePreferencesStore = defineStore('preferences', () => {
     if (_currentBlobUrl) {
       URL.revokeObjectURL(_currentBlobUrl)
       _currentBlobUrl = null
-    }
-  }
-
-  // 云端背景 URL（带时间戳缓存）
-  const _cloudBgUrl = () => getApiUrl(`/api/music/backgrounds/cloud_bg.webp?t=${bgTimestamp.value}`)
-
-  // 静默下载云端新图，无缝切换
-  const _silentDownloadCloudBg = async (timestamp: string) => {
-    try {
-      const resp = await fetch(_cloudBgUrl())
-      if (!resp.ok) return
-      const blob = await resp.blob()
-      await musicDB.saveBackground(blob, timestamp)
-      _revokeBlobUrl()
-      bgUrl.value = _createBlobUrl(blob)
-    } catch (e) {
-      console.warn('Silent cloud background download failed, keeping local:', e)
     }
   }
 
@@ -63,21 +45,14 @@ export const usePreferencesStore = defineStore('preferences', () => {
     themeMode.value = localTheme as any
     applyTheme(localTheme as any)
 
-    // 1. 优先读取本地缓存实现首屏极速无闪烁渲染
+    // 1. 读取本地缓存实现首屏极速无闪烁渲染
     const localEnabled = localStorage.getItem('2fmusic_custom_bg_enabled') === 'true'
-    const localSync = localStorage.getItem('2fmusic_custom_bg_sync') === 'true'
     const localTimestamp = localStorage.getItem('2fmusic_custom_bg_timestamp') || '0'
 
-    customBgSync.value = localSync
     bgTimestamp.value = localTimestamp
 
     if (localEnabled) {
-      if (localSync) {
-        // 云同步模式：优先读本地 IndexedDB，零网络；无本地数据时走云端 URL
-        bgUrl.value = (await _loadLocalBlobUrl()) || _cloudBgUrl()
-      } else {
-        bgUrl.value = await _loadLocalBlobUrl()
-      }
+      bgUrl.value = await _loadLocalBlobUrl()
     } else {
       bgUrl.value = null
     }
@@ -86,91 +61,39 @@ export const usePreferencesStore = defineStore('preferences', () => {
     customBgEnabled.value = !!bgUrl.value
     localStorage.setItem('2fmusic_custom_bg_enabled', String(customBgEnabled.value))
 
-    // 向服务端同步偏好数据
+    // 2. 从服务端加载歌词刮削偏好
+    await fetchLyricsPreference()
+  }
+
+  // 拉取歌词刮削来源偏好
+  const fetchLyricsPreference = async () => {
     try {
-      const data = await wsClient.sendRequest('system/get_preferences')
-      if (data) {
-        customBgEnabled.value = !!data.custom_bg_enabled
-
-        // 比较服务器时间戳是否有变化
-        const serverTimestamp = String(data.custom_bg_timestamp || '0')
-
-        if (customBgEnabled.value) {
-          if (customBgSync.value) {
-            if (serverTimestamp !== bgTimestamp.value) {
-              // 时间戳变化 → 保持本地图片不变，后台静默下载云端新图
-              bgTimestamp.value = serverTimestamp
-              _silentDownloadCloudBg(serverTimestamp)
-            } else {
-              // 时间戳一致 → 本地 IndexedDB 的图就是最新的，零网络
-              const localUrl = await _loadLocalBlobUrl()
-              if (localUrl) {
-                bgUrl.value = localUrl
-              }
-            }
-          } else {
-            bgUrl.value = (await _loadLocalBlobUrl()) || null
-          }
-        } else {
-          _revokeBlobUrl()
-          bgUrl.value = null
-        }
-
-        // 强一致性修正：有图即开，无图即关
-        customBgEnabled.value = !!bgUrl.value
-
-        // 重新写回 LocalStorage
-        localStorage.setItem('2fmusic_custom_bg_enabled', String(customBgEnabled.value))
-        localStorage.setItem('2fmusic_custom_bg_sync', String(customBgSync.value))
-        localStorage.setItem('2fmusic_custom_bg_timestamp', bgTimestamp.value)
+      const data = await wsClient.sendRequest('system/get_lyrics_preference')
+      if (data && data.value) {
+        lyricsSourcePref.value = data.value as 'embedded' | 'network'
       }
     } catch (e) {
-      console.warn('Failed to sync preferences via WS:', e)
+      console.warn('Failed to fetch lyrics preference:', e)
     }
   }
 
-  // 保存偏好开关设置到云端
+  // 保存歌词刮削来源偏好
+  const saveLyricsPreference = async (value: 'embedded' | 'network') => {
+    lyricsSourcePref.value = value
+    try {
+      await wsClient.sendRequest('system/save_lyrics_preference', { value })
+    } catch (e) {
+      console.warn('Failed to save lyrics preference:', e)
+    }
+  }
+
+  // 保存偏好设置到本地
   const savePreferences = async () => {
     localStorage.setItem('2fmusic_custom_bg_enabled', String(customBgEnabled.value))
-    localStorage.setItem('2fmusic_custom_bg_sync', String(customBgSync.value))
-
-    await wsClient.sendRequest('system/save_preferences', {
-      prefs: {
-        custom_bg_enabled: customBgEnabled.value,
-        custom_bg_timestamp: bgTimestamp.value
-      }
-    })
 
     // 更新背景显示状态
     if (customBgEnabled.value) {
-      if (customBgSync.value) {
-        // 尝试自动将本地图片上传到云端
-        const record = await musicDB.getBackground()
-        if (record && record.blob) {
-          const newTimestamp = String(Date.now())
-          const formData = new FormData()
-          formData.append('file', record.blob)
-          formData.append('timestamp', newTimestamp)
-          try {
-            const resp = await fetch(getApiUrl('/api/music/background/upload'), { method: 'POST', body: formData })
-            const res = await resp.json()
-            if (res.success) {
-              bgTimestamp.value = newTimestamp
-              localStorage.setItem('2fmusic_custom_bg_timestamp', bgTimestamp.value)
-              await musicDB.updateBackgroundTimestamp(bgTimestamp.value)
-              _revokeBlobUrl()
-              bgUrl.value = _cloudBgUrl()
-              return
-            }
-          } catch (e) {
-            console.warn('Auto-upload local bg failed, keep local display:', e)
-          }
-        }
-        // 上传失败或无本地数据 → 回退到本地显示
-        bgUrl.value = await _loadLocalBlobUrl()
-      } else {
-        bgUrl.value = await _loadLocalBlobUrl()
-      }
+      bgUrl.value = await _loadLocalBlobUrl()
     } else {
       _revokeBlobUrl()
       bgUrl.value = null
@@ -191,46 +114,6 @@ export const usePreferencesStore = defineStore('preferences', () => {
     await savePreferences()
   }
 
-  // 上传背景至云端 (使用 HTTP 接口传输文件)
-  const uploadCloudBackground = async (file: File): Promise<{ success: boolean; error?: string }> => {
-    const formData = new FormData()
-    formData.append('file', file)
-
-    // 用前端的上传完成时间作为这个背景图版本的唯一 ID
-    const newTimestamp = String(Date.now())
-    formData.append('timestamp', newTimestamp)
-
-    try {
-      const resp = await fetch(getApiUrl('/api/music/background/upload'), {
-        method: 'POST',
-        body: formData
-      })
-      const res = await resp.json()
-      if (res.success) {
-        customBgEnabled.value = true
-        customBgSync.value = true
-
-        localStorage.setItem('2fmusic_custom_bg_enabled', 'true')
-        localStorage.setItem('2fmusic_custom_bg_sync', 'true')
-
-        _revokeBlobUrl()
-        bgTimestamp.value = newTimestamp
-        localStorage.setItem('2fmusic_custom_bg_timestamp', bgTimestamp.value)
-        await musicDB.updateBackgroundTimestamp(bgTimestamp.value)
-        bgUrl.value = _cloudBgUrl()
-
-        // 通知后端更新偏好字段
-        await savePreferences()
-        return { success: true }
-      } else {
-        return { success: false, error: res.error || '上传处理失败' }
-      }
-    } catch (e: any) {
-      console.error('Failed to upload cloud background:', e)
-      return { success: false, error: e.message || '网络连接异常' }
-    }
-  }
-
   // 清除自定义背景图片
   const clearBackground = async (): Promise<boolean> => {
     try {
@@ -239,10 +122,6 @@ export const usePreferencesStore = defineStore('preferences', () => {
       customBgEnabled.value = false
       _revokeBlobUrl()
       bgUrl.value = null
-
-      if (customBgSync.value) {
-        await fetch(getApiUrl('/api/music/background/delete'), { method: 'POST' })
-      }
 
       await savePreferences()
       return true
@@ -270,14 +149,15 @@ export const usePreferencesStore = defineStore('preferences', () => {
 
   return {
     customBgEnabled,
-    customBgSync,
     bgUrl,
     themeMode,
+    lyricsSourcePref,
     fetchPreferences,
     savePreferences,
     setLocalBackground,
-    uploadCloudBackground,
     clearBackground,
-    setThemeMode
+    setThemeMode,
+    fetchLyricsPreference,
+    saveLyricsPreference
   }
 })

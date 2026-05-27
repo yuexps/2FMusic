@@ -107,15 +107,15 @@ def dispatch_ws_action(action: str, data: dict) -> tuple:
         elif action.startswith('system/'):
             from core.routes.system import (
                 handle_get_system_status,
-                handle_get_preferences,
-                handle_save_preferences
+                handle_get_lyrics_preference,
+                handle_save_lyrics_preference
             )
             if action == 'system/get_status':
                 return handle_get_system_status()
-            elif action == 'system/get_preferences':
-                return handle_get_preferences()
-            elif action == 'system/save_preferences':
-                return handle_save_preferences(data.get('prefs'))
+            elif action == 'system/get_lyrics_preference':
+                return handle_get_lyrics_preference()
+            elif action == 'system/save_lyrics_preference':
+                return handle_save_lyrics_preference(data.get('value'))
 
         # 5. 网易云音乐相关 action
         elif action.startswith('netease/'):

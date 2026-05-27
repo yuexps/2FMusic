@@ -12,10 +12,7 @@ from core.models.song import (
     delete_song_by_path,
     get_song_by_path
 )
-from PIL import Image
-from core.models.preferences import get_preference, set_preference
-from core.services.metadata import (
-    extract_embedded_lyrics,
+from core.services.metadata import (    extract_embedded_lyrics,
     extract_embedded_cover
 )
 from core.services.scanner import index_single_file, notify_library_changed
@@ -243,8 +240,14 @@ def handle_get_lyrics(title: str, artist: str, filename: str, song_id: str = Non
             except Exception as e:
                 logger.warning(f"读取同级歌词失败: {e}")
 
-    # 4. 尝试从音频源文件中提取内嵌歌词
-    if actual_path:
+    # 4. 根据用户偏好决定内嵌歌词与网络刮削的优先级
+    from core.models.preferences import get_preference
+    lyrics_pref = get_preference('lyrics_source_preference', 'embedded')
+
+    def try_embedded():
+        """尝试从音频源文件中提取内嵌歌词"""
+        if not actual_path:
+            return None
         embedded_lrc = extract_embedded_lyrics(actual_path)
         if embedded_lrc:
             try:
@@ -256,36 +259,56 @@ def handle_get_lyrics(title: str, artist: str, filename: str, song_id: str = Non
                         conn.execute("UPDATE songs SET has_lyrics=1 WHERE id=?", (sid,))
                         conn.commit()
                 logger.info(f"内嵌歌词提取并保存: {lrc_cache_path}")
-                return True, {'lyrics': embedded_lrc}, None
+                return embedded_lrc
             except Exception as e:
                 logger.warning(f"保存内嵌歌词失败: {e}")
+        return None
 
-    # 5. 聚合网络检索 - LrcApi 搜索并写入缓存
-    try:
-        logger.info(f"本地调用 LrcApi 搜索歌词: title={title}, artist={artist}")
-        result = mod.search_all(title=title, artist=artist, album='')
-        best_lrc = result.get('lyrics') if result and result.get('lyrics') else None
-        if best_lrc:
-            try:
-                os.makedirs(app_config.LYRICS_DIR, exist_ok=True)
-                with open(lrc_cache_path, 'wb') as f:
-                    f.write(best_lrc.encode('utf-8'))
-                if song_id:
-                    with get_db() as conn:
-                        conn.execute("UPDATE songs SET has_lyrics=1 WHERE id=?", (sid,))
-                        conn.commit()
-                    try:
-                        notify_library_changed()
-                    except Exception as notify_err:
-                        logger.warning(f"广播歌词变更失败: {notify_err}")
-                logger.info(f"网络歌词下载保存成功: {lrc_cache_path}")
-                return True, {'lyrics': best_lrc}, None
-            except Exception as e:
-                logger.warning(f"保存网络歌词失败: {e}")
-        else:
-            logger.warning(f"LrcApi 未找到匹配歌词: {title}")
-    except Exception as e:
-        logger.warning(f"LrcApi 搜索歌词发生异常: {e}")
+    def try_network():
+        """聚合网络检索 - LrcApi 搜索并写入缓存"""
+        try:
+            logger.info(f"网络刮削搜索歌词: title={title}, artist={artist}")
+            result = mod.search_all(title=title, artist=artist, album='')
+            best_lrc = result.get('lyrics') if result and result.get('lyrics') else None
+            if best_lrc:
+                try:
+                    os.makedirs(app_config.LYRICS_DIR, exist_ok=True)
+                    with open(lrc_cache_path, 'wb') as f:
+                        f.write(best_lrc.encode('utf-8'))
+                    if song_id:
+                        with get_db() as conn:
+                            conn.execute("UPDATE songs SET has_lyrics=1 WHERE id=?", (sid,))
+                            conn.commit()
+                        try:
+                            notify_library_changed()
+                        except Exception as notify_err:
+                            logger.warning(f"广播歌词变更失败: {notify_err}")
+                    logger.info(f"网络歌词下载保存成功: {lrc_cache_path}")
+                    return best_lrc
+                except Exception as e:
+                    logger.warning(f"保存网络歌词失败: {e}")
+            else:
+                logger.warning(f"网络检索未找到匹配歌词: {title}")
+        except Exception as e:
+            logger.warning(f"网络刮削搜索歌词发生异常: {e}")
+        return None
+
+    if lyrics_pref == 'network':
+        # 优先网络刮削，次选内嵌
+        lrc = try_network()
+        if lrc:
+            return True, {'lyrics': lrc}, None
+        lrc = try_embedded()
+        if lrc:
+            return True, {'lyrics': lrc}, None
+    else:
+        # 默认优先内嵌，次选网络刮削
+        lrc = try_embedded()
+        if lrc:
+            return True, {'lyrics': lrc}, None
+        lrc = try_network()
+        if lrc:
+            return True, {'lyrics': lrc}, None
 
     logger.warning(f"歌词获取失败: {title} - {artist}")
     return False, None, "未找到匹配的歌词"
@@ -524,78 +547,3 @@ def play_external_file():
     if os.path.exists(path): 
         return send_file(path, conditional=True)
     return jsonify({'error': '文件未找到'}), 404
-
-# --- 以下为自定义背景图片相关的 HTTP API 路由 ---
-
-@music_bp.route('/api/music/backgrounds/<bg_name>')
-def get_background_image(bg_name):
-    """读取并托管 backgrounds/ 缓存目录下的自定义背景图片资源"""
-    bg_name = unquote(bg_name)
-    base_name, _ = os.path.splitext(bg_name)
-    path = os.path.join(app_config.BACKGROUNDS_DIR, f"{base_name}.webp")
-    if os.path.exists(path): 
-        resp = send_file(path, mimetype='image/webp')
-        # 背景图强制开启浏览器长缓存
-        resp.headers['Cache-Control'] = 'public, max-age=2592000'
-        return resp
-    return jsonify({'error': 'Not found'}), 404
-
-@music_bp.route('/api/music/background/upload', methods=['POST'])
-def upload_background_image():
-    """上传自定义背景图，后台利用 Pillow 自动进行分辨率自适应等比缩放并压缩转换为 WebP 格式"""
-    if 'file' not in request.files: 
-        return jsonify({'success': False, 'error': '未收到文件'})
-    file = request.files['file']
-    if file.filename == '': 
-        return jsonify({'success': False, 'error': '文件名为空'})
-        
-    try:
-        # 1. 打开文件流
-        img = Image.open(file.stream)
-        
-        # 2. 限制最大分辨率为 1920x1080 并等比例智能缩放 (thumbnail)
-        img.thumbnail((1920, 1080))
-        
-        # 3. 剥离多余色彩通道，转换为 RGB，极大缩减最终 WebP 的体积
-        if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-            background = Image.new("RGB", img.size, (255, 255, 255))
-            background.paste(img, mask=img.split()[3] if img.mode == 'RGBA' else None)
-            img = background
-        elif img.mode != 'RGB':
-            img = img.convert('RGB')
-            
-        # 4. 压缩保存为 WebP
-        save_path = os.path.join(app_config.BACKGROUNDS_DIR, 'cloud_bg.webp')
-        img.save(save_path, 'WEBP', quality=75)
-        
-        # 5. 使用前端上传完成时间作为版本 ID，确保跨设备时时间戳一致
-        bg_timestamp = request.form.get('timestamp') or str(int(time.time()))
-        
-        # 6. 更新配置偏好以让其他设备获取
-        set_preference('custom_bg_enabled', '1')
-        set_preference('custom_bg_sync', '1')
-        set_preference('custom_bg_timestamp', bg_timestamp)
-        
-        logger.info("后台 Pillow 图片智能压缩处理完成，成功保存为 backgrounds/cloud_bg.webp")
-        return jsonify({
-            'success': True,
-            'bg_url': f'/api/music/backgrounds/cloud_bg.webp?t={bg_timestamp}'
-        })
-    except Exception as e:
-        logger.exception(f"处理上传自定义背景失败: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@music_bp.route('/api/music/background/delete', methods=['POST'])
-def delete_background_image():
-    """删除服务端的自定义背景 WebP 图像并清理系统配置偏好"""
-    try:
-        path = os.path.join(app_config.BACKGROUNDS_DIR, 'cloud_bg.webp')
-        if os.path.exists(path):
-            os.remove(path)
-        set_preference('custom_bg_enabled', '0')
-        set_preference('custom_bg_sync', '0')
-        set_preference('custom_bg_timestamp', '0')
-        return jsonify({'success': True})
-    except Exception as e:
-        logger.exception(f"清理云端自定义背景失败: {e}")
-        return jsonify({'success': False, 'error': str(e)})

@@ -19,33 +19,27 @@ def handle_get_system_status() -> tuple:
         logger.exception(f"查询库数据统计发生错误: {e}")
         return False, None, str(e)
 
-def handle_get_preferences() -> tuple:
-    """获取自定义背景偏好等用户系统参数配置"""
+
+def handle_get_lyrics_preference() -> tuple:
+    """获取歌词刮削来源偏好"""
     from core.models.preferences import get_preference
     try:
-        prefs = {
-            'custom_bg_enabled': get_preference('custom_bg_enabled', '0') == '1',
-            'custom_bg_sync': get_preference('custom_bg_sync', '0') == '1',
-            'custom_bg_timestamp': get_preference('custom_bg_timestamp', '0')
-        }
-        return True, prefs, None
+        value = get_preference('lyrics_source_preference', 'embedded')
+        return True, {'value': value}, None
     except Exception as e:
-        logger.exception(f"获取偏好设置失败: {e}")
+        logger.exception(f"获取歌词偏好失败: {e}")
         return False, None, str(e)
 
-def handle_save_preferences(prefs: dict) -> tuple:
-    """保存自定义背景偏好等用户系统参数配置"""
+
+def handle_save_lyrics_preference(value: str) -> tuple:
+    """保存歌词刮削来源偏好 (embedded | network)"""
     from core.models.preferences import set_preference
-    if not prefs:
-        return False, None, "参数配置对象不能为空"
+    if value not in ('embedded', 'network'):
+        return False, None, "无效的歌词偏好值，请传入 'embedded' 或 'network'"
     try:
-        if 'custom_bg_enabled' in prefs:
-            set_preference('custom_bg_enabled', '1' if prefs['custom_bg_enabled'] else '0')
-        if 'custom_bg_sync' in prefs:
-            set_preference('custom_bg_sync', '1' if prefs['custom_bg_sync'] else '0')
-        if 'custom_bg_timestamp' in prefs:
-            set_preference('custom_bg_timestamp', prefs['custom_bg_timestamp'])
+        set_preference('lyrics_source_preference', value)
+        logger.info(f"歌词刮削偏好已更新为: {value}")
         return True, None, None
     except Exception as e:
-        logger.exception(f"保存偏好设置失败: {e}")
+        logger.exception(f"保存歌词偏好失败: {e}")
         return False, None, str(e)

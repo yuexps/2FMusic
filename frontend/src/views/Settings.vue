@@ -82,14 +82,6 @@
             </div>
           </div>
 
-          <div
-            class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
-            <div class="flex-1 min-w-0">
-              <h4 class="m-0 mb-1 text-sm font-semibold text-ink">将背景图片云同步</h4>
-              <p class="m-0 text-xs text-body-muted leading-relaxed">开启后将当前背景同步至云端，在其他设备上登录时也会自动拉取应用该背景。</p>
-            </div>
-            <n-switch v-model:value="preferencesStore.customBgSync" @update:value="handlePreferencesChange" />
-          </div>
         </div>
 
         <!-- 缓存设置 -->
@@ -114,6 +106,19 @@
               <p class="m-0 text-xs text-body-muted leading-relaxed">从云端搜刮的歌词直接持久化存入浏览器本地 IndexedDB 中，以提升二次加载效率。</p>
             </div>
             <n-switch v-model:value="cacheLyrics" @update:value="saveCacheSettings" />
+          </div>
+
+          <div
+            class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
+            <div class="flex-1 min-w-0">
+              <h4 class="m-0 mb-1 text-sm font-semibold text-ink">歌词刮削来源</h4>
+              <p class="m-0 text-xs text-body-muted leading-relaxed">优先从音频文件内嵌元数据提取，或是优先从网络聚合搜索获取。</p>
+            </div>
+            <n-radio-group :value="preferencesStore.lyricsSourcePref" @update:value="handleLyricsPrefChange"
+              size="medium" name="lyricsSource">
+              <n-radio-button value="embedded" label="优先内嵌" />
+              <n-radio-button value="network" label="优先网络" />
+            </n-radio-group>
           </div>
         </div>
 
@@ -400,9 +405,10 @@ onUnmounted(() => {
   cleanupResources()
 })
 
-// 背景配置变更
-const handlePreferencesChange = () => {
-  preferencesStore.savePreferences()
+// 歌词刮削来源偏好变更
+const handleLyricsPrefChange = (value: 'embedded' | 'network') => {
+  preferencesStore.saveLyricsPreference(value)
+  message.success(`歌词刮削来源已切换为「${value === 'embedded' ? '优先内嵌' : '优先网络'}」`)
 }
 
 // 选择并上传背景图
@@ -413,21 +419,8 @@ const handleBgUpload = async (e: Event) => {
 
   try {
     message.info('正在设置背景，请稍候...')
-
-    // 1. 原始 Blob 存入本地 IndexedDB，前端不做任何压缩
     await preferencesStore.setLocalBackground(file)
-
-    // 2. 若开启云同步，将原图发送给服务器，由服务端自行压缩
-    if (preferencesStore.customBgSync) {
-      const res = await preferencesStore.uploadCloudBackground(file)
-      if (res.success) {
-        message.success('自定义背景图片已成功同步至云端')
-      } else {
-        message.error(`云端同步失败: ${res.error}`)
-      }
-    } else {
-      message.success('已成功设置本地个性化背景')
-    }
+    message.success('已成功设置本地个性化背景')
   } catch (err: any) {
     message.error('背景设置失败: ' + (err.message || '未知错误'))
   } finally {

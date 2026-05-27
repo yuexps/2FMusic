@@ -180,9 +180,9 @@ onUnmounted(() => {
             :style="{ backgroundImage: `url(${preferencesStore.bgUrl})` }"></div>
           <!-- 侧边栏 -->
           <aside
-            class="w-[260px] h-full flex flex-col shrink-0 z-10 border-r border-border-main box-border bg-sidebar backdrop-saturate-180 backdrop-blur-sidebar max-md:fixed max-md:left-[-260px] max-md:transition-transform max-md:duration-300 max-md:bg-canvas max-md:bg-none"
+            class="w-(--sidebar-width) h-full flex flex-col shrink-0 z-10 border-r border-border-main box-border bg-sidebar backdrop-saturate-180 backdrop-blur-sidebar max-md:fixed max-md:-left-(--sidebar-width) max-md:transition-transform max-md:duration-300 max-md:bg-canvas max-md:bg-none"
             :class="[
-              isSidebarActive ? 'max-md:translate-x-[260px]' : '',
+              isSidebarActive ? 'max-md:translate-x-(--sidebar-width)' : '',
               preferencesStore.customBgEnabled ? 'max-md:bg-white/92 max-md:backdrop-blur-[35px] max-md:backdrop-saturate-180 dark:max-md:bg-[#16171d]/92' : ''
             ]">
             <Sidebar @close-sidebar="isSidebarActive = false" />
@@ -229,6 +229,7 @@ onUnmounted(() => {
 /* 响应式全局缩放支持 */
 :root {
   --ui-scale: 1.0;
+  --sidebar-width: clamp(180px, 18vw, 240px);
 }
 
 body {
