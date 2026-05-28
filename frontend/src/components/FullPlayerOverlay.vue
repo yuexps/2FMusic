@@ -8,7 +8,7 @@
     </div>
 
     <!-- 头部：关闭及状态 -->
-    <header class="h-16 flex items-center justify-between px-6 box-border">
+    <header class="h-16 flex items-center justify-between px-6 box-border lg:px-20">
       <button class="bg-transparent border-none text-white text-[20px] cursor-pointer opacity-60 transition-all duration-150 hover:opacity-100 hover:translate-y-0.5 flex items-center justify-center" @click="emit('close')" title="收起">
         <SvgIcon name="chevron-down" />
       </button>
@@ -22,7 +22,7 @@
     </header>
 
     <!-- 主体：双列布局 -->
-    <main class="fp-body flex-1 flex px-20 py-10 box-border overflow-hidden gap-20 max-md:flex-col max-md:p-5 max-md:gap-4 md:max-lg:px-10 md:max-lg:py-7 md:max-lg:gap-10">
+    <main class="fp-body flex-1 flex px-20 py-10 box-border overflow-hidden gap-12 xl:gap-16 max-md:flex-col max-md:p-5 max-md:gap-4 md:max-lg:px-10 md:max-lg:py-7 md:max-lg:gap-10">
       <!-- 左侧：封面和元数据 -->
       <div class="flex-1 flex flex-col justify-center items-center text-center min-w-0 max-md:flex-[0_0_auto] max-md:flex-row max-md:items-center max-md:text-left max-md:gap-4 max-md:w-full">
         <div class="w-[min(360px,45vw,42vh)] lg:w-[min(380px,45vw,42vh)] xl:w-[min(440px,48vw,46vh)] 2xl:w-[min(480px,50vw,50vh)] aspect-square mb-8 flex justify-center items-center max-md:w-18 max-md:h-18 max-md:mb-0 max-md:shrink-0 md:max-lg:w-[min(240px,40vw,35vh)] md:max-lg:mb-4 xl:mb-10 shadow-[0_20px_40px_rgba(0,0,0,0.35)] dark:shadow-[0_20px_40px_rgba(0,0,0,0.55)] max-md:shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
@@ -37,7 +37,7 @@
       </div>
 
       <!-- Right column: lyrics scroll -->
-      <div class="fp-right flex-[1.2] flex flex-col justify-center overflow-hidden max-md:flex-1 max-md:justify-start max-md:h-0">
+      <div class="fp-right flex-[1.4] flex flex-col justify-center overflow-hidden max-md:flex-1 max-md:justify-start max-md:h-0">
         <div ref="lyricsContainer" class="lyrics-scroll-container h-[85%] overflow-y-auto py-10 box-border mask-[linear-gradient(180deg,transparent_0%,#000_15%,#000_85%,transparent_100%)] max-md:h-full max-md:py-5" :class="{ 'no-lyrics': lyricLines.length === 0 }">
           <div v-if="lyricLines.length === 0" class="empty-lyrics flex items-center justify-center h-full">
             <p class="text-[20px] font-semibold text-white px-4 py-3 text-center active">暂无歌词</p>

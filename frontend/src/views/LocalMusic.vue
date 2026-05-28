@@ -100,7 +100,7 @@
         <SvgIcon name="music" class="text-[36px] text-body-muted mb-4" />
         <h3 class="m-0 mb-2 text-lg font-semibold text-ink">暂无音乐</h3>
         <p class="m-0 text-[13px] text-body-muted" v-if="searchQuery">没有匹配的歌曲，请尝试其他关键词</p>
-        <p class="m-0 text-[13px] text-body-muted" v-else-if="playlistId">当前收藏夹为空，可在“本地音乐”列表中右键加入此收藏夹</p>
+        <p class="m-0 text-[13px] text-body-muted" v-else-if="playlistId">当前收藏夹为空，可在“本地音乐”列表中右键或点击操作按钮加入此收藏夹</p>
         <p class="m-0 text-[13px] text-body-muted" v-else>音乐库为空，请前往“目录管理”添加挂载路径或前往“网易下载”获取</p>
       </div>
 
@@ -126,7 +126,7 @@
               :class="{
                 'text-(--primary) font-semibold': playerStore.currentSong?.id === song.id,
                 'bg-(--primary-alpha-16) backdrop-blur-card border border-(--primary-alpha-10) dark:bg-(--primary-on-dark-alpha-16) dark:border-(--primary-on-dark-alpha-12)': selectedSongIds.has(song.id)
-              }" @click="handleRowClick(song)" @dblclick="playSong(song)">
+              }" @click="handleRowClick(song)" @dblclick="playSong(song)" @contextmenu.prevent="handleContextMenu($event, song)">
               <!-- 复选框 -->
               <div v-if="isBatchMode"
                 class="col-check max-md:[grid-area:check] max-md:w-auto max-md:flex max-md:items-center"
@@ -223,6 +223,18 @@
         </n-space>
       </template>
     </n-modal>
+
+    <!-- 专属右键上下文操作菜单 -->
+    <n-dropdown
+      trigger="manual"
+      placement="bottom-start"
+      :show="showDropdown"
+      :options="dropdownSong ? getRowDropdownOptions(dropdownSong) : []"
+      :x="x"
+      :y="y"
+      @select="handleDropdownSelect"
+      @clickoutside="handleClickOutside"
+    />
   </div>
 </template>
 
@@ -233,6 +245,7 @@ import { useSystemStore } from '../stores/system'
 import { usePlayerStore } from '../stores/player'
 import { useFavoritesStore } from '../stores/favorites'
 import { NDropdown, NCheckbox, NModal, NButton, NInput, NSpace, NVirtualList, NSpin, useMessage } from 'naive-ui'
+import type { DropdownOption } from 'naive-ui'
 import type { Song } from '../types'
 import SvgIcon from '../components/SvgIcon.vue'
 
@@ -501,17 +514,63 @@ const goBackToFavorites = () => {
   router.push('/favorites')
 }
 
-// 行右键/操作菜单选项定义
+// 专属右键上下文菜单控制
+const showDropdown = ref(false)
+const x = ref(0)
+const y = ref(0)
+const dropdownSong = ref<Song | null>(null)
+
+const handleContextMenu = (e: MouseEvent, song: Song) => {
+  e.preventDefault()
+  showDropdown.value = false
+  nextTick(() => {
+    dropdownSong.value = song
+    x.value = e.clientX
+    y.value = e.clientY
+    showDropdown.value = true
+  })
+}
+
+const handleClickOutside = () => {
+  showDropdown.value = false
+}
+
+const handleDropdownSelect = (key: string) => {
+  showDropdown.value = false
+  if (dropdownSong.value) {
+    handleRowAction(key, dropdownSong.value)
+  }
+}
+
+// 行操作菜单选项定义
 const getRowDropdownOptions = (_song: Song) => {
-  const options = [
+  const options: DropdownOption[] = [
     { label: '播放', key: 'play' },
     { label: '添加至队列', key: 'queue' }
   ]
 
-    if (!playlistId.value) {
-      options.push({ label: '添加到收藏夹', key: 'fav' })
-    } else {
-      options.push({ label: '从收藏夹移出', key: 'remove_fav' })
+  if (!playlistId.value) {
+    options.push({
+      label: '添加到收藏夹',
+      key: 'add_to_fav_parent',
+      children: favoritesStore.playlists.map(p => ({
+        label: p.name,
+        key: `fav_${p.id}`
+      }))
+    })
+  } else {
+    options.push({ label: '从当前收藏夹移出', key: 'remove_fav' })
+    const otherPlaylists = favoritesStore.playlists.filter(p => String(p.id) !== String(playlistId.value))
+    if (otherPlaylists.length > 0) {
+      options.push({
+        label: '移动到其他收藏夹',
+        key: 'move_to_fav_parent',
+        children: otherPlaylists.map(p => ({
+          label: p.name,
+          key: `move_${p.id}`
+        }))
+      })
+    }
   }
 
   options.push({ label: '批量管理', key: 'batch' })
@@ -529,9 +588,19 @@ const handleRowAction = async (key: string, song: Song) => {
   } else if (key === 'queue') {
     playerStore.addToQueue(song)
     message.success('已添加到播放队列')
-  } else if (key === 'fav') {
-    const res = await favoritesStore.addFavorite(song.id, 'default', song.title, song.artist)
-    if (res.success) message.success('已成功添加至默认收藏夹')
+  } else if (key.startsWith('fav_')) {
+    const targetPlaylistId = key.substring(4)
+    const targetPlaylist = favoritesStore.playlists.find(p => String(p.id) === String(targetPlaylistId))
+    const playlistName = targetPlaylist ? targetPlaylist.name : '收藏夹'
+    const res = await favoritesStore.addFavorite(song.id, targetPlaylistId, song.title, song.artist)
+    if (res.success) message.success(`已成功添加至收藏夹《${playlistName}》`)
+    else message.error(res.error)
+  } else if (key.startsWith('move_')) {
+    const targetPlaylistId = key.substring(5)
+    const targetPlaylist = favoritesStore.playlists.find(p => String(p.id) === String(targetPlaylistId))
+    const playlistName = targetPlaylist ? targetPlaylist.name : '收藏夹'
+    const res = await favoritesStore.batchMoveFavorites([song.id], playlistId.value, targetPlaylistId)
+    if (res.success) message.success(`已成功移动至收藏夹《${playlistName}》`)
     else message.error(res.error)
   } else if (key === 'remove_fav') {
     const res = await favoritesStore.removeFavorite(song.id, playlistId.value)

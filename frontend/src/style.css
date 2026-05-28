@@ -752,12 +752,10 @@ button,
   background-color: var(--primary) !important;
 }
 
-/* ==========================================================================
-   移动端圆形按钮物理对齐微调补强 (彻底清除 Naive UI 图标偏左瑕疵)
-   ========================================================================== */
+
+
+/* 移动端圆形按钮对齐微调 */
 @media (max-width: 768px) {
-  /* 当 Naive UI 按钮在手机端简化为 w-8 或 w-9 圆形且隐藏文字时， */
-  /* 强行剥离其内部由组件库自带的 .n-button__icon 容器的 margin-right */
   .n-button.max-md\:w-8 .n-button__icon,
   .n-button.max-md\:w-9 .n-button__icon,
   .n-button.max-md\:w-8 .n-button__icon-container,
@@ -768,7 +766,6 @@ button,
     padding: 0px !important;
   }
 
-  /* 强行使内容容器撑满并绝对 flex 居中 */
   .n-button.max-md\:w-8 .n-button__content,
   .n-button.max-md\:w-9 .n-button__content {
     justify-content: center !important;
@@ -777,5 +774,30 @@ button,
     height: 100% !important;
     margin: 0px !important;
     padding: 0px !important;
+  }
+}
+
+/* 修复全局缩放导致的定位弹窗偏移 */
+.v-binder-follower-content {
+  zoom: calc(1 / var(--ui-scale, 1.0)) !important;
+}
+
+.v-binder-follower-content > div {
+  transform: scale(var(--ui-scale, 1.0)) !important;
+  transform-origin: inherit !important;
+}
+
+/* 提高播放队列在自定义背景下的对比度与可读性 */
+.has-custom-bg .queue-drawer {
+  background: rgba(255, 255, 255, 0.88) !important;
+}
+
+:root.theme-dark .has-custom-bg .queue-drawer {
+  background: rgba(28, 28, 33, 0.88) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.theme-light) .has-custom-bg .queue-drawer {
+    background: rgba(28, 28, 33, 0.88) !important;
   }
 }

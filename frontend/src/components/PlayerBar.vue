@@ -53,6 +53,14 @@
             <SvgIcon name="forward" />
           </template>
         </n-button>
+
+        <!-- 播放队列按钮 (桌面端专享居中对称布局) -->
+        <n-button circle text class="text-lg! max-md:hidden!" :class="{ 'text-primary dark:text-primary-on-dark': showQueue }"
+          @click="showQueue = !showQueue" title="播放队列">
+          <template #icon>
+            <SvgIcon name="tasks" />
+          </template>
+        </n-button>
       </div>
 
       <div class="flex items-center gap-3 w-full">
@@ -103,8 +111,8 @@
         </div>
       </div>
 
-      <!-- 播放队列纯图标按钮 (移动端与桌面端通用) -->
-      <n-button circle text class="text-lg!" :class="{ 'text-primary dark:text-primary-on-dark': showQueue }"
+      <!-- 播放队列纯图标按钮 (移动端专用，释出桌面端空间并维持居中控制) -->
+      <n-button circle text class="text-lg! md:hidden!" :class="{ 'text-primary dark:text-primary-on-dark': showQueue }"
         @click="showQueue = !showQueue" title="播放队列">
         <template #icon>
           <SvgIcon name="tasks" />
@@ -114,7 +122,7 @@
 
     <!-- 播放队列抽屉 (Popover/Drawer) -->
     <div v-if="showQueue"
-      class="absolute bottom-22.5 right-6 w-[320px] h-100 max-h-[calc(100vh-120px)] max-h-700:h-[280px]! glass-panel p-4 box-border flex flex-col rounded-2xl z-50 max-md:right-4 max-md:left-4 max-md:w-auto">
+      class="absolute bottom-22.5 right-6 w-[320px] h-100 max-h-[calc(100vh-120px)] max-h-700:h-[280px]! glass-panel queue-drawer p-4 box-border flex flex-col rounded-2xl z-50 max-md:right-4 max-md:left-4 max-md:w-auto">
       <n-tabs type="segment" size="small" v-model:value="queueTab" class="mb-3">
         <n-tab name="playlist" :tab="`当前列表 (${playerStore.playlist.length})`" />
         <n-tab name="queue" :tab="`待播队列 (${playerStore.queue.length})`" />
@@ -158,7 +166,7 @@
         <!-- 标签页：待播队列 -->
         <template v-else>
           <div v-if="playerStore.queue.length === 0" class="text-xs text-body-muted text-center py-8">
-            队列为空，从歌曲列表中右键"添加至队列"
+            队列为空，从歌曲列表中右键或选择“添加至队列”
           </div>
           <n-virtual-list v-else class="-mr-4 pr-4" style="flex:1;min-height:0" :item-size="48"
             :items="playerStore.queue" key-field="id">

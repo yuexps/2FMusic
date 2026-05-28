@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { NConfigProvider, NMessageProvider, NDialogProvider, NGlobalStyle, NButton, darkTheme, useOsTheme } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, NDialogProvider, NGlobalStyle, NButton, NProgress, darkTheme, useOsTheme } from 'naive-ui'
 import type { GlobalThemeOverrides } from 'naive-ui'
 import Sidebar from './components/Sidebar.vue'
 import PlayerBar from './components/PlayerBar.vue'
@@ -9,11 +9,86 @@ import FullPlayerOverlay from './components/FullPlayerOverlay.vue'
 import { useSystemStore } from './stores/system'
 import { usePlayerStore } from './stores/player'
 import { usePreferencesStore } from './stores/preferences'
+import { useFavoritesStore } from './stores/favorites'
 
 const route = useRoute()
 const systemStore = useSystemStore()
 const playerStore = usePlayerStore()
 const preferencesStore = usePreferencesStore()
+const favoritesStore = useFavoritesStore()
+
+const isReady = ref(false)
+
+// 首屏数据就绪真实进度与文本计算
+const loadedCount = ref(0)
+const totalCount = 6
+const progress = computed(() => {
+  return Math.min(100, Math.round((loadedCount.value / totalCount) * 100))
+})
+
+const loadingText = computed(() => {
+  const p = progress.value
+  if (p < 25) return '正在建立安全连接...'
+  if (p < 50) return '正在同步系统配置...'
+  if (p < 75) return '正在唤醒本地歌曲...'
+  if (p < 100) return '正在构建收藏索引...'
+  return '音乐就绪，开启旋律！'
+})
+
+// 1. 同步首屏极速无闪烁设置初始化，杜绝尺寸和主题模式的瞬间闪烁
+try {
+  const savedScale = localStorage.getItem('2fmusic_ui_scale')
+  if (savedScale) {
+    document.documentElement.style.setProperty('--ui-scale', savedScale)
+  }
+
+  const localTheme = localStorage.getItem('2fmusic_theme_mode') || 'system'
+  preferencesStore.themeMode = localTheme as any
+
+  const root = document.documentElement
+  root.classList.remove('theme-light', 'theme-dark')
+  if (localTheme !== 'system') {
+    root.classList.add(`theme-${localTheme}`)
+  }
+} catch (e) {
+  console.error(e)
+}
+
+// 2. 异步并行加载系统状态与全部偏好，逐个监听核心任务resolve情况，同步推进真实百分比
+const initApp = async () => {
+  loadedCount.value = 0
+
+  const tasks = [
+    systemStore.fetchSystemStatus(),
+    preferencesStore.fetchPreferences(),
+    systemStore.fetchSongs(),
+    favoritesStore.fetchPlaylists(),
+    systemStore.fetchNeteaseConfig(),
+    systemStore.fetchNeteaseUserStatus()
+  ]
+
+  try {
+    await Promise.all(
+      tasks.map(async (task) => {
+        try {
+          await task
+        } catch (e) {
+          console.error('Core task failed in preloading:', e)
+        } finally {
+          loadedCount.value++
+        }
+      })
+    )
+  } catch (e) {
+    console.error('Preload stream encountered error:', e)
+  } finally {
+    // 进度达到 100% 后，给用户保留 250ms 的短暂视觉反馈时间，看清进度和欢迎语后优雅切入主页
+    await new Promise(resolve => setTimeout(resolve, 250))
+    isReady.value = true
+  }
+}
+
+initApp()
 
 // 结合系统偏好与用户设置判定暗色模式
 const osThemeRef = useOsTheme()
@@ -59,6 +134,14 @@ const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault()
       playerStore.setVolume(playerStore.volume - 0.05)
       break
+  }
+}
+
+// 鼠标点击后自动释放焦点，消除残留高亮并防止空格键误触二次点击
+const handleMouseUp = () => {
+  const activeEl = document.activeElement as HTMLElement
+  if (activeEl && (activeEl.tagName === 'BUTTON' || activeEl.closest('button'))) {
+    activeEl.blur()
   }
 }
 
@@ -147,25 +230,13 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
 })
 
 onMounted(() => {
-  // 从本地存储恢复全局缩放设置并应用
-  try {
-    const savedScale = localStorage.getItem('2fmusic_ui_scale')
-    if (savedScale) {
-      document.documentElement.style.setProperty('--ui-scale', savedScale)
-    }
-  } catch (e) {
-    console.error(e)
-  }
-
-  systemStore.fetchSystemStatus()
-  preferencesStore.fetchPreferences()
-
-  // 绑定全局按键事件
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('mouseup', handleMouseUp)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('mouseup', handleMouseUp)
 })
 </script>
 
@@ -174,7 +245,25 @@ onUnmounted(() => {
     <n-global-style />
     <n-message-provider placement="bottom">
       <n-dialog-provider>
-        <div class="app-layout" :class="{ 'has-custom-bg': preferencesStore.customBgEnabled }">
+        <!-- 首屏数据就绪过渡遮罩 -->
+        <div v-if="!isReady"
+          class="fixed inset-0 flex flex-col items-center justify-center bg-canvas-parchment text-ink z-99999 gap-5 select-none">
+          <!-- 进度环 -->
+          <div class="relative w-20 h-20 flex items-center justify-center">
+            <n-progress type="circle" :percentage="progress" :stroke-width="7" :show-indicator="false"
+              class="w-full! h-full! transition-all duration-300" />
+            <!-- 环中心等宽高对比度等分比数字 -->
+            <div class="absolute inset-0 flex items-center justify-center">
+              <span class="text-sm font-semibold tracking-tight text-ink font-mono">{{ progress }}%</span>
+            </div>
+          </div>
+          <span
+            class="text-[13px] font-medium tracking-wider text-body-muted animate-pulse mt-1 h-[20px] transition-all duration-300">
+            {{ loadingText }}
+          </span>
+        </div>
+
+        <div v-else class="app-layout" :class="{ 'has-custom-bg': preferencesStore.customBgEnabled }">
           <!-- 自定义磨砂毛玻璃背景 -->
           <div v-if="preferencesStore.customBgEnabled && preferencesStore.bgUrl" class="global-custom-bg"
             :style="{ backgroundImage: `url(${preferencesStore.bgUrl})` }"></div>
