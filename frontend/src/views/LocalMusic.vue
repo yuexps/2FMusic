@@ -421,7 +421,7 @@ const loadData = async () => {
       await favoritesStore.fetchPlaylistSongs(playlistId.value)
     }
   } catch (err) {
-    console.error('Failed to sync library data:', err)
+    console.error('同步音乐库数据失败:', err)
   } finally {
     isLoading.value = false
   }
@@ -453,7 +453,7 @@ onMounted(() => {
       if (state.sortOrder) sortOrder.value = state.sortOrder
     }
   } catch (e) {
-    console.error(e)
+    console.error('恢复排序状态发生异常:', e)
   }
 
   loadData()

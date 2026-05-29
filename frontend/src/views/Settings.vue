@@ -310,7 +310,7 @@ const handleClearCache = async () => {
     try {
       await musicDB.clearAll()
     } catch (e) {
-      console.warn('Failed to clear indexedDB:', e)
+      console.warn('清空 IndexedDB 缓存失败:', e)
     }
 
     // 3. 清理 localStorage 和 sessionStorage 中除了播放器关键状态以外的内容

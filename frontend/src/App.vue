@@ -51,7 +51,7 @@ try {
     root.classList.add(`theme-${localTheme}`)
   }
 } catch (e) {
-  console.error(e)
+  console.error('初始化无闪烁设置发生异常:', e)
 }
 
 // 2. 异步并行加载系统状态与全部偏好，逐个监听核心任务resolve情况，同步推进真实百分比
@@ -73,14 +73,14 @@ const initApp = async () => {
         try {
           await task
         } catch (e) {
-          console.error('Core task failed in preloading:', e)
+          console.error('核心预加载任务失败:', e)
         } finally {
           loadedCount.value++
         }
       })
     )
   } catch (e) {
-    console.error('Preload stream encountered error:', e)
+    console.error('预加载任务流遇到未知错误:', e)
   } finally {
     // 进度达到 100% 后，给用户保留 250ms 的短暂视觉反馈时间，看清进度和欢迎语后优雅切入主页
     await new Promise(resolve => setTimeout(resolve, 250))

@@ -63,7 +63,7 @@ const handleLogin = async (e: Event) => {
       }
     }, 50)
   } catch (err) {
-    console.error('Hashing failed, falling back to plaintext', err)
+    console.error('哈希计算失败，降级使用明文比对', err)
     hashedPassword.value = password.value
     setTimeout(() => {
       if (formRef.value) {

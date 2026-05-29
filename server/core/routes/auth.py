@@ -32,7 +32,7 @@ def require_auth():
     # 豁免静态资源、登录页与图标请求
     if (path.startswith('/assets') or path.startswith('/images') or
             path.startswith('/login') or
-            path in ('/favicon.ico', '/favicon.svg', '/ICON.PNG')):
+            path in ('/ICON.PNG', '/manifest.json')):
         return
 
     # 放行 CORS OPTIONS 预检请求

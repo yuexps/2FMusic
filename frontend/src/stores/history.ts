@@ -20,7 +20,7 @@ export const useHistoryStore = defineStore('history', () => {
       historyList.value = data || []
       localStorage.setItem('2fmusic_history', JSON.stringify(historyList.value))
     } catch (e) {
-      console.error('Failed to fetch play history via WS:', e)
+      console.error('通过 WebSocket 获取播放历史失败:', e)
       // 失败时兜底使用本地缓存
       const saved = localStorage.getItem('2fmusic_history')
       if (saved) {
@@ -37,7 +37,7 @@ export const useHistoryStore = defineStore('history', () => {
       await wsClient.sendRequest('history/add', { song_id: songId })
       await fetchHistory() // 成功添加后静默更新最新列表
     } catch (e) {
-      console.error('Failed to add play history via WS:', e)
+      console.error('通过 WebSocket 添加播放历史失败:', e)
     }
   }
 
@@ -49,7 +49,7 @@ export const useHistoryStore = defineStore('history', () => {
       localStorage.removeItem('2fmusic_history')
       return { success: true }
     } catch (e: any) {
-      console.error('Failed to clear play history via WS:', e)
+      console.error('通过 WebSocket 清除所有播放历史失败:', e)
       return { success: false, error: e.message || '清空失败' }
     }
   }
@@ -62,7 +62,7 @@ export const useHistoryStore = defineStore('history', () => {
       localStorage.setItem('2fmusic_history', JSON.stringify(historyList.value))
       return { success: true }
     } catch (e: any) {
-      console.error('Failed to remove history item via WS:', e)
+      console.error('通过 WebSocket 移除单条播放历史失败:', e)
       return { success: false, error: e.message || '移除记录失败' }
     }
   }

@@ -73,7 +73,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
         lyricsSourcePref.value = data.value as 'embedded' | 'network'
       }
     } catch (e) {
-      console.warn('Failed to fetch lyrics preference:', e)
+      console.warn('获取歌词偏好设置失败:', e)
     }
   }
 
@@ -83,7 +83,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     try {
       await wsClient.sendRequest('system/save_lyrics_preference', { value })
     } catch (e) {
-      console.warn('Failed to save lyrics preference:', e)
+      console.warn('保存歌词偏好设置失败:', e)
     }
   }
 
@@ -126,7 +126,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
       await savePreferences()
       return true
     } catch (e) {
-      console.error('Failed to clear background:', e)
+      console.error('清除背景图失败:', e)
       return false
     }
   }

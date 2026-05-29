@@ -55,10 +55,10 @@ const loadSongCover = async (song: Song): Promise<string> => {
         .then(blob => {
           musicDB.saveCover(song.id, blob)
         })
-        .catch(err => console.debug('Failed to cache cover blob:', err))
+        .catch(err => console.debug('缓存封面数据块失败:', err))
     }
   } catch (e) {
-    console.warn('Failed to load song cover from IndexedDB:', e)
+    console.warn('从 IndexedDB 加载歌曲封面失败:', e)
   }
 
   return getApiUrl(song.album_art || '/ICON.PNG')
@@ -112,7 +112,7 @@ export const usePlayerStore = defineStore('player', () => {
         }
       }
     } catch (e) {
-      console.error('Failed to restore player state:', e)
+      console.error('恢复播放器状态失败:', e)
     }
 
     // 绑定播放器事件
@@ -169,7 +169,7 @@ export const usePlayerStore = defineStore('player', () => {
         audio.src = getApiUrl(`/api/music/play/${currentSong.value.id}`)
       }
       if (audio.src) {
-        audio.play().catch((err) => console.error('Play failed:', err))
+        audio.play().catch((err) => console.error('播放音频失败:', err))
       }
     }
   }
@@ -203,7 +203,7 @@ export const usePlayerStore = defineStore('player', () => {
       }
     }
 
-    audio.play().catch((err) => console.error('Play failed:', err))
+    audio.play().catch((err) => console.error('播放音频失败:', err))
     isPlaying.value = true
     saveState()
   }
@@ -234,7 +234,7 @@ export const usePlayerStore = defineStore('player', () => {
 
     if (playMode.value === 'single' && currentSong.value) {
       seek(0)
-      audio?.play().catch(e => console.error(e))
+      audio?.play().catch(e => console.error('播放音频错误:', e))
       return
     }
 
@@ -287,8 +287,15 @@ export const usePlayerStore = defineStore('player', () => {
       const historyStore = useHistoryStore()
       historyStore.addHistory(song.id)
     } catch (e) {
-      console.error('Failed to sync history to backend:', e)
+      console.error('同步播放历史至后端失败:', e)
     }
+  }
+
+  const currentLyric = ref('')
+
+  const updateLyric = (lyricText: string) => {
+    currentLyric.value = lyricText
+    updateMediaSession()
   }
 
   // 更新 MediaSession 元数据
@@ -296,9 +303,16 @@ export const usePlayerStore = defineStore('player', () => {
     if (!('mediaSession' in navigator) || !currentSong.value) return
 
     const song = currentSong.value
+    const displayTitle = currentLyric.value 
+      ? `${song.title} - ${song.artist}` 
+      : song.title
+    const displayArtist = currentLyric.value 
+      ? currentLyric.value 
+      : song.artist
+
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: song.title,
-      artist: song.artist,
+      title: displayTitle,
+      artist: displayArtist,
       album: song.album || '',
       artwork: [
         {
@@ -337,7 +351,7 @@ export const usePlayerStore = defineStore('player', () => {
         position: audio.currentTime || 0
       })
     } catch (e) {
-      console.debug('MediaSession setPositionState failed:', e)
+      console.debug('媒体会话设置播放进度状态失败:', e)
     }
   }
 
@@ -359,7 +373,7 @@ export const usePlayerStore = defineStore('player', () => {
           fetch(getApiUrl(artUrl))
             .then(res => res.blob())
             .then(blob => musicDB.saveCover(song.id, blob))
-            .catch(err => console.debug('Fetch album art for cache failed:', err))
+            .catch(err => console.debug('为缓存获取专辑封面失败:', err))
         }
 
         if (currentSong.value && currentSong.value.id === song.id) {
@@ -390,7 +404,7 @@ export const usePlayerStore = defineStore('player', () => {
         saveState()
       }
     } catch (e) {
-      console.warn('Failed to fetch album art via WS:', e)
+      console.warn('通过 WS 获取专辑封面失败:', e)
     }
   }
 
@@ -413,6 +427,8 @@ export const usePlayerStore = defineStore('player', () => {
     addToQueue,
     removeFromQueue,
     clearQueue,
-    fetchAlbumArt
+    fetchAlbumArt,
+    currentLyric,
+    updateLyric
   }
 })

@@ -65,7 +65,7 @@ export const useSystemStore = defineStore('system', () => {
 
     // 连接成功时获取初始状态
     wsClient.subscribe('open', () => {
-      console.log('WS Open: Fetching initial library state...')
+      console.log('WebSocket 连接开启：正在拉取初始音乐库状态...')
       fetchSystemStatus()
       fetchSongs()
       fetchMountPoints()
@@ -75,7 +75,7 @@ export const useSystemStore = defineStore('system', () => {
 
     // 库扫描状态
     wsClient.subscribe('scan_status', (data: any) => {
-      console.log('WS: Received scan status:', data)
+      console.log('WebSocket：收到扫描状态更新:', data)
       const oldVersion = status.value.library_version
       status.value = {
         ...status.value,
@@ -88,7 +88,7 @@ export const useSystemStore = defineStore('system', () => {
 
     // 库文件变更通知
     wsClient.subscribe('library_changed', (data: any) => {
-      console.log('WS: Received library changed:', data)
+      console.log('WebSocket：收到音乐库变更通知:', data)
       if (data && data.library_version) {
         status.value.library_version = data.library_version
       }
@@ -98,7 +98,7 @@ export const useSystemStore = defineStore('system', () => {
 
     // 下载任务进度
     wsClient.subscribe('download_status', (data: any) => {
-      console.log('WS: Received download task status:', data)
+      console.log('WebSocket：收到下载任务状态更新:', data)
       if (data && data.task_id) {
         downloadTasks.value[data.task_id] = data as DownloadTask
       }
@@ -113,7 +113,7 @@ export const useSystemStore = defineStore('system', () => {
       // 同步缓存
       localStorage.setItem('2fmusic_playlist', JSON.stringify(songs.value))
     } catch (e) {
-      console.error('Failed to fetch songs via WS:', e)
+      console.error('通过 WebSocket 获取歌曲列表失败:', e)
     }
   }
 
@@ -133,8 +133,8 @@ export const useSystemStore = defineStore('system', () => {
       await wsClient.sendRequest('music/clear_metadata', { song_id: songId })
 
       // 2. 清除前端本地数据库 IndexedDB 中的对应缓存
-      await musicDB.deleteCover(songId).catch(err => console.warn('Failed to delete cover in IndexedDB:', err))
-      await musicDB.deleteLyrics(songId).catch(err => console.warn('Failed to delete lyrics in IndexedDB:', err))
+      await musicDB.deleteCover(songId).catch(err => console.warn('从 IndexedDB 删除封面失败:', err))
+      await musicDB.deleteLyrics(songId).catch(err => console.warn('从 IndexedDB 删除歌词失败:', err))
 
       // 3. 清除前端内存缓存池中的 Object URL，防止继续使用旧的 Blob URL
       coverCacheManager.delete(songId)
@@ -148,8 +148,8 @@ export const useSystemStore = defineStore('system', () => {
           artist: targetSong.artist,
           filename: targetSong.filename
         }
-        wsClient.sendRequest('music/album-art', payload).catch(e => console.warn('Re-fetch album art failed:', e))
-        wsClient.sendRequest('music/lyrics', payload).catch(e => console.warn('Re-fetch lyrics failed:', e))
+        wsClient.sendRequest('music/album-art', payload).catch(e => console.warn('重新获取专辑封面失败:', e))
+        wsClient.sendRequest('music/lyrics', payload).catch(e => console.warn('重新获取歌词失败:', e))
       }
 
       return { success: true }
@@ -164,7 +164,7 @@ export const useSystemStore = defineStore('system', () => {
       const data = await wsClient.sendRequest('mount/list')
       mountPoints.value = data
     } catch (e) {
-      console.error('Failed to fetch mount points via WS:', e)
+      console.error('通过 WebSocket 获取目录挂载点失败:', e)
     }
   }
 
@@ -212,7 +212,7 @@ export const useSystemStore = defineStore('system', () => {
       const data = await wsClient.sendRequest('system/get_status')
       status.value = data
     } catch (e) {
-      console.error('Failed to fetch system status via WS:', e)
+      console.error('通过 WebSocket 获取系统状态失败:', e)
     }
   }
 
@@ -223,7 +223,7 @@ export const useSystemStore = defineStore('system', () => {
       neteaseConfig.value = data
       localStorage.setItem('2fmusic_netease_config', JSON.stringify(data))
     } catch (e) {
-      console.error('Failed to fetch netease config via WS:', e)
+      console.error('通过 WebSocket 获取网易云配置失败:', e)
     }
   }
 
@@ -260,7 +260,7 @@ export const useSystemStore = defineStore('system', () => {
       clearNeteaseRecommendCache() // 退出登录时清空每日推荐列表缓存
       return { success: true }
     } catch (e) {
-      console.error('Failed to logout netease via WS:', e)
+      console.error('通过 WebSocket 登出网易云失败:', e)
       return { success: false }
     }
   }
@@ -275,7 +275,7 @@ export const useSystemStore = defineStore('system', () => {
       localStorage.setItem('2fmusic_netease_recommend', JSON.stringify(neteaseRecommendSongs.value))
       return neteaseRecommendSongs.value
     } catch (e) {
-      console.error('Failed to fetch netease recommend songs via WS:', e)
+      console.error('通过 WebSocket 获取网易云每日推荐歌曲失败:', e)
       throw e
     }
   }
@@ -327,7 +327,7 @@ export const useSystemStore = defineStore('system', () => {
       const data = await wsClient.sendRequest('netease/install_status')
       dockerInstallStatus.value = data
     } catch (e) {
-      console.error('Failed to fetch docker install status via WS:', e)
+      console.error('通过 WebSocket 获取 Docker 安装状态失败:', e)
     }
   }
 
@@ -336,7 +336,7 @@ export const useSystemStore = defineStore('system', () => {
       const data = await wsClient.sendRequest('netease/check_container')
       dockerContainerStatus.value = data
     } catch (e) {
-      console.error('Failed to check docker container via WS:', e)
+      console.error('通过 WebSocket 检查 Docker 容器失败:', e)
     }
   }
 

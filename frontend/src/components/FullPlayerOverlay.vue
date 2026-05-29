@@ -187,10 +187,12 @@ const loadLyricsForSong = async (song: any, skipCache: boolean = false) => {
     rawLyrics.value = ''
     lyricLines.value = []
     currentLyricIndex.value = -1
+    playerStore.updateLyric('')
     return
   }
 
   try {
+    playerStore.updateLyric('')
     const cacheEnabled = localStorage.getItem('2fmusic_cache_lyrics') === 'true'
     if (cacheEnabled && !skipCache) {
       const cachedLyrics = await musicDB.getLyrics(song.id)
@@ -215,7 +217,7 @@ const loadLyricsForSong = async (song: any, skipCache: boolean = false) => {
 
       if (cacheEnabled) {
         musicDB.saveLyrics(song.id, data.lyrics).catch(err => {
-          console.debug('Failed to save lyrics to IndexedDB:', err)
+          console.debug('保存歌词到 IndexedDB 失败:', err)
         })
       }
     } else {
@@ -223,7 +225,7 @@ const loadLyricsForSong = async (song: any, skipCache: boolean = false) => {
       lyricLines.value = []
     }
   } catch (e) {
-    console.error('Failed to load lyrics:', e)
+    console.error('加载歌词失败:', e)
     rawLyrics.value = ''
     lyricLines.value = []
   }
@@ -300,7 +302,12 @@ const parseLyrics = (lrc: string) => {
 }
 
 watch(() => playerStore.currentTime, (time) => {
-  if (lyricLines.value.length === 0) return
+  if (lyricLines.value.length === 0) {
+    if (playerStore.currentLyric) {
+      playerStore.updateLyric('')
+    }
+    return
+  }
 
   let targetIndex = -1
   for (let i = 0; i < lyricLines.value.length; i++) {
@@ -314,6 +321,15 @@ watch(() => playerStore.currentTime, (time) => {
   if (targetIndex !== currentLyricIndex.value) {
     currentLyricIndex.value = targetIndex
     scrollToActiveLyric()
+
+    // 动态同步推送歌词至系统控制卡片/锁屏
+    const activeLine = lyricLines.value[targetIndex]
+    if (activeLine) {
+      const texts = getLineTexts(activeLine)
+      playerStore.updateLyric(texts.join(' | '))
+    } else {
+      playerStore.updateLyric('')
+    }
   }
 })
 
@@ -382,7 +398,7 @@ const copyText = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       message.success('路径已成功复制到剪贴板')
     }).catch(err => {
-      console.error('Copy failed:', err)
+      console.error('复制失败:', err)
       message.error('复制失败')
     })
   } else {
@@ -442,7 +458,7 @@ const handleMenuSelect = async (key: string) => {
       }
     } catch (err) {
       msgInstance.destroy()
-      console.error('Re-scrape failed:', err)
+      console.error('重新刮削失败:', err)
       message.error('刮削过程发生异常，请重试')
     }
   } else if (key === 'song_info') {
@@ -465,7 +481,7 @@ const handleMenuSelect = async (key: string) => {
       URL.revokeObjectURL(blobUrl)
       message.success('已成功保存歌曲')
     } catch (err) {
-      console.error('Download failed:', err)
+      console.error('下载歌曲失败:', err)
       message.error('下载歌曲失败')
     }
   } else if (key === 'delete_song') {
@@ -503,7 +519,7 @@ const handleConfirmDelete = async () => {
       message.error(res.error || '删除失败')
     }
   } catch (err) {
-    console.error('Delete failed:', err)
+    console.error('删除歌曲失败:', err)
     message.error('删除歌曲失败')
   }
 }

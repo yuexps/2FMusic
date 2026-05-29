@@ -15,7 +15,7 @@ export const useFavoritesStore = defineStore('favorites', () => {
       playlists.value = data
       localStorage.setItem('2fmusic_cached_playlists', JSON.stringify(playlists.value))
     } catch (e) {
-      console.error('Failed to fetch playlists via WS:', e)
+      console.error('通过 WebSocket 获取收藏夹列表失败:', e)
     }
   }
 
@@ -28,7 +28,7 @@ export const useFavoritesStore = defineStore('favorites', () => {
         localStorage.setItem('2fmusic_favs', JSON.stringify(favoriteSongIds.value))
       }
     } catch (e) {
-      console.error('Failed to fetch playlist songs via WS:', e)
+      console.error('通过 WebSocket 获取收藏夹内歌曲失败:', e)
     }
   }
 

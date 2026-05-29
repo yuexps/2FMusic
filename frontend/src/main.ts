@@ -90,7 +90,7 @@ async function applyCachedSrc(el: HTMLImageElement, binding: any) {
           }
         })
         .catch(err => {
-          console.debug('v-cached-src fetch and cache failed, fallback to direct src:', err)
+          console.debug('v-cached-src 获取和缓存图片失败，降级使用直链 src:', err)
           if ((el as any)._lastReqId === currentReqId) {
             el.src = getApiUrl(src)
           }

@@ -355,7 +355,7 @@ const loadRecommendSongs = async () => {
     const data = await systemStore.fetchNeteaseRecommendSongs()
     songsList.value = data || []
   } catch (e: any) {
-    console.error('Failed to load daily recommend songs:', e)
+    console.error('加载网易云每日推荐歌曲失败:', e)
   } finally {
     isSearching.value = false
   }
