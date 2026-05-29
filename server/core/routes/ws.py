@@ -80,8 +80,6 @@ def dispatch_ws_action(action: str, data: dict) -> tuple:
                 handle_get_playlist_songs,
                 handle_add_favorite,
                 handle_remove_favorite,
-                handle_batch_add_favorites,
-                handle_batch_remove_favorites,
                 handle_batch_move_favorites
             )
             if action == 'favorite/list_playlists':
@@ -93,13 +91,16 @@ def dispatch_ws_action(action: str, data: dict) -> tuple:
             elif action == 'favorite/playlist_songs':
                 return handle_get_playlist_songs(data.get('playlist_id'))
             elif action == 'favorite/add':
-                return handle_add_favorite(data.get('song_id'), data.get('playlist_id'), data.get('title'), data.get('artist'))
+                return handle_add_favorite(
+                    song_ids=data.get('song_ids'),
+                    playlist_ids=data.get('playlist_ids'),
+                    songs=data.get('songs')
+                )
             elif action == 'favorite/delete':
-                return handle_remove_favorite(data.get('song_id'), data.get('playlist_id'))
-            elif action == 'favorite/batch_add':
-                return handle_batch_add_favorites(data.get('song_ids'), data.get('playlist_ids'), data.get('songs'))
-            elif action == 'favorite/batch_delete':
-                return handle_batch_remove_favorites(data.get('song_ids'), data.get('playlist_ids'))
+                return handle_remove_favorite(
+                    song_ids=data.get('song_ids'),
+                    playlist_ids=data.get('playlist_ids')
+                )
             elif action == 'favorite/batch_move':
                 return handle_batch_move_favorites(data.get('song_ids'), data.get('from_playlist_id'), data.get('to_playlist_id'))
 
@@ -125,11 +126,8 @@ def dispatch_ws_action(action: str, data: dict) -> tuple:
                 handle_netease_login_status,
                 handle_netease_logout,
                 handle_netease_login_qrcode,
-                handle_netease_login_check,
                 handle_netease_config,
                 handle_netease_resolve,
-                handle_netease_playlist_detail,
-                handle_netease_song_detail,
                 handle_download_netease_music,
                 handle_get_netease_task_detail,
                 handle_get_install_status,
@@ -146,18 +144,13 @@ def dispatch_ws_action(action: str, data: dict) -> tuple:
                 return handle_netease_logout()
             elif action == 'netease/login_qrcode':
                 return handle_netease_login_qrcode()
-            elif action == 'netease/login_check':
-                return handle_netease_login_check(data.get('key'))
             elif action == 'netease/get_config':
                 return handle_netease_config('GET')
             elif action == 'netease/save_config':
                 return handle_netease_config('POST', data.get('download_dir'), data.get('api_base'))
             elif action == 'netease/resolve':
                 return handle_netease_resolve(data.get('input'))
-            elif action == 'netease/playlist':
-                return handle_netease_playlist_detail(data.get('id'))
-            elif action == 'netease/song':
-                return handle_netease_song_detail(data.get('id'))
+
             elif action == 'netease/download':
                 return handle_download_netease_music(data)
             elif action == 'netease/task_status':

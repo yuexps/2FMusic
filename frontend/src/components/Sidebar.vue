@@ -29,7 +29,7 @@
     </nav>
 
     <!-- 扫描进度与状态底栏 -->
-    <div v-if="systemStore.status.scanning || systemStore.status.is_scraping" class="glass-card p-3 box-border mt-auto">
+    <div v-if="systemStore.status.scanning || systemStore.status.is_scraping" class="glass-card p-3 rounded-xl box-border mt-auto">
       <div class="text-xs font-semibold text-primary mb-2">
         <span>{{ systemStore.status.scanning ? '正在扫描音乐库...' : '正在自动刮削元数据...' }}</span>
       </div>

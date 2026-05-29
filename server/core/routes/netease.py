@@ -239,6 +239,60 @@ def handle_netease_logout() -> tuple:
         logger.warning(f"网易云退出登录失败: {e}")
         return False, None, "退出失败"
 
+def poll_netease_qr_status(key: str):
+    """后台线程：轮询检测网易云扫码状态并进行 WebSocket 实时推送"""
+    from core.routes.ws import broadcast_ws_message
+    
+    logger.info(f"启动网易云扫码后台监听线程: {key}")
+    last_status = None
+    start_time = time.time()
+    max_duration = 300  # 最多轮询 5 分钟
+    
+    while time.time() - start_time < max_duration:
+        try:
+            resp = call_netease_api('/login/qr/check', {'key': key, 'timestamp': int(time.time() * 1000)}, need_cookie=False)
+            code = resp.get('code')
+            message = resp.get('message')
+            cookie_str = resp.get('cookie')
+            if not cookie_str and isinstance(resp.get('cookies'), list):
+                cookie_str = '; '.join(resp.get('cookies'))
+                
+            status_map = {
+                800: 'expired',
+                801: 'waiting',
+                802: 'scanned',
+                803: 'authorized'
+            }
+            status = status_map.get(code, 'unknown')
+            
+            # 如果状态发生变化，广播推送给前端
+            if status != last_status:
+                logger.info(f"网易云扫码状态变化: {last_status} -> {status} (key: {key})")
+                last_status = status
+                
+                broadcast_ws_message('netease_login_status', {
+                    'key': key,
+                    'status': status,
+                    'message': message
+                })
+                
+            if status == 'authorized' and cookie_str:
+                save_netease_cookie(cookie_str)
+                clear_netease_user_cache()
+                logger.info(f"网易云扫码登录成功，已保存 Cookie，线程优雅退出 (key: {key})")
+                break
+                
+            if status in ('expired', 'unknown'):
+                logger.info(f"网易云扫码状态为 {status}，线程优雅退出 (key: {key})")
+                break
+                
+        except Exception as e:
+            logger.warning(f"网易云扫码后台轮询异常: {e}")
+            
+        time.sleep(2)
+    else:
+        logger.info(f"网易云扫码后台轮询超时退出 (key: {key})")
+
 def handle_netease_login_qrcode() -> tuple:
     """获取扫码登录二维码"""
     try:
@@ -250,36 +304,14 @@ def handle_netease_login_qrcode() -> tuple:
         qrimg = qr_resp.get('data', {}).get('qrimg')
         if not qrimg:
             return False, None, "获取二维码失败"
+            
+        # 启动后台监听线程
+        threading.Thread(target=poll_netease_qr_status, args=(unikey,), daemon=True).start()
+        
         return True, {'unikey': unikey, 'qrimg': qrimg}, None
     except Exception as e:
         logger.warning(f"生成网易云二维码失败: {e}")
         return False, None, "二维码生成失败"
-
-def handle_netease_login_check(key: str) -> tuple:
-    """轮询检测扫码状态"""
-    if not key:
-        return False, None, "缺少 key"
-    try:
-        resp = call_netease_api('/login/qr/check', {'key': key, 'timestamp': int(time.time() * 1000)}, need_cookie=False)
-        code = resp.get('code')
-        message = resp.get('message')
-        cookie_str = resp.get('cookie')
-        if not cookie_str and isinstance(resp.get('cookies'), list):
-            cookie_str = '; '.join(resp.get('cookies'))
-            
-        if code == 803 and cookie_str:
-            save_netease_cookie(cookie_str)
-            clear_netease_user_cache()
-            return True, {'status': 'authorized', 'message': message}, None
-        status_map = {
-            800: 'expired',
-            801: 'waiting',
-            802: 'scanned'
-        }
-        return True, {'status': status_map.get(code, 'unknown'), 'message': message}, None
-    except Exception as e:
-        logger.warning(f"扫码检查失败: {e}")
-        return False, None, "扫码轮询失败"
 
 def handle_netease_config(method: str, download_dir: str = None, api_base: str = None) -> tuple:
     """读写网易云下载位置及 API Base 根路径设置"""
@@ -347,31 +379,7 @@ def handle_netease_resolve(raw_input: str) -> tuple:
         logger.warning(f"解析网易云链接失败: {e}")
         return False, None, "解析失败，请确认链接有效且 API 服务正常"
 
-def handle_netease_playlist_detail(playlist_id: str) -> tuple:
-    """获取歌单内的所有曲目"""
-    parsed_input = _resolve_netease_input(playlist_id, prefer='playlist')
-    if not parsed_input or parsed_input.get('type') != 'playlist':
-        return False, None, "缺少歌单链接或无法识别"
-    try:
-        songs = _fetch_playlist_songs(parsed_input['id'])
-        return True, {'name': '', 'id': parsed_input['id'], 'data': songs}, None
-    except Exception as e:
-        logger.warning(f"歌单获取失败: {e}")
-        return False, None, "获取歌单失败"
 
-def handle_netease_song_detail(song_id: str) -> tuple:
-    """获取单曲元数据详情"""
-    parsed_input = _resolve_netease_input(song_id, prefer='song')
-    if not parsed_input:
-        return False, None, "缺少歌曲链接或ID"
-    if parsed_input.get('type') == 'playlist':
-        return False, None, "检测到歌单链接，请切换至歌单解析"
-    try:
-        parsed = _fetch_song_detail(parsed_input['id'])
-        return True, {'id': parsed_input['id'], 'data': parsed}, None
-    except Exception as e:
-        logger.warning(f"获取单曲详情失败: {e}")
-        return False, None, "获取歌曲信息失败"
 
 def handle_download_netease_music(payload: dict) -> tuple:
     """异步下载单曲"""

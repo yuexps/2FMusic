@@ -62,55 +62,33 @@ def handle_get_playlist_songs(playlist_id: str) -> tuple:
         logger.exception(f"获取收藏夹歌曲失败，ID: {playlist_id}, 错误: {e}")
         return False, None, str(e)
 
-def handle_add_favorite(song_id: str, playlist_id: str = 'default', title: str = '', artist: str = '') -> tuple:
-    """将特定曲目添加至选定收藏夹"""
-    if not song_id:
-        return False, None, "歌曲ID不能为空"
-    playlist_id = playlist_id or 'default'
+def handle_add_favorite(song_ids: list, playlist_ids: list = None, songs: dict = None) -> tuple:
+    """将歌曲批量添加至选定收藏夹"""
+    if not song_ids:
+        return False, None, "歌曲ID列表不能为空"
+
+    p_ids = playlist_ids if playlist_ids else ['default']
+    songs_meta = songs or {}
+
     try:
-        add_song_to_favorite(song_id, playlist_id, title, artist)
-        return True, None, None
+        res = batch_add_to_favorites(song_ids, p_ids, songs_meta)
+        return True, res, None
     except Exception as e:
         logger.exception(f"添加收藏失败: {e}")
-        return False, None, "添加失败"
+        return False, None, str(e)
 
-def handle_remove_favorite(song_id: str, playlist_id: str = 'default') -> tuple:
-    """从选定收藏夹中移除特定曲目"""
-    if not song_id:
-        return False, None, "歌曲ID不能为空"
-    playlist_id = playlist_id or 'default'
-    try:
-        remove_song_from_favorite(song_id, playlist_id)
-        return True, None, None
-    except Exception as e:
-        logger.exception(f"取消收藏失败: {e}")
-        return False, None, "移除失败"
-
-def handle_batch_add_favorites(song_ids: list, playlist_ids: list = None, songs: dict = None) -> tuple:
-    """批量添加歌曲到多个收藏夹"""
+def handle_remove_favorite(song_ids: list, playlist_ids: list = None) -> tuple:
+    """从选定收藏夹中批量移除歌曲"""
     if not song_ids:
         return False, None, "歌曲ID列表不能为空"
-    if not playlist_ids:
-        playlist_ids = ['default']
-    songs = songs or {}
-    try:
-        res = batch_add_to_favorites(song_ids, playlist_ids, songs)
-        return True, res, None
-    except Exception as e:
-        logger.exception(f"批量添加收藏失败: {e}")
-        return False, None, "批量添加失败"
 
-def handle_batch_remove_favorites(song_ids: list, playlist_ids: list) -> tuple:
-    """批量从多个收藏夹中移除多首歌曲"""
-    if not song_ids:
-        return False, None, "歌曲ID列表不能为空"
-    if not playlist_ids:
-        return False, None, "收藏夹ID列表不能为空"
+    p_ids = playlist_ids if playlist_ids else ['default']
+
     try:
-        res = batch_remove_from_favorites(song_ids, playlist_ids)
+        res = batch_remove_from_favorites(song_ids, p_ids)
         return True, res, None
     except Exception as e:
-        logger.exception(f"批量移除收藏失败: {e}")
+        logger.exception(f"移除收藏失败: {e}")
         return False, None, str(e)
 
 def handle_batch_move_favorites(song_ids: list, from_playlist_id: str, to_playlist_id: str) -> tuple:

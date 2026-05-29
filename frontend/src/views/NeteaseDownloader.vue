@@ -214,7 +214,7 @@
     </div>
 
     <!-- 扫码登录模态框 -->
-    <n-modal v-model:show="showQrModal" preset="dialog" title="扫码登录网易云" :closable="true" @after-leave="cleanupQrTimer">
+    <n-modal v-model:show="showQrModal" preset="dialog" title="扫码登录网易云" :closable="true" @after-leave="resetQrState">
       <div class="flex justify-center py-4">
         <div class="flex flex-col items-center gap-4">
           <img v-if="qrImage" :src="qrImage" alt="QR Code"
@@ -283,7 +283,6 @@ const qrImage = ref('')
 const qrKey = ref('')
 const qrStatus = ref<'waiting' | 'scanned' | 'expired' | 'success' | 'idle'>('idle')
 const qrStatusText = ref('加载中...')
-let qrCheckTimer: number | null = null
 
 const qrStatusClass = computed(() => {
   return {
@@ -306,7 +305,6 @@ const openQrModal = async () => {
       qrImage.value = data.qrimg // Base64 图片
       qrStatus.value = 'waiting'
       qrStatusText.value = '请打开网易云音乐 APP 扫码登录'
-      startQrCheckPoll()
     } else {
       qrStatusText.value = '获取二维码失败，请重试'
     }
@@ -315,43 +313,11 @@ const openQrModal = async () => {
   }
 }
 
-const startQrCheckPoll = () => {
-  cleanupQrTimer()
-  qrCheckTimer = window.setInterval(async () => {
-    try {
-      const data = await wsClient.sendRequest('netease/login_check', { key: qrKey.value })
-      if (data) {
-        const stat = data.status // authorized, scanned, expired, waiting
-        if (stat === 'authorized') {
-          qrStatus.value = 'success'
-          qrStatusText.value = '授权登录成功！'
-          message.success('登录成功')
-          cleanupQrTimer()
-          setTimeout(async () => {
-            showQrModal.value = false
-            systemStore.clearNeteaseRecommendCache() // 登录成功，清空旧账号的每日推荐缓存
-            await systemStore.fetchNeteaseUserStatus()
-          }, 1500)
-        } else if (stat === 'scanned') {
-          qrStatus.value = 'scanned'
-          qrStatusText.value = '已扫码，请在手机上点击确认登录'
-        } else if (stat === 'expired') {
-          qrStatus.value = 'expired'
-          qrStatusText.value = '二维码已过期，请重新点击登录获取'
-          cleanupQrTimer()
-        }
-      }
-    } catch (e) {
-      console.error(e)
-    }
-  }, 2000)
-}
-
-const cleanupQrTimer = () => {
-  if (qrCheckTimer) {
-    clearInterval(qrCheckTimer)
-    qrCheckTimer = null
-  }
+const resetQrState = () => {
+  qrImage.value = ''
+  qrKey.value = ''
+  qrStatus.value = 'idle'
+  qrStatusText.value = ''
 }
 
   // 批量选择
@@ -586,12 +552,40 @@ watch(() => songsList.value, () => {
   })
 }, { deep: true })
 
+let unsubscribeLoginStatus: (() => void) | null = null
+
 onMounted(() => {
   systemStore.fetchNeteaseConfig()
   systemStore.fetchNeteaseUserStatus()
 
   // 初始化 WebSocket 连接
   systemStore.initWebSocket()
+
+  // 订阅网易云扫码登录状态主动推送
+  unsubscribeLoginStatus = wsClient.subscribe('netease_login_status', (data) => {
+    if (!data || data.key !== qrKey.value) return
+    
+    const stat = data.status // authorized, scanned, expired, waiting
+    if (stat === 'authorized') {
+      qrStatus.value = 'success'
+      qrStatusText.value = '授权登录成功！'
+      message.success('登录成功')
+      setTimeout(async () => {
+        showQrModal.value = false
+        systemStore.clearNeteaseRecommendCache() // 登录成功，清空旧账号的每日推荐缓存
+        await systemStore.fetchNeteaseUserStatus()
+      }, 1500)
+    } else if (stat === 'scanned') {
+      qrStatus.value = 'scanned'
+      qrStatusText.value = '已扫码，请在手机上点击确认登录'
+    } else if (stat === 'expired') {
+      qrStatus.value = 'expired'
+      qrStatusText.value = '二维码已过期，请重新点击登录获取'
+    } else if (stat === 'waiting') {
+      qrStatus.value = 'waiting'
+      qrStatusText.value = '请打开网易云音乐 APP 扫码登录'
+    }
+  })
 
   // 若当前正在部署 Docker，继续拉取
   if (systemStore.dockerInstallStatus.status === 'running') {
@@ -602,6 +596,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  cleanupQrTimer()
+  if (unsubscribeLoginStatus) {
+    unsubscribeLoginStatus()
+    unsubscribeLoginStatus = null
+  }
 })
 </script>

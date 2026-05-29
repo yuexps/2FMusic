@@ -353,9 +353,13 @@ const toggleFavorite = async () => {
   if (!playerStore.currentSong) return
   const song = playerStore.currentSong
   if (isFavorited.value) {
-    await favoritesStore.removeFavorite(song.id, 'default')
+    await favoritesStore.removeFavorite([song.id], ['default'])
   } else {
-    await favoritesStore.addFavorite(song.id, 'default', song.title, song.artist)
+    await favoritesStore.addFavorite(
+      [song.id],
+      ['default'],
+      { [song.id]: { title: song.title, artist: song.artist } }
+    )
   }
 }
 

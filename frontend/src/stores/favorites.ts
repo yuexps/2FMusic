@@ -57,14 +57,20 @@ export const useFavoritesStore = defineStore('favorites', () => {
     }
   }
 
-  // 添加歌曲到收藏夹
-  const addFavorite = async (songId: string, playlistId: string = 'default', title: string = '', artist: string = '') => {
+  // 添加歌曲到收藏夹 (统一以列表形式)
+  const addFavorite = async (
+    songIds: string[],
+    playlistIds: string[] = ['default'],
+    songsInfo?: Record<string, { title: string; artist: string }>
+  ) => {
     try {
-      await wsClient.sendRequest('favorite/add', { song_id: songId, playlist_id: playlistId, title, artist })
-      if (playlistId === currentPlaylistId.value) {
-        if (!favoriteSongIds.value.includes(songId)) {
-          favoriteSongIds.value.push(songId)
-        }
+      await wsClient.sendRequest('favorite/add', {
+        song_ids: songIds,
+        playlist_ids: playlistIds,
+        songs: songsInfo || {}
+      })
+      if (playlistIds.includes(currentPlaylistId.value)) {
+        await fetchPlaylistSongs(currentPlaylistId.value)
       }
       await fetchPlaylists() // 更新歌曲统计
       return { success: true }
@@ -73,52 +79,23 @@ export const useFavoritesStore = defineStore('favorites', () => {
     }
   }
 
-  // 从收藏夹移除歌曲
-  const removeFavorite = async (songId: string, playlistId: string = 'default') => {
+  // 从收藏夹移除歌曲 (统一以列表形式)
+  const removeFavorite = async (
+    songIds: string[],
+    playlistIds: string[] = ['default']
+  ) => {
     try {
-      await wsClient.sendRequest('favorite/delete', { song_id: songId, playlist_id: playlistId })
-      if (playlistId === currentPlaylistId.value) {
-        favoriteSongIds.value = favoriteSongIds.value.filter(id => id !== songId)
+      await wsClient.sendRequest('favorite/delete', {
+        song_ids: songIds,
+        playlist_ids: playlistIds
+      })
+      if (playlistIds.includes(currentPlaylistId.value)) {
+        await fetchPlaylistSongs(currentPlaylistId.value)
       }
       await fetchPlaylists() // 更新歌曲统计
       return { success: true }
     } catch (e: any) {
       return { success: false, error: e.message || '取消收藏异常' }
-    }
-  }
-
-  // 批量添加
-  const batchAddFavorites = async (songIds: string[], playlistIds: string[], songsInfo: Record<string, { title: string; artist: string }>) => {
-    try {
-      await wsClient.sendRequest('favorite/batch_add', {
-        song_ids: songIds,
-        playlist_ids: playlistIds,
-        songs: songsInfo
-      })
-      await fetchPlaylists()
-      if (playlistIds.includes(currentPlaylistId.value)) {
-        await fetchPlaylistSongs(currentPlaylistId.value)
-      }
-      return { success: true }
-    } catch (e: any) {
-      return { success: false, error: e.message || '批量收藏异常' }
-    }
-  }
-
-  // 批量移除
-  const batchRemoveFavorites = async (songIds: string[], playlistIds: string[]) => {
-    try {
-      await wsClient.sendRequest('favorite/batch_delete', {
-        song_ids: songIds,
-        playlist_ids: playlistIds
-      })
-      await fetchPlaylists()
-      if (playlistIds.includes(currentPlaylistId.value)) {
-        await fetchPlaylistSongs(currentPlaylistId.value)
-      }
-      return { success: true }
-    } catch (e: any) {
-      return { success: false, error: e.message || '批量取消收藏异常' }
     }
   }
 
@@ -150,8 +127,6 @@ export const useFavoritesStore = defineStore('favorites', () => {
     deletePlaylist,
     addFavorite,
     removeFavorite,
-    batchAddFavorites,
-    batchRemoveFavorites,
     batchMoveFavorites
   }
 })

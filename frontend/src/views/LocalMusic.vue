@@ -592,7 +592,7 @@ const handleRowAction = async (key: string, song: Song) => {
     const targetPlaylistId = key.substring(4)
     const targetPlaylist = favoritesStore.playlists.find(p => String(p.id) === String(targetPlaylistId))
     const playlistName = targetPlaylist ? targetPlaylist.name : '收藏夹'
-    const res = await favoritesStore.addFavorite(song.id, targetPlaylistId, song.title, song.artist)
+    const res = await favoritesStore.addFavorite([song.id], [targetPlaylistId], { [song.id]: { title: song.title, artist: song.artist } })
     if (res.success) message.success(`已成功添加至收藏夹《${playlistName}》`)
     else message.error(res.error)
   } else if (key.startsWith('move_')) {
@@ -603,7 +603,7 @@ const handleRowAction = async (key: string, song: Song) => {
     if (res.success) message.success(`已成功移动至收藏夹《${playlistName}》`)
     else message.error(res.error)
   } else if (key === 'remove_fav') {
-    const res = await favoritesStore.removeFavorite(song.id, playlistId.value)
+    const res = await favoritesStore.removeFavorite([song.id], [playlistId.value])
     if (res.success) message.success('已移出该收藏夹')
     else message.error(res.error)
   } else if (key === 'clear_cache') {
@@ -643,7 +643,6 @@ const batchPlaylistOptions = computed(() => {
     key: p.id
   }))
 })
-
 // 批量添加操作
 const handleBatchAddToPlaylist = async (playlistId: string) => {
   const ids = Array.from(selectedSongIds.value)
@@ -655,7 +654,7 @@ const handleBatchAddToPlaylist = async (playlistId: string) => {
     }
   })
 
-  const res = await favoritesStore.batchAddFavorites(ids, [playlistId], songsInfo)
+  const res = await favoritesStore.addFavorite(ids, [playlistId], songsInfo)
   if (res.success) {
     message.success(`已批量加入 ${ids.length} 首歌曲到收藏夹`)
     isBatchMode.value = false
@@ -664,11 +663,10 @@ const handleBatchAddToPlaylist = async (playlistId: string) => {
     message.error(res.error)
   }
 }
-
 // 从当前收藏夹批量移出
 const handleBatchRemoveFromPlaylist = async () => {
   const ids = Array.from(selectedSongIds.value)
-  const res = await favoritesStore.batchRemoveFavorites(ids, [playlistId.value])
+  const res = await favoritesStore.removeFavorite(ids, [playlistId.value])
   if (res.success) {
     message.success(`已批量从收藏夹中移出 ${ids.length} 首歌曲`)
     isBatchMode.value = false

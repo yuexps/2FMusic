@@ -232,6 +232,9 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('mouseup', handleMouseUp)
+
+  // 全局拉起并初始化 WebSocket 实时通信信道
+  systemStore.initWebSocket()
 })
 
 onUnmounted(() => {
