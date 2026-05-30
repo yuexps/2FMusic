@@ -90,15 +90,6 @@ const handleLogin = async (e: Event) => {
           <p class="m-0 text-[13px] text-body-muted">请输入您的访问密码以进入音乐库</p>
         </header>
 
-        <!-- 错误提示 -->
-        <transition enter-active-class="transition-opacity duration-200 ease" enter-from-class="opacity-0"
-          leave-active-class="transition-opacity duration-200 ease" leave-to-class="opacity-0">
-          <div v-if="showError"
-            class="p-[10px_14px] bg-danger-soft border border-danger-border rounded-sm text-danger text-[13px] text-center font-medium">
-            <span>{{ loginError }}</span>
-          </div>
-        </transition>
-
         <!-- Vue 表单（拦截 submit 执行哈希） -->
         <form class="flex flex-col gap-5" @submit="handleLogin">
           <div class="form-group">
@@ -117,6 +108,15 @@ const handleLogin = async (e: Event) => {
               登录
             </n-button>
           </div>
+
+          <!-- 错误提示 -->
+          <transition enter-active-class="transition-opacity duration-200 ease" enter-from-class="opacity-0"
+            leave-active-class="transition-opacity duration-200 ease" leave-to-class="opacity-0">
+            <div v-if="showError"
+              class="text-danger text-[13px] text-center font-medium">
+              <span>{{ loginError }}</span>
+            </div>
+          </transition>
         </form>
 
         <!-- 后端接收的隐藏表单 -->
