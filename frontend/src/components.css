@@ -409,7 +409,7 @@
   }
 
   /* 本地/历史/网易云视图禁止外层滚动，保障虚拟列表独立滚动 */
-  .main-scroll:has(.local-music-view, .history-view, .netease-downloader-view, .settings-view) {
+  .main-scroll:has(.local-music-view, .history-view, .netease-downloader-view) {
     overflow: hidden !important;
     display: flex !important;
     flex-direction: column !important;

@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col max-w-[1040px] mx-auto w-full">
+  <div class="flex flex-col mount-manager-view">
     <div class="view-header">
       <h1 class="view-title">音乐目录管理</h1>
     </div>

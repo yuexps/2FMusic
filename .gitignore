@@ -7,5 +7,4 @@ yuexps.2fmusic.fpk
 .DS_Store?
 lib/
 node_modules
-.agent
-.codebuddy
+.agents

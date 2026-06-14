@@ -1,12 +1,11 @@
 <template>
-  <div class="flex flex-col flex-1 min-h-0 settings-view max-w-[1040px] mx-auto w-full">
+  <div class="flex flex-col settings-view">
     <div class="view-header">
       <h1 class="view-title">系统设置</h1>
     </div>
 
-    <n-virtual-list class="settings-virtual-list flex-1 min-h-0" :item-size="480" :items="settingSections"
-      key-field="id" item-resizable>
-      <template #default="{ item }">
+    <div class="settings-list flex flex-col">
+      <div v-for="item in settingSections" :key="item.id">
         <!-- 登录与维护 -->
         <div v-if="item.id === 'login'" class="glass-panel p-6 rounded-2xl mb-6 box-border">
           <h3 class="section-title">
@@ -173,8 +172,8 @@
             </div>
           </div>
         </div>
-      </template>
-    </n-virtual-list>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -182,7 +181,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useSystemStore } from '../stores/system'
 import { usePreferencesStore } from '../stores/preferences'
-import { NSwitch, NButton, NInput, NRadioGroup, NRadioButton, NProgress, NVirtualList, useMessage } from 'naive-ui'
+import { NSwitch, NButton, NInput, NRadioGroup, NRadioButton, NProgress, useMessage } from 'naive-ui'
 import { musicDB } from '../utils/indexedDB'
 import { getBaseUrl } from '../utils/path'
 

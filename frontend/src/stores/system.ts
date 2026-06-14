@@ -59,9 +59,13 @@ export const useSystemStore = defineStore('system', () => {
   const savedRecommend = localStorage.getItem('2fmusic_netease_recommend')
   const neteaseRecommendSongs = ref<NeteaseSong[]>(savedRecommend ? JSON.parse(savedRecommend) : [])
 
+  let isWsInitialized = false
+
   // 1. WebSocket 连接与数据广播订阅
   const initWebSocket = () => {
     wsClient.connect()
+    if (isWsInitialized) return
+    isWsInitialized = true
 
     // 连接成功时获取初始状态
     wsClient.subscribe('open', () => {

@@ -123,9 +123,15 @@ if __name__ == '__main__':
     logger.info(f"Music Library Path: {app_config.MUSIC_LIBRARY_PATH}")
     if app_config.BASE_URL:
         logger.info(f"Base URL prefix enabled: {app_config.BASE_URL}")
+    # 同步初始化数据库与清理临时 part 文件
+    try:
+        init_db()
+        clean_temp_part_files()
+    except Exception as e:
+        logger.exception(f"同步初始化失败: {e}")
     
-    # 6. 后台异步挂起数据库初始化、增量扫描与文件变化自动同步
-    threading.Thread(target=lambda: (init_db(), clean_temp_part_files(), scan_library_incremental()), daemon=True).start()
+    # 异步进行全库增量扫描与文件变化自动同步
+    threading.Thread(target=scan_library_incremental, daemon=True).start()
     threading.Thread(target=init_watchdog, daemon=True).start()
     
     # 智能分发三种启动模式
