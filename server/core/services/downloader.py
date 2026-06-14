@@ -420,10 +420,9 @@ def run_download_task(task_id: str, payload: dict):
             target_path = os.path.join(target_dir, filename)
             counter += 1
 
-        tmp_path = target_path + ".part"
+        tmp_path = os.path.join(app_config.CACHE_DIR, f"dl_{task_id}.part")
         update_download_task(task_id, status='downloading')
         
-        # 3. 开始执行网络流式下载
         try:
             with requests.get(download_url, stream=True, timeout=20, headers=COMMON_HEADERS) as resp:
                 resp.raise_for_status()
@@ -438,52 +437,63 @@ def run_download_task(task_id: str, payload: dict):
                             if total_size > 0:
                                 progress = int((downloaded / total_size) * 100)
                                 update_download_task(task_id, progress=progress)
-                                
+
+            # 先内嵌元数据至临时文件以确立最终文件内容
+            if cover_bytes:
+                embed_cover_to_file(tmp_path, cover_bytes)
+                
+            lrc_text, yrc_text = fetch_netease_lyrics(song_id)
+            if lrc_text:
+                embed_lyrics_to_file(tmp_path, lrc_text)
+
+            # 文件最终内容确定后，计算唯一物理 MD5 作为最终 ID
+            from core.utils.hasher import get_file_md5
+            new_sid = get_file_md5(tmp_path)
+
+            # 保存本地封面和歌词缓存
+            if cover_bytes:
+                save_cover_file(cover_bytes, new_sid)
+
+            if lrc_text:
+                try:
+                    lrc_path = os.path.join(app_config.LYRICS_DIR, f"{new_sid}.lrc")
+                    with open(lrc_path, 'w', encoding='utf-8') as ff:
+                        ff.write(lrc_text)
+                except Exception as e:
+                    logger.warning(f"保存本地歌词失败: {e}")
+                
+            if yrc_text:
+                try:
+                    yrc_path = os.path.join(app_config.LYRICS_DIR, f"{new_sid}.yrc")
+                    with open(yrc_path, 'w', encoding='utf-8') as ff:
+                        ff.write(yrc_text)
+                except Exception as e:
+                    logger.warning(f"保存本地逐字歌词失败: {e}")
+
+            # 注册 Watchdog 忽略，原子性移动并建立索引
+            try:
+                from core.services.scanner import add_watchdog_ignore_path, index_single_file, notify_library_changed
+                add_watchdog_ignore_path(target_path)
+            except Exception as e:
+                logger.warning(f"注册忽略路径失败: {e}")
+
             shutil.move(tmp_path, target_path)
+
+            try:
+                index_single_file(target_path)
+                notify_library_changed()
+            except Exception as e:
+                logger.warning(f"触发同步索引失败: {e}")
+
+            update_download_task(task_id, status='success', progress=100)
+            logger.info(f"网易云歌曲已下载: {filename} | {title} - {artist}")
+
         finally:
             if os.path.exists(tmp_path):
                 try: 
                     os.remove(tmp_path)
                 except Exception: 
                     pass
-            
-        # 4. 计算内容 MD5，获得歌曲的真正 song_id
-        from core.utils.hasher import get_file_md5
-        new_sid = get_file_md5(target_path)
-
-        # 5. 内嵌与保存封面及歌词
-        if cover_bytes:
-            embed_cover_to_file(target_path, cover_bytes)
-            save_cover_file(cover_bytes, new_sid)
-            
-        lrc_text, yrc_text = fetch_netease_lyrics(song_id)
-        if lrc_text:
-            try:
-                lrc_path = os.path.join(app_config.LYRICS_DIR, f"{new_sid}.lrc")
-                with open(lrc_path, 'w', encoding='utf-8') as f:
-                    f.write(lrc_text)
-            except Exception as e:
-                logger.warning(f"保存本地歌词失败: {e}")
-            embed_lyrics_to_file(target_path, lrc_text)
-            
-        if yrc_text:
-            try:
-                yrc_path = os.path.join(app_config.LYRICS_DIR, f"{new_sid}.yrc")
-                with open(yrc_path, 'w', encoding='utf-8') as f:
-                    f.write(yrc_text)
-            except Exception as e:
-                logger.warning(f"保存本地逐字歌词失败: {e}")
-                
-        # 6. 调用单文件索引并广播通知
-        try:
-            from core.services.scanner import index_single_file, notify_library_changed
-            index_single_file(target_path)
-            notify_library_changed()
-        except ImportError:
-            pass
-        
-        update_download_task(task_id, status='success', progress=100)
-        logger.info(f"网易云歌曲已下载: {filename} | {title} - {artist}")
         
     except Exception as e:
         logger.warning(f"网易云下载失败: {e}")

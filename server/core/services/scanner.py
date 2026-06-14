@@ -32,6 +32,25 @@ def register_ws_broadcast_callback(cb):
 scan_status_lock = threading.Lock()
 scan_execution_lock = threading.Lock()
 watchdog_queue = queue.Queue()
+watchdog_ignore_paths = set()
+watchdog_ignore_lock = threading.Lock()
+
+def add_watchdog_ignore_path(path: str):
+    """添加需要被忽略的物理路径"""
+    abs_path = os.path.abspath(path)
+    with watchdog_ignore_lock:
+        watchdog_ignore_paths.add(abs_path)
+        logger.debug(f"已加入 Watchdog 忽略: {abs_path}")
+
+def is_watchdog_ignored(path: str) -> bool:
+    """判断是否需要忽略，并执行单次移出清除"""
+    abs_path = os.path.abspath(path)
+    with watchdog_ignore_lock:
+        if abs_path in watchdog_ignore_paths:
+            watchdog_ignore_paths.remove(abs_path)
+            return True
+    return False
+
 SCAN_STATUS = {
     'scanning': False,
     'is_scraping': False,
@@ -155,6 +174,9 @@ def watchdog_worker():
                         info['target_time'] = now + 1.0
             
             for path, action in to_process:
+                if is_watchdog_ignored(path):
+                    logger.info(f"Watchdog 忽略已由下载器主动入库的路径: {path}")
+                    continue
                 try:
                     _execute_watchdog_event(path, action)
                 except Exception as ex:
@@ -183,6 +205,11 @@ class MusicFileEventHandler(FileSystemEventHandler):
         self._process(event.dest_path, 'created')
 
     def _process(self, path, action):
+        # 排除临时缓存目录中的变动
+        normalized_path = os.path.abspath(path)
+        if '.cache' in normalized_path.split(os.sep):
+            return
+            
         filename = os.path.basename(path)
         ext = os.path.splitext(filename)[1].lower()
         
@@ -356,6 +383,8 @@ def clean_temp_part_files():
     roots = [app_config.MUSIC_LIBRARY_PATH]
     if app_config.NETEASE_DOWNLOAD_DIR:
         roots.append(app_config.NETEASE_DOWNLOAD_DIR)
+    if getattr(app_config, 'CACHE_DIR', None) and os.path.exists(app_config.CACHE_DIR):
+        roots.append(app_config.CACHE_DIR)
     try:
         with get_db() as conn:
             rows = conn.execute("SELECT path FROM mount_points").fetchall()
@@ -424,7 +453,7 @@ def scan_library_incremental():
             if not os.path.exists(root_dir): 
                 continue
             for root, dirs, files in os.walk(root_dir):
-                dirs[:] = [d for d in dirs if d not in ('lyrics', 'covers')]
+                dirs[:] = [d for d in dirs if d not in ('lyrics', 'covers', '.cache')]
                 for f in files:
                     if f.lower().endswith(AUDIO_EXTS):
                         path = os.path.join(root, f)

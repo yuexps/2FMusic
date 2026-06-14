@@ -18,6 +18,7 @@ class AppConfig:
         self.MUSIC_LIBRARY_PATH = ""
         self.LYRICS_DIR = ""
         self.COVERS_DIR = ""
+        self.CACHE_DIR = ""
         self.DB_PATH = ""
         self.LOG_FILE = ""
         self.PASSWORD = None
@@ -62,8 +63,10 @@ class AppConfig:
         
         self.LYRICS_DIR = os.path.join(self.MUSIC_LIBRARY_PATH, 'lyrics')
         self.COVERS_DIR = os.path.join(self.MUSIC_LIBRARY_PATH, 'covers')
+        self.CACHE_DIR = os.path.join(self.MUSIC_LIBRARY_PATH, '.cache')
         os.makedirs(self.LYRICS_DIR, exist_ok=True)
         os.makedirs(self.COVERS_DIR, exist_ok=True)
+        os.makedirs(self.CACHE_DIR, exist_ok=True)
         
         self.DB_PATH = os.path.join(self.MUSIC_LIBRARY_PATH, 'data.db')
         self.LOG_FILE = args.log_path or os.path.join(os.getcwd(), 'app.log')

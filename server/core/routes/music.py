@@ -514,12 +514,22 @@ def upload_file():
         except Exception as e:
             logger.error(f"查重操作异常: {e}")
 
+        import uuid
+        tmp_filename = f"upload_{uuid.uuid4().hex}.part"
+        tmp_path = os.path.join(app_config.CACHE_DIR, tmp_filename)
+
         try:
-            file.save(save_path)
-            # 文件保存后由 Watchdog 自动扫描入库
+            file.save(tmp_path)
+            shutil.move(tmp_path, save_path)
             return jsonify({'success': True})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)})
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
             
     return jsonify({'success': False, 'error': '未知错误'})
 

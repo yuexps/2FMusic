@@ -17,6 +17,8 @@ class LogManager:
         cls._logger.handlers.clear()
         cls._logger.propagate = False
 
+        formatter = logging.Formatter('%(asctime)s [%(levelname)s] - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
         # 确保日志存储目录存在
         if log_file:
             log_dir = os.path.dirname(os.path.abspath(log_file))
@@ -28,15 +30,26 @@ class LogManager:
 
             try:
                 file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
-                file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+                file_handler.setFormatter(formatter)
                 cls._logger.addHandler(file_handler)
             except Exception as e:
                 print(f"警告：创建日志文件处理器失败: {e}")
 
         # 始终添加控制台输出处理器
         console_handler = logging.StreamHandler()
-        console_handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+        console_handler.setFormatter(formatter)
         cls._logger.addHandler(console_handler)
+
+        # 统一配置 Werkzeug 日志器
+        try:
+            werkzeug_logger = logging.getLogger("werkzeug")
+            werkzeug_logger.setLevel(level)
+            werkzeug_logger.handlers.clear()
+            werkzeug_logger.propagate = False
+            for handler in cls._logger.handlers:
+                werkzeug_logger.addHandler(handler)
+        except Exception as e:
+            print(f"警告：统一 Werkzeug 日志器配置失败: {e}")
 
         return cls._logger
 
