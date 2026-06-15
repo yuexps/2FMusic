@@ -11,12 +11,33 @@
 LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
 VENV_PATH="${TRIM_PKGVAR}/venv"
-MUSIC_LIBRARY_PATH="/var/apps/yuexps.2fmusic/shares/2FMusic/Music"
 
 # 启动应用
 SOURCE_APP="${TRIM_APPDEST}/server/app.py"
+
+# 根据音乐库位置选项决定路径
+LIB_TYPE="${wizard_music_library_type:-share}"
+if [ "${LIB_TYPE}" = "data" ]; then
+    MUSIC_LIBRARY_PATH="${TRIM_PKGVAR}/Music"
+else
+    MUSIC_LIBRARY_PATH="/var/apps/yuexps.2fmusic/shares/2FMusic/Music"
+fi
+
+# 根据运行方式构建参数
+RUN_MODE="${wizard_run_mode:-both}"
+PORT_ARG=""
+SOCKET_ARG=""
+
+if [ "${RUN_MODE}" = "both" ] || [ "${RUN_MODE}" = "port" ]; then
+    PORT_ARG="--port ${wizard_port:-23237}"
+fi
+
+if [ "${RUN_MODE}" = "both" ] || [ "${RUN_MODE}" = "socket" ]; then
+    SOCKET_ARG="--unix-socket ${TRIM_APPDEST}/app.sock"
+fi
+
 # 定义通用的启动参数
-APP_ARGS="--music-library-path ${MUSIC_LIBRARY_PATH} --log-path ${LOG_FILE} --port 23237 --unix-socket ${TRIM_APPDEST}/app.sock --base-url /app/yuexps-2fmusic --password ${wizard_password}"
+APP_ARGS="--music-library-path ${MUSIC_LIBRARY_PATH} --log-path ${LOG_FILE} ${PORT_ARG} ${SOCKET_ARG} --base-url /app/yuexps-2fmusic --password ${wizard_password}"
 
 # 启动Python应用
 CMD="${VENV_PATH}/bin/python ${SOURCE_APP} ${APP_ARGS}"

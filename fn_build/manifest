@@ -17,4 +17,3 @@ distributor           = yuexps
 desktop_uidir         = ui
 desktop_applaunchname = yuexps.2fmusic.Application
 service_port          = 23237
-install_dep_apps      = python312

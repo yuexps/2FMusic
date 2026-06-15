@@ -5,6 +5,10 @@
     1.  **纯端口模式**：使用 Werkzeug 内置的多线程开发服务器监听 TCP 端口（如 0.0.0.0:port），通过 `app.run(threaded=True)` 运行。
     2.  **纯 Socket 模式**：通过自定义的 `UnixWSGIServer`（基于 `socketserver.ThreadingMixIn` 和 `werkzeug.serving.BaseWSGIServer`）绑定指定的物理 UNIX Domain Socket 文件。在绑定前自动删除历史残留 socket 并配置物理读写权限为 `0666`，以供反向代理服务器（如 Caddy/Nginx）读取。
     3.  **端口+Socket 并发模式**：在单独 the 守护线程里运行自定义的 `UnixWSGIServer` 监听 UNIX socket，主线程阻塞运行 Werkzeug TCP 端口开发服务。
+*   **FNAS 部署脚本端口与运行方式规范**：
+    - 在 `fn_build/cmd/main` 中，应用启动的端口参数必须引用 `fn_build/wizard/install` 及 `fn_build/wizard/config` 中定义的动态服务端口变量 `${wizard_port}`（可设置默认备用值 `23237`，即 `${wizard_port:-23237}`），严禁使用硬编码端口，以保障多实例或自定义端口部署时的端口一致性。
+    - 脚本支持由 `wizard_run_mode` 变量控制的自定义运行方式（支持 `both`：并发模式；`port`：纯端口模式；`socket`：纯 Socket 模式），并在启动命令行中按需动态构建 `--port` 和 `--unix-socket` 参数。
+    - 脚本支持由 `wizard_music_library_type` 变量控制音乐库的物理路径，支持 `share`（默认，指向 `/var/apps/yuexps.2fmusic/shares/2FMusic/Music`）和 `data`（指向 `${TRIM_PKGVAR}/Music`），启动时依据配置动态设置。
 
 ## 2. 基准子路径与鉴权拦截
 *   **PrefixMiddleware**：若配置了 `BASE_URL`，在 Flask 顶层利用 WSGI 中间件统一剥离请求前缀（同时支持 `HTTP_X_FORWARDED_PREFIX` 标志识别），实现透明的子路径反向代理适配。
