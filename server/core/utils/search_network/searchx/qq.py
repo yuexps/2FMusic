@@ -1,8 +1,9 @@
 import json
 import time
 import asyncio
-from mod import tools
-from mod import textcompare
+from functools import lru_cache
+from .. import tools
+from .. import textcompare
 from core.utils.logger import logger
 import os
 import sys
@@ -47,7 +48,7 @@ async def async_search_with_keyword(keyword, origin=False, session=None):
         }
     }
     t_req_start = time.perf_counter()
-    async with session.post(COMMON_SEARCH_URL_QQ, data=json.dumps(data, ensure_ascii=False).encode('utf-8')) as resp:
+    async with session.post(COMMON_SEARCH_URL_QQ, data=json.dumps(data, ensure_ascii=False).encode('utf-8'), timeout=aiohttp.ClientTimeout(total=5.0)) as resp:
         resp_data = await resp.json(content_type=None)
     t_req_end = time.perf_counter()
     t_parse_end = time.perf_counter()
@@ -65,7 +66,7 @@ async def async_get_song_lyric(songmid, parse=False, origin=False, session=None)
     url = LYRIC_URL_QQ.format(songmid)
     t_req_start = time.perf_counter()
 
-    async with session.get(url) as resp:
+    async with session.get(url, timeout=aiohttp.ClientTimeout(total=5.0)) as resp:
         data = await resp.json(content_type=None)
     
     t_req_end = time.perf_counter()
@@ -299,7 +300,7 @@ async def async_get_album_cover_image(albummid=None, vs=None, session=None):
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for result, url in zip(results, urls):
                 if result is True:
-                    url_real = url if isinstance(url, tuple) else (None, url)
+                    url_real = url[1] if isinstance(url, tuple) else url
                     return url_real
             return None
 
@@ -314,6 +315,7 @@ async def async_get_album_cover_image(albummid=None, vs=None, session=None):
     test_time_print(f"[qq] async_get_album_cover_image: 未命中封面，总耗时: {(t_end-t_start)*1000:.2f} ms")
     return None
 
+@lru_cache(maxsize=64)
 def search(title='', artist='', album=''):
     """
     兼容包装入口

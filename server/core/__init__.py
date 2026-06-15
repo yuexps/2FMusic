@@ -1,4 +1,5 @@
 import os
+import hashlib
 from datetime import timedelta
 from flask import Flask, render_template, send_file, url_for, jsonify
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -59,7 +60,6 @@ def create_app() -> Flask:
         h = hashlib.md5()
         h.update(data)
         return h.hexdigest()
-    import hashlib
 
     # 5. 主页路由
     @app.route('/')

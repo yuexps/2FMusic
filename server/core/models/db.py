@@ -21,22 +21,6 @@ def init_db():
     """初始化数据库表结构与默认设置"""
     def _init_db_core():
         with get_db() as conn:
-            # 检查旧模式，如果不满足全新设计（如缺失 has_lyrics），直接删除重建
-            need_rebuild = False
-            try:
-                cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='songs'")
-                if cursor.fetchone():
-                    conn.execute("SELECT has_lyrics FROM songs LIMIT 1")
-                else:
-                    need_rebuild = True
-            except Exception:
-                need_rebuild = True
-
-            if need_rebuild:
-                logger.info("检测到旧表结构不匹配或表不存在，重新创建 songs 表...")
-                conn.execute("DROP TABLE IF EXISTS songs")
-                conn.execute("DROP TABLE IF EXISTS mount_files")
-
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS songs (
                     id TEXT PRIMARY KEY,
@@ -48,7 +32,8 @@ def init_db():
                     mtime REAL,
                     size INTEGER,
                     has_cover INTEGER DEFAULT 0,
-                    has_lyrics INTEGER DEFAULT 0
+                    has_lyrics INTEGER DEFAULT 0,
+                    scrape_retry_count INTEGER DEFAULT 0
                 )
             ''')
             conn.execute('''
@@ -96,13 +81,6 @@ def init_db():
                     value TEXT
                 )
             ''')
-            
-            # 清理错误索引的非音频文件
-            try:
-                placeholders = ' OR '.join([f"filename NOT LIKE '%{ext}'" for ext in AUDIO_EXTS])
-                conn.execute(f"DELETE FROM songs WHERE {placeholders}")
-            except Exception: 
-                pass
             
             conn.commit()
 

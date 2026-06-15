@@ -1,7 +1,7 @@
 #原始项目地址：https://github.com/HisAtri/LrcApi
 
 import re
-from mod.ttscn import t2s
+from .ttscn import t2s
 
 """
 本模块算法针对常见音乐标题匹配场景应用，着重分离度和效率。

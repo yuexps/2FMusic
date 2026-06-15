@@ -1,8 +1,8 @@
 import threading
 import time
 import random
-from mod.searchx import qq, netease, kugou
-from mod import textcompare
+from .searchx import qq, netease, kugou
+from . import textcompare
 from core.utils.logger import logger
 
 API_BONUS = {'qq': 0.01, 'netease': 0.005, 'kugou': 0.0}  # API权重加分
@@ -55,7 +55,7 @@ def search_song_best(title, artist, album):
     cost_msgs.append(f"\n[search_util] 线程启动耗时: {(t_thread_end - t_thread_start)*1000:.2f} ms")
     t_join_start = time.perf_counter()
     for t in threads:
-        t.join()
+        t.join(timeout=6.0)
     t_join_end = time.perf_counter()
     cost_msgs.append(f"[search_util] 等待所有线程完成耗时: {(t_join_end - t_join_start)*1000:.2f} ms")
     t_score_start = time.perf_counter()
@@ -90,15 +90,7 @@ def search_song_best(title, artist, album):
             score += 0.01
         scored.append([score, filtered])
 
-    # 对分数接近的结果加动态随机扰动（分数越接近，扰动范围越小）
-    scored.sort(reverse=True, key=lambda x: x[0])
-    for i in range(1, len(scored)):
-        diff = abs(scored[i][0] - scored[i-1][0])
-        if diff < 0.01:
-            max_disturb = 0.005 * (1 - diff/0.01)
-            scored[i][0] += random.uniform(-max_disturb, max_disturb)
-
-    # 重新排序
+    # 相似度分值排序，不加随机扰动以保证确定性
     scored.sort(reverse=True, key=lambda x: x[0])
     t_score_end = time.perf_counter()
     cost_msgs.append(f"[search_util] 结果打分耗时: {(t_score_end - t_score_start)*1000:.2f} ms")
@@ -107,16 +99,16 @@ def search_song_best(title, artist, album):
     t_sort_end = time.perf_counter()
     cost_msgs.append(f"[search_util] 排序耗时: {(t_sort_end - t_sort_start)*1000:.2f} ms")
 
-    # 增强结果筛选：优先选择有封面且歌词质量高的结果
-    def is_high_quality(item):
+    # 增强结果筛选：优先选择有封面且歌词质量高，且文本相似度大于 0.55 的结果，防范错配
+    def is_high_quality(item, score):
         has_cover = bool(item.get('cover'))
         has_valid_lyrics = len(item.get('lyrics', '')) > 50
-        return has_cover and has_valid_lyrics
+        return has_cover and has_valid_lyrics and score > 0.55
 
     best = None
     # 先找高质量结果
     for score, item in scored:
-        if is_high_quality(item):
+        if is_high_quality(item, score):
             best = item
             break
     # 如果没有高质量结果，退而求其次

@@ -8,75 +8,18 @@
 # TRIM_SHARES     - 应用共享目录 (shares目录)        -> @appshare
 # TRIM_SERVICE_PORT - 服务端口
 
-# 将 Python 路径加入环境 (源码版需要，二进制版忽略即可)
-export PATH=/var/apps/python312/target/bin:$PATH
-
 LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
-MUSIC_LIBRARY_PATH="${TRIM_PKGVAR}/Music"
+VENV_PATH="${TRIM_PKGVAR}/venv"
+MUSIC_LIBRARY_PATH="/var/apps/yuexps.2fmusic/shares/2FMusic/Music"
 
-# ========================================================
-# 自动兼容逻辑：检测是 二进制版 还是 源码版
-
-# 定义可能的路径
-BINARY_APP="${TRIM_APPDEST}/server/app"
+# 启动应用
 SOURCE_APP="${TRIM_APPDEST}/server/app.py"
 # 定义通用的启动参数
 APP_ARGS="--music-library-path ${MUSIC_LIBRARY_PATH} --log-path ${LOG_FILE} --port 23237 --unix-socket ${TRIM_APPDEST}/app.sock --base-url /app/yuexps-2fmusic --password ${wizard_password}"
 
-if [ -f "${BINARY_APP}" ]; then
-    # 🔹 Case 1: 发现二进制文件 (Auto Build Binary Version)
-    # 确保有执行权限
-    chmod +x "${BINARY_APP}"
-    CMD="${BINARY_APP} ${APP_ARGS}"
-    MODE="Binary"
-else
-    # 🔸 Case 2: 未发现二进制，回退到 Python 源码 (Source Version)
-
-    # 检查lib目录是否缺失requirements.txt中的依赖
-    NEED_INSTALL=false
-    
-    if [ ! -d "${TRIM_APPDEST}/server/lib" ]; then
-        # lib目录不存在，需要安装
-        NEED_INSTALL=true
-    else
-        # 检查requirements.txt中的依赖是否都已安装
-        # 使用pip list检查指定目录中的包
-        while IFS= read -r req; do
-            # 提取包名（忽略版本限制）
-            PACKAGE=$(echo "$req" | sed 's/[<>!=~=].*//' | tr -d '[:space:]')
-            if [ -n "$PACKAGE" ]; then
-                # 检查包是否已安装在lib目录
-                if ! python3.12 -m pip list --format=freeze --path ${TRIM_APPDEST}/server/lib | grep -qi "^${PACKAGE}="; then
-                    NEED_INSTALL=true
-                    break
-                fi
-            fi
-        done < "${TRIM_APPDEST}/server/requirements.txt"
-    fi
-    
-    if [ "$NEED_INSTALL" = true ]; then
-        # 安装依赖到lib目录（临时使用镜像源，不修改全局配置）
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - 安装依赖..." >> "${LOG_FILE}"
-        python3.12 -m pip install -r ${TRIM_APPDEST}/server/requirements.txt -t ${TRIM_APPDEST}/server/lib \
-            -i https://pypi.tuna.tsinghua.edu.cn/simple/ \
-            --extra-index-url https://mirrors.aliyun.com/pypi/simple/ >> "${LOG_FILE}" 2>&1
-        
-        if [ $? -ne 0 ]; then
-            # 安装失败，写入临时日志并退出
-            echo "依赖安装失败，详细信息请查看 ${LOG_FILE}" >> "${TRIM_TEMP_LOGFILE}"
-            exit 1
-        fi
-        
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - 依赖安装完成" >> "${LOG_FILE}"
-    fi
-
-    # 启动Python应用
-    CMD="python3.12 ${SOURCE_APP} ${APP_ARGS}"
-    MODE="Source(Python)"
-fi
-
-# ========================================================
+# 启动Python应用
+CMD="${VENV_PATH}/bin/python ${SOURCE_APP} ${APP_ARGS}"
 
 log_msg() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> ${LOG_FILE}
@@ -87,7 +30,7 @@ start_process() {
         return 0
     fi
 
-    log_msg "Starting process (Mode: ${MODE}) ..."
+    log_msg "Starting process ..."
     log_msg "Command: ${CMD}"
     
     # run cmd to start process

@@ -180,16 +180,19 @@ ws://<server-ip>:<port>/api/ws?auth=<你的密码或SHA-256哈希值>
       "song_id": "c1a2e3...",   // 歌曲ID
       "title": "歌曲标题",      // 必须，用于当无缓存时自动在线刮削
       "artist": "歌手",         // 可空
-      "filename": "歌手 - 歌曲名.mp3"  // 可空
+      "filename": "歌手 - 歌曲名.mp3",  // 可空
+      "yrc": false              // 可空，布尔型。为 true 时，若本地存在网易云逐字歌词则优先返回
     }
     ```
 *   **成功响应 `data`**：
     ```json
     {
-      "lyrics": "[00:10.00]歌词内容...\n[00:12.00]下一句..." // 可能是标准 LRC 或逐字 YRC 格式
+      "lyrics": "[00:10.00]歌词内容...\n[00:12.00]下一句..." // 可能是标准 LRC 或网易云逐字 YRC 格式
     }
     ```
-*   **获取逻辑**：优先从缓存提取 $\rightarrow$ 寻找同名物理外部 `.lrc` 复制并命中 $\rightarrow$ 音频内嵌提取 $\rightarrow$ 网络多源刮削。
+*   **获取逻辑**：
+    - 若 `yrc` 为 `true`，优先从缓存提取 `.yrc` $\rightarrow$ 寻找同名外部物理 `.yrc` 复制并命中 $\rightarrow$ 从缓存提取 `.lrc` $\rightarrow$ 寻找外部物理 `.lrc` $\rightarrow$ 音频内嵌提取 $\rightarrow$ 网络多源刮削。
+    - 若 `yrc` 为 `false` 或未传，则忽略所有 `.yrc`，直接从 `.lrc` 缓存级联向下获取。
 
 #### ⑤ 获取/在线刮削单曲封面
 *   **Action**：`music/album-art`

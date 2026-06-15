@@ -1,8 +1,10 @@
 import os
 import time
 import shutil
+import threading
 from urllib.parse import unquote, quote
 import requests
+import uuid
 from flask import Blueprint, request, jsonify, send_file
 from core.config import app_config
 from core.models.db import get_db, AUDIO_EXTS
@@ -12,14 +14,17 @@ from core.models.song import (
     delete_song_by_path,
     get_song_by_path
 )
-from core.services.metadata import (    extract_embedded_lyrics,
-    extract_embedded_cover
+from core.services.metadata import (
+    extract_embedded_lyrics,
+    extract_embedded_cover,
+    save_cover_file
 )
-from core.services.scanner import index_single_file, notify_library_changed
+from core.services.scanner import index_single_file, notify_library_changed, add_watchdog_ignore_path, auto_scrape_missing_metadata
+from core.models.preferences import get_preference
 from core.utils.logger import logger
 from core.utils.common import COMMON_HEADERS
 from core.utils.hasher import generate_song_id
-import mod
+from core.utils import search_network
 
 music_bp = Blueprint('music', __name__)
 
@@ -164,7 +169,7 @@ def handle_clear_metadata(song_id: str = None, path: str = None) -> tuple:
         logger.exception(f"清理元数据失败: {e}")
         return False, None, str(e)
 
-def handle_get_lyrics(title: str, artist: str, filename: str, song_id: str = None) -> tuple:
+def handle_get_lyrics(title: str, artist: str, filename: str, song_id: str = None, yrc: bool = False) -> tuple:
     """获取单曲歌词 (优先本地/内嵌，后聚合搜索)"""
     if not title:
         return False, None, "歌词请求缺少 title 参数"
@@ -211,9 +216,18 @@ def handle_get_lyrics(title: str, artist: str, filename: str, song_id: str = Non
     else:
         sid = song_id
 
-    # 2. 检查缓存是否有 lrc
+    # 2. 检查缓存是否有 yrc / lrc
+    yrc_cache_path = os.path.join(app_config.LYRICS_DIR, f"{sid}.yrc")
     lrc_cache_path = os.path.join(app_config.LYRICS_DIR, f"{sid}.lrc")
     
+    if yrc and os.path.exists(yrc_cache_path):
+        try:
+            with open(yrc_cache_path, 'r', encoding='utf-8') as f:
+                logger.info(f"缓存逐字歌词命中: {yrc_cache_path}")
+                return True, {'lyrics': f.read()}, None
+        except Exception as e:
+            logger.warning(f"读取缓存逐字歌词失败: {e}")
+            
     if os.path.exists(lrc_cache_path):
         try:
             with open(lrc_cache_path, 'r', encoding='utf-8') as f:
@@ -222,10 +236,26 @@ def handle_get_lyrics(title: str, artist: str, filename: str, song_id: str = Non
         except Exception as e:
             logger.warning(f"读取缓存歌词失败: {e}")
 
-    # 3. 检查歌曲同级目录下是否有同名外部 .lrc 文件，有的话复制并返回
+    # 3. 检查歌曲同级目录下是否有同名外部 .yrc / .lrc 文件，有的话复制并返回
     if actual_path:
         local_dir = os.path.dirname(actual_path)
         base_name = os.path.splitext(os.path.basename(actual_path))[0]
+        
+        if yrc:
+            adj_yrc = os.path.join(local_dir, f"{base_name}.yrc")
+            if os.path.exists(adj_yrc):
+                try:
+                    shutil.copy(adj_yrc, yrc_cache_path)
+                    if song_id:
+                        with get_db() as conn:
+                            conn.execute("UPDATE songs SET has_lyrics=1 WHERE id=?", (sid,))
+                            conn.commit()
+                    with open(yrc_cache_path, 'r', encoding='utf-8') as f:
+                        logger.info(f"本地同级逐字歌词复制并命中: {adj_yrc}")
+                        return True, {'lyrics': f.read()}, None
+                except Exception as e:
+                    logger.warning(f"读取同级逐字歌词失败: {e}")
+
         adj_lrc = os.path.join(local_dir, f"{base_name}.lrc")
         if os.path.exists(adj_lrc):
             try:
@@ -241,7 +271,6 @@ def handle_get_lyrics(title: str, artist: str, filename: str, song_id: str = Non
                 logger.warning(f"读取同级歌词失败: {e}")
 
     # 4. 根据用户偏好决定内嵌歌词与网络刮削的优先级
-    from core.models.preferences import get_preference
     lyrics_pref = get_preference('lyrics_source_preference', 'embedded')
 
     def try_embedded():
@@ -268,7 +297,7 @@ def handle_get_lyrics(title: str, artist: str, filename: str, song_id: str = Non
         """聚合网络检索 - LrcApi 搜索并写入缓存"""
         try:
             logger.info(f"网络刮削搜索歌词: title={title}, artist={artist}")
-            result = mod.search_all(title=title, artist=artist, album='')
+            result = search_network.search_all(title=title, artist=artist, album='')
             best_lrc = result.get('lyrics') if result and result.get('lyrics') else None
             if best_lrc:
                 try:
@@ -379,7 +408,6 @@ def handle_get_album_art(title: str, artist: str, filename: str, song_id: str = 
                 
         if cover_file_path:
             try:
-                from core.services.metadata import save_cover_file
                 with open(cover_file_path, 'rb') as rf:
                     save_cover_file(rf.read(), sid)
                 if song_id:
@@ -404,24 +432,26 @@ def handle_get_album_art(title: str, artist: str, filename: str, song_id: str = 
     # 5. 网络刮削
     try:
         logger.info(f"本地调用 LrcApi 搜索封面: title={title}, artist={artist}")
-        result = mod.search_all(title=title, artist=artist, album='')
+        result = search_network.search_all(title=title, artist=artist, album='')
         cover_url = result.get('cover') if result and result.get('cover') else None
         if cover_url:
             logger.info(f"LrcApi 找到封面 URL: {cover_url}")
             try:
-                resp = requests.get(cover_url, timeout=10, headers=COMMON_HEADERS)
+                resp = requests.get(cover_url, timeout=5.0, headers=COMMON_HEADERS)
                 if resp.status_code == 200 and resp.headers.get('content-type', '').startswith('image/'):
-                    from core.services.metadata import save_cover_file
-                    save_cover_file(resp.content, sid)
-                    if song_id:
-                        try:
-                            with get_db() as conn:
-                                conn.execute("UPDATE songs SET has_cover=1 WHERE id=?", (sid,))
-                                conn.commit()
-                            notify_library_changed()
-                        except Exception as db_err:
-                            logger.warning(f"保存网络封面并更新数据库状态失败: {db_err}")
-                    return True, {'album_art': f"/api/music/covers/{sid}.webp"}, None
+                    saved_path = save_cover_file(resp.content, sid)
+                    if saved_path:
+                        if song_id:
+                            try:
+                                with get_db() as conn:
+                                    conn.execute("UPDATE songs SET has_cover=1 WHERE id=?", (sid,))
+                                    conn.commit()
+                                notify_library_changed()
+                            except Exception as db_err:
+                                logger.warning(f"更新封面数据库状态失败: {db_err}")
+                        return True, {'album_art': f"/api/music/covers/{sid}.webp"}, None
+                    else:
+                        logger.warning(f"网络封面 WebP 压缩转换保存失败: {sid}")
                 else:
                     logger.warning(f"网络封面图片下载失败: HTTP {resp.status_code}")
             except Exception as dl_err:
@@ -514,13 +544,25 @@ def upload_file():
         except Exception as e:
             logger.error(f"查重操作异常: {e}")
 
-        import uuid
         tmp_filename = f"upload_{uuid.uuid4().hex}.part"
         tmp_path = os.path.join(app_config.CACHE_DIR, tmp_filename)
 
         try:
             file.save(tmp_path)
+            add_watchdog_ignore_path(save_path)
             shutil.move(tmp_path, save_path)
+            
+            # 异步执行入库索引与自动刮削，不阻塞 Web 请求的响应，秒级返回 200
+            def async_index_and_scrape(path):
+                try:
+                    index_single_file(path)
+                    notify_library_changed()
+                    auto_scrape_missing_metadata()
+                except Exception as ex:
+                    logger.error(f"后台异步索引/刮削任务执行失败: {ex}")
+            
+            threading.Thread(target=async_index_and_scrape, args=(save_path,), daemon=True).start()
+            
             return jsonify({'success': True})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)})

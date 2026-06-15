@@ -5,6 +5,7 @@ import requests
 import concurrent.futures
 import queue
 import random
+import shutil
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -14,11 +15,14 @@ from core.models.song import insert_or_replace_song, delete_song_by_path
 from core.services.metadata import (
     get_metadata,
     extract_embedded_cover,
-    extract_embedded_lyrics
+    extract_embedded_lyrics,
+    save_cover_file
 )
+from core.models.preferences import get_preference
 from core.utils.logger import logger
 from core.utils.common import COMMON_HEADERS
 from core.utils.hasher import generate_song_id
+from core.utils.search_network.searchx import qq, netease, kugou
 
 # 挂载在 routes/ws 上的广播辅助函数
 _ws_broadcast_callback = None
@@ -326,7 +330,6 @@ def index_single_file(file_path: str):
             has_cover = 1
             if not os.path.exists(cover_cache_path):
                 try:
-                    from core.services.metadata import save_cover_file
                     with open(cover_file_path, 'rb') as rf:
                         save_cover_file(rf.read(), sid)
                 except Exception as e:
@@ -343,7 +346,6 @@ def index_single_file(file_path: str):
         if os.path.exists(ext_lrc):
             has_lyrics = 1
             if not os.path.exists(lrc_cache_path):
-                import shutil
                 try:
                     shutil.copy(ext_lrc, lrc_cache_path)
                 except Exception:
@@ -351,14 +353,18 @@ def index_single_file(file_path: str):
         elif os.path.exists(lrc_cache_path):
             has_lyrics = 1
         else:
-            embedded_lrc = extract_embedded_lyrics(file_path)
-            if embedded_lrc:
-                try:
-                    with open(lrc_cache_path, 'w', encoding='utf-8') as f:
-                        f.write(embedded_lrc)
-                    has_lyrics = 1
-                except Exception:
-                    pass
+            lyrics_pref = get_preference('lyrics_source_preference', 'embedded')
+            if lyrics_pref == 'network':
+                has_lyrics = 0
+            else:
+                embedded_lrc = extract_embedded_lyrics(file_path)
+                if embedded_lrc:
+                    try:
+                        with open(lrc_cache_path, 'w', encoding='utf-8') as f:
+                            f.write(embedded_lrc)
+                        has_lyrics = 1
+                    except Exception:
+                        pass
                     
         insert_or_replace_song(
             song_id=sid,
@@ -512,7 +518,6 @@ def scan_library_incremental():
                         has_cover = 1
                         if not os.path.exists(cover_cache_path):
                             try:
-                                from core.services.metadata import save_cover_file
                                 with open(cover_file_path, 'rb') as rf:
                                     save_cover_file(rf.read(), sid)
                             except Exception as e:
@@ -529,7 +534,6 @@ def scan_library_incremental():
                     if os.path.exists(ext_lrc):
                         has_lyrics = 1
                         if not os.path.exists(lrc_cache_path):
-                            import shutil
                             try:
                                 shutil.copy(ext_lrc, lrc_cache_path)
                             except Exception:
@@ -537,14 +541,18 @@ def scan_library_incremental():
                     elif os.path.exists(lrc_cache_path):
                         has_lyrics = 1
                     else:
-                        embedded_lrc = extract_embedded_lyrics(info['path'])
-                        if embedded_lrc:
-                            try:
-                                with open(lrc_cache_path, 'w', encoding='utf-8') as f:
-                                    f.write(embedded_lrc)
-                                has_lyrics = 1
-                            except Exception:
-                                pass
+                        lyrics_pref = get_preference('lyrics_source_preference', 'embedded')
+                        if lyrics_pref == 'network':
+                            has_lyrics = 0
+                        else:
+                            embedded_lrc = extract_embedded_lyrics(info['path'])
+                            if embedded_lrc:
+                                try:
+                                    with open(lrc_cache_path, 'w', encoding='utf-8') as f:
+                                        f.write(embedded_lrc)
+                                    has_lyrics = 1
+                                except Exception:
+                                    pass
                                 
                     title = str(meta['title']) if meta['title'] is not None else ''
                     artist = str(meta['artist']) if meta['artist'] is not None else ''
@@ -588,8 +596,8 @@ def scan_library_incremental():
 
                 if final_update_db:
                     cursor.executemany('''
-                        INSERT OR REPLACE INTO songs (id, path, filename, title, artist, album, mtime, size, has_cover, has_lyrics)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT OR REPLACE INTO songs (id, path, filename, title, artist, album, mtime, size, has_cover, has_lyrics, scrape_retry_count)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                     ''', final_update_db)
                     conn.commit()
 
@@ -626,10 +634,10 @@ def auto_scrape_missing_metadata(target_dir=None):
         
         songs_to_scrape = []
         with get_db() as conn:
-            sql = "SELECT id, path, title, artist, album, filename, has_cover, has_lyrics FROM songs WHERE has_cover = 0 OR has_lyrics = 0"
+            sql = "SELECT id, path, title, artist, album, filename, has_cover, has_lyrics FROM songs WHERE (has_cover = 0 OR has_lyrics = 0) AND scrape_retry_count < 3"
             params = ()
             if target_dir:
-                sql = "SELECT id, path, title, artist, album, filename, has_cover, has_lyrics FROM songs WHERE (has_cover = 0 OR has_lyrics = 0) AND path LIKE ? || '%'"
+                sql = "SELECT id, path, title, artist, album, filename, has_cover, has_lyrics FROM songs WHERE (has_cover = 0 OR has_lyrics = 0) AND scrape_retry_count < 3 AND path LIKE ? || '%'"
                 params = (target_dir,)
             cursor = conn.execute(sql, params)
             all_songs = cursor.fetchall()
@@ -691,10 +699,6 @@ def scrape_single_song(item: dict, idx: int, total: int):
     song = item['song']
     update_scan_status(current_path=song['path'])
     
-    import mod.searchx.qq
-    import mod.searchx.netease
-    import mod.searchx.kugou
-    
     try:
         # 0. 优先尝试提取音频内嵌封面
         if item['need_cover']:
@@ -719,36 +723,59 @@ def scrape_single_song(item: dict, idx: int, total: int):
             return ok_cover and ok_lyrics
 
         results = []
-        providers = [mod.searchx.qq, mod.searchx.netease, mod.searchx.kugou]
+        providers = [qq, netease, kugou]
         
-        for attempt in range(3):
-            results = []
-            for prov in providers:
-                try:
-                    time.sleep(random.uniform(0.1, 0.5))
-                    p_res = prov.search(title=song['title'], artist=song['artist'], album=song['album'])
-                    if p_res:
-                        results.extend(p_res)
-                    if is_satisfied(results):
-                        break
-                    
-                    if item['need_cover'] and not any(r.get('cover') for r in results) and song['album']:
-                         l_res = prov.search(title=song['title'], artist=song['artist'], album='')
-                         if l_res:
-                             results.extend(l_res)
-                         if is_satisfied(results):
-                             break
-                except Exception as e:
-                    logger.warning(f"提供商 {prov.__name__} 检索失败: {e}")
-            if results:
-                break
-            if attempt < 2:
-                time.sleep(1)
+        for idx, prov in enumerate(providers):
+            try:
+                # 首个平台直接发起检索，切换后续平台时执行极短频次安全延迟
+                if idx > 0:
+                    time.sleep(random.uniform(0.02, 0.1))
+                p_res = prov.search(title=song['title'], artist=song['artist'], album=song['album'])
+                if p_res:
+                    results.extend(p_res)
+                if is_satisfied(results):
+                    break
+                
+                if item['need_cover'] and not any(r.get('cover') for r in results) and song['album']:
+                     time.sleep(random.uniform(0.02, 0.05))
+                     l_res = prov.search(title=song['title'], artist=song['artist'], album='')
+                     if l_res:
+                         results.extend(l_res)
+                     if is_satisfied(results):
+                         break
+            except Exception as e:
+                logger.warning(f"提供商 {prov.__name__} 检索失败: {e}")
 
         if not results:
+            # 尝试降级提取音频内嵌歌词作为退避兜底
+            if item['need_lyrics']:
+                embedded_lrc = extract_embedded_lyrics(song['path'])
+                if embedded_lrc:
+                    try:
+                        save_lrc_path = os.path.join(app_config.LYRICS_DIR, f"{song['id']}.lrc")
+                        with open(save_lrc_path, 'w', encoding='utf-8') as f:
+                            f.write(embedded_lrc)
+                        with get_db() as conn:
+                            conn.execute("UPDATE songs SET has_lyrics=1 WHERE id=?", (song['id'],))
+                            conn.commit()
+                        logger.info(f"网络检索失败，退避降级提取内嵌歌词成功: {song['title']}")
+                        item['need_lyrics'] = False
+                    except Exception as e_embed:
+                        logger.warning(f"退避保存内嵌歌词失败: {e_embed}")
+            
+            is_failed = item['need_cover'] or item['need_lyrics']
             with scan_status_lock:
-                 SCAN_STATUS['failed'] += 1
+                 if is_failed:
+                     SCAN_STATUS['failed'] += 1
                  SCAN_STATUS['processed'] += 1
+            
+            if is_failed:
+                try:
+                    with get_db() as conn:
+                        conn.execute("UPDATE songs SET scrape_retry_count = scrape_retry_count + 1 WHERE id=?", (song['id'],))
+                        conn.commit()
+                except Exception as e_db:
+                    logger.warning(f"更新无检索结果的重试次数失败: {e_db}")
             return
         
         is_partial_fail = False
@@ -765,11 +792,28 @@ def scrape_single_song(item: dict, idx: int, total: int):
                         conn.execute("UPDATE songs SET has_lyrics=1 WHERE id=?", (song['id'],))
                         conn.commit()
                     logger.info(f"自动保存歌词成功: {save_lrc_path}")
+                    item['need_lyrics'] = False
                 except Exception as e:
                     logger.warning(f"保存歌词失败: {e}")
                     is_partial_fail = True
             else:
-                 is_partial_fail = True
+                 # 网络未搜到歌词，尝试提取原生内嵌歌词保底
+                 embedded_lrc = extract_embedded_lyrics(song['path'])
+                 if embedded_lrc:
+                     try:
+                         save_lrc_path = os.path.join(app_config.LYRICS_DIR, f"{song['id']}.lrc")
+                         with open(save_lrc_path, 'w', encoding='utf-8') as f:
+                             f.write(embedded_lrc)
+                         with get_db() as conn:
+                             conn.execute("UPDATE songs SET has_lyrics=1 WHERE id=?", (song['id'],))
+                             conn.commit()
+                         logger.info(f"网络结果无歌词，退避提取内嵌歌词成功: {song['title']}")
+                         item['need_lyrics'] = False
+                     except Exception as e_embed:
+                         logger.warning(f"退避保存内嵌歌词失败: {e_embed}")
+                         is_partial_fail = True
+                 else:
+                     is_partial_fail = True
 
         # 封面下载与写入
         if item['need_cover']:
@@ -778,7 +822,6 @@ def scrape_single_song(item: dict, idx: int, total: int):
                 try:
                     resp = requests.get(found_cover, timeout=10, headers=COMMON_HEADERS)
                     if resp.status_code == 200:
-                        from core.services.metadata import save_cover_file
                         saved_path = save_cover_file(resp.content, song['id'])
                         if saved_path:
                             with get_db() as conn:
@@ -800,6 +843,12 @@ def scrape_single_song(item: dict, idx: int, total: int):
         with scan_status_lock:
              if is_partial_fail:
                  SCAN_STATUS['failed'] += 1
+                 try:
+                     with get_db() as conn:
+                         conn.execute("UPDATE songs SET scrape_retry_count = scrape_retry_count + 1 WHERE id=?", (song['id'],))
+                         conn.commit()
+                 except Exception as e_db:
+                     logger.warning(f"更新部分刮削失败的重试次数失败: {e_db}")
              SCAN_STATUS['processed'] += 1
              current_processed = SCAN_STATUS['processed']
              
@@ -811,6 +860,12 @@ def scrape_single_song(item: dict, idx: int, total: int):
         with scan_status_lock:
              SCAN_STATUS['failed'] += 1
              SCAN_STATUS['processed'] += 1
+        try:
+            with get_db() as conn:
+                conn.execute("UPDATE songs SET scrape_retry_count = scrape_retry_count + 1 WHERE id=?", (song['id'],))
+                conn.commit()
+        except Exception as e_db:
+            logger.warning(f"更新异常单曲的刮削重试次数失败: {e_db}")
 
 def scan_directory_single(target_dir: str):
     """单独扫描特定文件夹目录并入库"""
@@ -885,7 +940,6 @@ def scan_directory_single(target_dir: str):
                         has_cover = 1
                         if not os.path.exists(cover_cache_path):
                             try:
-                                from core.services.metadata import save_cover_file
                                 with open(cover_file_path, 'rb') as rf:
                                     save_cover_file(rf.read(), sid)
                             except Exception as e:
@@ -902,7 +956,6 @@ def scan_directory_single(target_dir: str):
                     if os.path.exists(ext_lrc):
                         has_lyrics = 1
                         if not os.path.exists(lrc_cache_path):
-                            import shutil
                             try:
                                 shutil.copy(ext_lrc, lrc_cache_path)
                             except Exception:
@@ -910,14 +963,18 @@ def scan_directory_single(target_dir: str):
                     elif os.path.exists(lrc_cache_path):
                         has_lyrics = 1
                     else:
-                        embedded_lrc = extract_embedded_lyrics(info['path'])
-                        if embedded_lrc:
-                            try:
-                                with open(lrc_cache_path, 'w', encoding='utf-8') as f:
-                                    f.write(embedded_lrc)
-                                has_lyrics = 1
-                            except Exception:
-                                pass
+                        lyrics_pref = get_preference('lyrics_source_preference', 'embedded')
+                        if lyrics_pref == 'network':
+                            has_lyrics = 0
+                        else:
+                            embedded_lrc = extract_embedded_lyrics(info['path'])
+                            if embedded_lrc:
+                                try:
+                                    with open(lrc_cache_path, 'w', encoding='utf-8') as f:
+                                        f.write(embedded_lrc)
+                                    has_lyrics = 1
+                                except Exception:
+                                    pass
                                 
                     title = str(meta['title']) if meta['title'] is not None else ''
                     artist = str(meta['artist']) if meta['artist'] is not None else ''
@@ -957,8 +1014,8 @@ def scan_directory_single(target_dir: str):
 
             if final_update_db:
                 conn.executemany('''
-                    INSERT OR REPLACE INTO songs (id, path, filename, title, artist, album, mtime, size, has_cover, has_lyrics)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT OR REPLACE INTO songs (id, path, filename, title, artist, album, mtime, size, has_cover, has_lyrics, scrape_retry_count)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                 ''', final_update_db)
                 conn.commit()
                 

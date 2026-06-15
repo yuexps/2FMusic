@@ -4,12 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - dev
+      - main
     paths:
       - 'server/**'
-      - 'www/**'
+      - 'frontend/**'
       - 'fn_build/manifest'
-    # 仅在 dev 分支且 server/ www/ 或 manifest 变动时触发
 
 jobs:
   build-source-on-push:
@@ -19,6 +18,23 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
 
       - name: Prepare build environment
         run: |
@@ -37,13 +53,13 @@ jobs:
           VERSION="${VERSION_NUM}-${SHORT_SHA}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
-      - name: Build Source Package (Python)
+      - name: Build Source Package
         id: build_source
         run: |
-          echo "Building Source (Python) Package..."
+          echo "Building Source Package..."
           cd fn_build
           ./fnpack-1.2.1-linux-amd64 build
-          SOURCE_FPK_NAME="2fmusic-${{ steps.version.outputs.version }}-python.fpk"
+          SOURCE_FPK_NAME="2fmusic-${{ steps.version.outputs.version }}.fpk"
           if [ -f "yuexps.2fmusic.fpk" ]; then
             mv yuexps.2fmusic.fpk "$SOURCE_FPK_NAME"
             echo "Built: $SOURCE_FPK_NAME"
@@ -56,6 +72,5 @@ jobs:
       - name: Upload Source FPK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: 2fmusic-source-fpk
           path: fn_build/${{ steps.build_source.outputs.source_pkg }}
           if-no-files-found: error

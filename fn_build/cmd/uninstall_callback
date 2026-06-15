@@ -6,6 +6,7 @@ wizard_data_action="$wizard_data_action"
 
 if [ "${wizard_data_action}" = "delete" ]; then
     rm -rf "${TRIM_PKGVAR}"
+    rm -rf "/var/apps/yuexps.2fmusic/shares/2FMusic"
 fi
 
 exit 0

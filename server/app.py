@@ -2,21 +2,25 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+import socket
 import argparse
 import threading
+import urllib.parse
+from socketserver import ThreadingMixIn
+from werkzeug.serving import BaseWSGIServer
 
-# 1. 确保【源码模式】下优先加载本地 lib 依赖目录中的模块 (必须最先运行)
+# 1. 确定运行基础目录
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    sys.path.insert(0, os.path.join(BASE_DIR, 'lib'))
 
 try:
     from core.config import app_config
     from core import create_app
     from core.models.db import init_db
     from core.services.scanner import scan_library_incremental, init_watchdog, clean_temp_part_files
+    from core.utils.logger import LogManager
 except ImportError as e:
     print(f"错误：初始化核心模块失败。\n详情: {e}")
     try:
@@ -41,7 +45,6 @@ args = parser.parse_args()
 app_config.init_from_args(args)
 
 # 4. 使用统一日志管理器配置日志输出
-from core.utils.logger import LogManager
 logger = LogManager.setup(app_config.LOG_FILE)
 
 
@@ -55,7 +58,6 @@ class PrefixMiddleware:
         self.prefix = '/' + prefix.strip('/') if prefix and prefix.strip('/') else ''
 
     def __call__(self, environ, start_response):
-        import urllib.parse
         # 1. 统一提取纯路径
         path = urllib.parse.urlparse(environ.get('PATH_INFO', '')).path
         if path.startswith('//'):
@@ -80,11 +82,6 @@ if app_config.BASE_URL and app_config.BASE_URL != '/':
         app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix=app_config.BASE_URL)
     except Exception as e:
         print(f"Error applying Base URL middleware: {e}")
-
-
-import socket
-from werkzeug.serving import BaseWSGIServer
-from socketserver import ThreadingMixIn
 
 class UnixWSGIServer(ThreadingMixIn, BaseWSGIServer):
     """自定义 UNIX Domain Socket 监听服务器（支持多线程高并发）"""

@@ -4,6 +4,7 @@ import sys
 import base64
 import time
 import functools
+from functools import lru_cache
 import asyncio
 
 if getattr(sys, 'frozen', False):
@@ -12,8 +13,8 @@ else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     sys.path.insert(0, os.path.join(BASE_DIR, 'lib'))
 
-from mod import textcompare
-from mod import tools
+from .. import textcompare
+from .. import tools
 from core.utils.logger import logger
 import aiohttp
 
@@ -59,7 +60,7 @@ async def search_async(title='', artist='', album=''):
     try:
         async with aiohttp.ClientSession(headers=headers) as session:
             url = f"https://songsearch.kugou.com/song_search_v2?keyword={keyword}&platform=WebFilter&format=json&page=1&pagesize=10"
-            async with session.get(url, timeout=10) as resp:
+            async with session.get(url, timeout=5) as resp:
                 if resp.status != 200:
                     return None
                 data = await resp.json(content_type=None)
@@ -102,14 +103,14 @@ async def search_async(title='', artist='', album=''):
                     album_audio_id = entry["album_audio_id"]
                     # 歌词第一步
                     url2 = f"https://krcs.kugou.com/search?ver=1&man=yes&client=mobi&keyword=&duration=&hash={file_hash}&album_audio_id={album_audio_id}"
-                    async with session.get(url2, timeout=10) as resp2:
+                    async with session.get(url2, timeout=5) as resp2:
                         lyrics_info = await resp2.json(content_type=None)
                     if lyrics_info.get("candidates"):
                         lyrics_id = lyrics_info["candidates"][0]["id"]
                         lyrics_key = lyrics_info["candidates"][0]["accesskey"]
                         # 歌词第二步
                         url3 = f"http://lyrics.kugou.com/download?ver=1&client=pc&id={lyrics_id}&accesskey={lyrics_key}&fmt=lrc&charset=utf8"
-                        async with session.get(url3, timeout=10) as resp3:
+                        async with session.get(url3, timeout=5) as resp3:
                             lyrics_data = await resp3.json(content_type=None)
                         lyrics_encode = lyrics_data.get("content", "")
                         if lyrics_encode:
@@ -137,9 +138,10 @@ async def search_async(title='', artist='', album=''):
     return [i.get('data') for i in sort_li[:limit]]
 
 # 同步包装器
-def search(*args, **kwargs):
+@lru_cache(maxsize=64)
+def search(title='', artist='', album=''):
     time_start = time.time()
-    result = asyncio.run(search_async(*args, **kwargs))
+    result = asyncio.run(search_async(title=title, artist=artist, album=album))
     time_end = time.time()
     test_time_print(f"[kugou] search 总耗时: {round((time_end - time_start) * 1000)} ms")
     return result

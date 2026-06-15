@@ -55,8 +55,8 @@ def insert_or_replace_song(song_id: str, path: str, filename: str, title: str, a
     with get_db() as conn:
         conn.execute(
             """
-            INSERT OR REPLACE INTO songs (id, path, filename, title, artist, album, mtime, size, has_cover, has_lyrics)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO songs (id, path, filename, title, artist, album, mtime, size, has_cover, has_lyrics, scrape_retry_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
             """,
             (song_id, path, filename, title, artist, album, mtime, size, has_cover, has_lyrics)
         )

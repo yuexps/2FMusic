@@ -2,6 +2,8 @@ import json
 import threading
 from flask_sock import Sock
 from core.utils.logger import logger
+from core.services.scanner import register_ws_broadcast_callback
+from core.services.downloader import register_downloader_ws_broadcast_callback
 
 sock = Sock()
 # 使用线程锁保护连接集合，防止多线程广播时产生并发修改异常
@@ -47,7 +49,7 @@ def dispatch_ws_action(action: str, data: dict) -> tuple:
             elif action == 'music/clear_metadata':
                 return handle_clear_metadata(data.get('song_id'), data.get('path'))
             elif action == 'music/lyrics':
-                return handle_get_lyrics(data.get('title'), data.get('artist'), data.get('filename'), data.get('song_id'))
+                return handle_get_lyrics(data.get('title'), data.get('artist'), data.get('filename'), data.get('song_id'), data.get('yrc', False))
             elif action == 'music/album-art':
                 return handle_get_album_art(data.get('title'), data.get('artist'), data.get('filename'), data.get('song_id'))
 
@@ -187,10 +189,6 @@ def dispatch_ws_action(action: str, data: dict) -> tuple:
 def register_ws(app):
     """初始化并挂载 WebSocket 连接处理器"""
     sock.init_app(app)
-    
-    # 注册服务层广播回调
-    from core.services.scanner import register_ws_broadcast_callback
-    from core.services.downloader import register_downloader_ws_broadcast_callback
     
     register_ws_broadcast_callback(broadcast_ws_message)
     register_downloader_ws_broadcast_callback(broadcast_ws_message)

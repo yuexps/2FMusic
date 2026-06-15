@@ -8,6 +8,8 @@ from mutagen.mp4 import MP4, MP4Cover
 from core.config import app_config
 from core.utils.logger import logger
 from core.utils.common import COMMON_HEADERS
+from core.utils.hasher import generate_song_id
+from core.utils.image import compress_and_convert_to_webp
 
 def get_metadata(file_path: str) -> dict:
     """提取音频文件元数据 (标题, 艺术家, 专辑)"""
@@ -70,7 +72,6 @@ def extract_embedded_cover(file_path: str, song_id: str = None) -> bool:
         if not os.path.exists(file_path):
             return False
         if not song_id:
-            from core.utils.hasher import generate_song_id
             song_id = generate_song_id(file_path)
         cover_dir = app_config.COVERS_DIR
         os.makedirs(cover_dir, exist_ok=True)
@@ -141,7 +142,7 @@ def extract_embedded_lyrics(file_path: str) -> str:
                 return lyrics[0]
                 
         # 3. M4A / MP4
-        if hasattr(audio, 'tags') and '©lyr' in audio.tags:
+        if isinstance(audio, MP4) and hasattr(audio, 'tags') and '©lyr' in audio.tags:
              return audio.tags['©lyr'][0]
 
     except Exception as e:
@@ -207,7 +208,6 @@ def save_cover_file(cover_bytes: bytes, song_id: str) -> str:
         os.makedirs(cover_dir, exist_ok=True)
         cover_path = os.path.join(cover_dir, f"{song_id}.webp")
         
-        from core.utils.image import compress_and_convert_to_webp
         processed_bytes = compress_and_convert_to_webp(cover_bytes)
         
         with open(cover_path, 'wb') as f:

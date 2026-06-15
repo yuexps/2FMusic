@@ -2,6 +2,8 @@ import time
 import os
 import threading
 import subprocess
+import datetime
+import requests
 from flask import Blueprint, redirect
 from core.config import app_config
 from core.models.db import get_db
@@ -14,12 +16,14 @@ from core.services.downloader import (
     _fetch_playlist_songs,
     _fetch_song_detail,
     run_download_task,
-    DOWNLOAD_TASKS,
+    get_active_download_tasks_count,
     NETEASE_MAX_CONCURRENT,
-    get_download_task_status
+    get_download_task_status,
+    update_download_task
 )
 from core.utils.logger import logger
 from core.utils.common import normalize_cookie_string
+from core.routes.ws import broadcast_ws_message
 
 netease_bp = Blueprint('netease', __name__)
 
@@ -125,7 +129,6 @@ def handle_netease_daily_recommend() -> tuple:
     # 检查推荐缓存是否有效
     now = time.time()
     if _daily_recommend_cache is not None:
-        import datetime
         # 减去 6 小时以符合网易云每日推荐 6:00 AM 更新的时间
         def get_recommend_day(ts):
             return (datetime.datetime.fromtimestamp(ts) - datetime.timedelta(hours=6)).strftime('%Y-%m-%d')
@@ -241,8 +244,6 @@ def handle_netease_logout() -> tuple:
 
 def poll_netease_qr_status(key: str):
     """后台线程：轮询检测网易云扫码状态并进行 WebSocket 实时推送"""
-    from core.routes.ws import broadcast_ws_message
-    
     logger.info(f"启动网易云扫码后台监听线程: {key}")
     last_status = None
     start_time = time.time()
@@ -331,7 +332,6 @@ def handle_netease_config(method: str, download_dir: str = None, api_base: str =
         if api_base is not None:
             api_base = api_base.strip().rstrip('/')
             if api_base:
-                import requests
                 try:
                     # 校验 API 是否可用：请求 /login/status 接口，超时为 3 秒
                     test_url = f"{api_base}/login/status"
@@ -387,17 +387,18 @@ def handle_download_netease_music(payload: dict) -> tuple:
     if not song_id:
         return False, None, "缺少歌曲ID"
 
-    active = sum(1 for t in DOWNLOAD_TASKS.values() if t.get('status') in ('pending', 'preparing', 'downloading'))
+    active = get_active_download_tasks_count()
     if active >= NETEASE_MAX_CONCURRENT:
         return False, None, f"并发下载已达上限 ({NETEASE_MAX_CONCURRENT})，请稍后再试"
     
     task_id = f"task_{int(time.time()*1000)}_{os.urandom(4).hex()}"
-    DOWNLOAD_TASKS[task_id] = {
-        'status': 'pending', 
-        'progress': 0, 
-        'title': payload.get('title', '未知'),
-        'artist': payload.get('artist', '未知')
-    }
+    update_download_task(
+        task_id,
+        status='pending',
+        progress=0,
+        title=payload.get('title', '未知'),
+        artist=payload.get('artist', '未知')
+    )
     
     # 异步开始任务，避免请求挂起
     threading.Thread(target=run_download_task, args=(task_id, payload), daemon=True).start()

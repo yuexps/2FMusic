@@ -2,6 +2,7 @@ import os
 import re
 import time
 import requests
+import threading
 from urllib.parse import urlparse, parse_qs
 import shutil
 
@@ -13,9 +14,11 @@ from core.services.metadata import (
     embed_lyrics_to_file
 )
 # 这里由于 scan_library_incremental 等方法可能发生循环依赖，故 index_single_file 延迟导入
+from core.services.scanner import add_watchdog_ignore_path, index_single_file, notify_library_changed
 
 from core.utils.logger import logger
 from core.utils.common import COMMON_HEADERS, parse_cookie_string
+from core.utils.hasher import get_file_md5
 
 # WebSocket 广播回调
 _ws_broadcast_callback = None
@@ -25,23 +28,26 @@ def register_downloader_ws_broadcast_callback(cb):
     global _ws_broadcast_callback
     _ws_broadcast_callback = cb
 
+
 # 全局任务池与并发限制
 DOWNLOAD_TASKS = {}
 NETEASE_MAX_CONCURRENT = 5
+download_tasks_lock = threading.Lock()
 
 def clean_expired_tasks():
     """清除超过 10 分钟已完成或失败的任务状态"""
     global DOWNLOAD_TASKS
     now = time.time()
     to_delete = []
-    for tid, task in list(DOWNLOAD_TASKS.items()):
-        status = task.get('status')
-        if status in ('success', 'error'):
-            completed_at = task.get('completed_at', 0)
-            if completed_at and (now - completed_at) > 600:
-                to_delete.append(tid)
-    for tid in to_delete:
-        DOWNLOAD_TASKS.pop(tid, None)
+    with download_tasks_lock:
+        for tid, task in list(DOWNLOAD_TASKS.items()):
+            status = task.get('status')
+            if status in ('success', 'error'):
+                completed_at = task.get('completed_at', 0)
+                if completed_at and (now - completed_at) > 600:
+                    to_delete.append(tid)
+        for tid in to_delete:
+            DOWNLOAD_TASKS.pop(tid, None)
 
 def update_download_task(task_id: str, **kwargs):
     """更新下载任务状态，并通过 WebSocket 实时推送给前端"""
@@ -52,16 +58,18 @@ def update_download_task(task_id: str, **kwargs):
     except Exception:
         pass
 
-    if task_id not in DOWNLOAD_TASKS:
-        DOWNLOAD_TASKS[task_id] = {}
-        
-    for k, v in kwargs.items():
-        DOWNLOAD_TASKS[task_id][k] = v
+    with download_tasks_lock:
+        if task_id not in DOWNLOAD_TASKS:
+            DOWNLOAD_TASKS[task_id] = {}
+            
+        for k, v in kwargs.items():
+            DOWNLOAD_TASKS[task_id][k] = v
 
-    if 'status' in kwargs and kwargs['status'] in ('success', 'error'):
-        DOWNLOAD_TASKS[task_id]['completed_at'] = time.time()
+        if 'status' in kwargs and kwargs['status'] in ('success', 'error'):
+            DOWNLOAD_TASKS[task_id]['completed_at'] = time.time()
+            
+        task_info = dict(DOWNLOAD_TASKS[task_id])
         
-    task_info = dict(DOWNLOAD_TASKS[task_id])
     task_info['task_id'] = task_id
     
     if _ws_broadcast_callback:
@@ -74,7 +82,14 @@ def update_download_task(task_id: str, **kwargs):
 
 def get_download_task_status(task_id: str) -> dict:
     """获取下载任务状态"""
-    return DOWNLOAD_TASKS.get(task_id)
+    with download_tasks_lock:
+        task = DOWNLOAD_TASKS.get(task_id)
+        return dict(task) if task else None
+
+def get_active_download_tasks_count() -> int:
+    """线程安全地获取当前活跃的下载任务数量"""
+    with download_tasks_lock:
+        return sum(1 for t in DOWNLOAD_TASKS.values() if t.get('status') in ('pending', 'preparing', 'downloading'))
 
 def sanitize_filename(name: str) -> str:
     """清理文件名中的非法字符，避免写入失败"""
@@ -447,7 +462,6 @@ def run_download_task(task_id: str, payload: dict):
                 embed_lyrics_to_file(tmp_path, lrc_text)
 
             # 文件最终内容确定后，计算唯一物理 MD5 作为最终 ID
-            from core.utils.hasher import get_file_md5
             new_sid = get_file_md5(tmp_path)
 
             # 保存本地封面和歌词缓存
@@ -472,7 +486,6 @@ def run_download_task(task_id: str, payload: dict):
 
             # 注册 Watchdog 忽略，原子性移动并建立索引
             try:
-                from core.services.scanner import add_watchdog_ignore_path, index_single_file, notify_library_changed
                 add_watchdog_ignore_path(target_path)
             except Exception as e:
                 logger.warning(f"注册忽略路径失败: {e}")

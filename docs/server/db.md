@@ -17,7 +17,8 @@ CREATE TABLE songs (
     mtime REAL,                   -- 文件物理修改时间戳
     size INTEGER,                 -- 文件物理大小 (字节)
     has_cover INTEGER DEFAULT 0,  -- 封面缓存状态 (0: 无, 1: 有)
-    has_lyrics INTEGER DEFAULT 0  -- 歌词缓存状态 (0: 无, 1: 有)
+    has_lyrics INTEGER DEFAULT 0, -- 歌词缓存状态 (0: 无, 1: 有)
+    scrape_retry_count INTEGER DEFAULT 0 -- 在线刮削尝试失败次数
 );
 
 -- 2. 自定义歌单（收藏夹）表

@@ -46,11 +46,25 @@
             :ref="el => { if (el) lyricElements[idx] = el as HTMLElement }" class="lyric-line group/lyric text-[20px] lg:text-[19px] xl:text-[21px] 2xl:text-[24px] font-semibold text-white/45 px-4 py-3 rounded-lg cursor-pointer transition-all duration-300 origin-center leading-relaxed text-center hover:text-white/80 hover:bg-white/5 max-md:text-base max-md:px-2 max-md:py-2.5 max-md:leading-snug max-md:hover:bg-transparent max-md:hover:text-white/45 select-none touch-none"
             :class="{ 'text-white! text-[24px] lg:text-[23px] xl:text-[25px] 2xl:text-[28px] scale-[1.03] cursor-default hover:bg-transparent max-md:text-[18px]': currentLyricIndex === idx }" @click="seekToLyric(line.time)">
             <template v-if="getLineTexts(line).length > 1">
-              <span class="block lyric-main">{{ getLineTexts(line)[0] }}</span>
+              <span class="block lyric-main">
+                <template v-if="line.isYrc && currentLyricIndex === idx && line.words && line.words.length > 0">
+                  <span v-for="(word, wIdx) in line.words" :key="wIdx" class="yrc-word" :class="getWordClass(word)" :style="getWordStyle(word)">{{ word.text }}</span>
+                </template>
+                <template v-else>
+                  {{ getLineTexts(line)[0] }}
+                </template>
+              </span>
               <span class="block text-[0.75em] font-normal text-white/48 mt-1.5 tracking-wide transition-colors duration-300 group-hover/lyric:text-white/65 max-md:mt-1 max-md:text-[0.78em]" :class="{ 'text-white/72!': currentLyricIndex === idx }">{{ getLineTexts(line)[1] }}</span>
             </template>
             <template v-else>
-              <span class="block lyric-main">{{ getLineTexts(line)[0] }}</span>
+              <span class="block lyric-main">
+                <template v-if="line.isYrc && currentLyricIndex === idx && line.words && line.words.length > 0">
+                  <span v-for="(word, wIdx) in line.words" :key="wIdx" class="yrc-word" :class="getWordClass(word)" :style="getWordStyle(word)">{{ word.text }}</span>
+                </template>
+                <template v-else>
+                  {{ getLineTexts(line)[0] }}
+                </template>
+              </span>
             </template>
           </div>
         </div>
@@ -165,10 +179,20 @@ const favoritesStore = useFavoritesStore()
 const systemStore = useSystemStore()
 const message = useMessage()
 
+// 逐字歌词字级时值结构
+interface YrcWord {
+  text: string
+  startTime: number  // 相对于歌曲起点的绝对毫秒
+  duration: number   // 持续时间（毫秒）
+}
+
 // 歌词行类型
 interface LyricLine {
   time: number
-  lines: string[]  // lines[0]=原文, lines[1]=翻译（可选）
+  duration?: number  // 整行持续时间（毫秒）
+  lines: string[]    // lines[0]=原文, lines[1]=翻译（可选）
+  isYrc?: boolean    // 是否是逐字歌词
+  words?: YrcWord[]  // 逐字数组
 }
 
 const rawLyrics = ref('')
@@ -208,7 +232,8 @@ const loadLyricsForSong = async (song: any, skipCache: boolean = false) => {
       title: song.title,
       artist: song.artist,
       filename: song.filename,
-      song_id: song.id
+      song_id: song.id,
+      yrc: true
     })
 
     if (data && data.lyrics) {
@@ -243,7 +268,7 @@ watch(() => playerStore.currentSong?.id, async (newId) => {
   await loadLyricsForSong(playerStore.currentSong)
 }, { immediate: true })
 
-// 解析 LRC 格式歌词
+// 解析 LRC 格式和网易云 YRC 格式歌词
 const parseLyrics = (lrc: string) => {
   if (!lrc || lrc.trim() === '') {
     lyricLines.value = []
@@ -252,7 +277,17 @@ const parseLyrics = (lrc: string) => {
 
   const lines = lrc.split('\n')
   const timeRegex = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\]/
-  const timeMap = new Map<number, string[]>()
+  const yrcRowRegex = /^\[(\d+),(\d+)\]/
+  const yrcWordRegex = /\((\d+),(\d+)(?:,\d+)?\)([^\(]+)/g
+
+  // 结构化时间轴 Map 存储对象
+  interface MapValue {
+    lines: string[]
+    duration?: number
+    isYrc?: boolean
+    words?: YrcWord[]
+  }
+  const timeMap = new Map<number, MapValue>()
 
   lines.forEach(rawLine => {
     const line = rawLine.trim()
@@ -268,12 +303,47 @@ const parseLyrics = (lrc: string) => {
             text = (json.c as Array<{ tx?: string }>).map(item => item.tx || '').join('').trim()
           }
           if (text) {
-            if (!timeMap.has(time)) timeMap.set(time, [])
-            timeMap.get(time)!.push(text)
+            if (!timeMap.has(time)) {
+              timeMap.set(time, { lines: [], isYrc: false })
+            }
+            timeMap.get(time)!.lines.push(text)
           }
           return
         }
       } catch (e) { /* ignore json parse error */ }
+    }
+
+    const yrcMatch = yrcRowRegex.exec(line)
+    if (yrcMatch) {
+      const timeMs = parseInt(yrcMatch[1])
+      const durationMs = parseInt(yrcMatch[2])
+      const time = timeMs / 1000
+
+      const content = line.replace(yrcRowRegex, '')
+      const words: YrcWord[] = []
+      let match;
+      let text = ''
+
+      yrcWordRegex.lastIndex = 0
+      while ((match = yrcWordRegex.exec(content)) !== null) {
+        const wStart = parseInt(match[1])
+        const wDuration = parseInt(match[2])
+        const wText = match[3]
+        words.push({
+          text: wText,
+          startTime: wStart,
+          duration: wDuration
+        })
+        text += wText
+      }
+
+      if (text) {
+        if (!timeMap.has(time)) {
+          timeMap.set(time, { lines: [], duration: durationMs, isYrc: true, words })
+        }
+        timeMap.get(time)!.lines.push(text)
+      }
+      return
     }
 
     const match = timeRegex.exec(line)
@@ -284,20 +354,30 @@ const parseLyrics = (lrc: string) => {
       const time = min * 60 + sec + (msRaw / (match[3] && match[3].length === 3 ? 1000 : 100))
       const text = line.replace(timeRegex, '').trim()
       if (text) {
-        if (!timeMap.has(time)) timeMap.set(time, [])
-        timeMap.get(time)!.push(text)
+        if (!timeMap.has(time)) {
+          timeMap.set(time, { lines: [], isYrc: false })
+        }
+        timeMap.get(time)!.lines.push(text)
       }
     } else {
       const isMetadata = /^\[(id|ar|ti|by|hash|al|sign|qq|total|offset|length|re|ve):.*?\]$/i.test(line)
       if (!line.startsWith('{') && !isMetadata) {
-        if (!timeMap.has(0)) timeMap.set(0, [])
-        timeMap.get(0)!.push(line)
+        if (!timeMap.has(0)) {
+          timeMap.set(0, { lines: [], isYrc: false })
+        }
+        timeMap.get(0)!.lines.push(line)
       }
     }
   })
 
   lyricLines.value = Array.from(timeMap.entries())
-    .map(([time, lineTexts]) => ({ time, lines: lineTexts }))
+    .map(([time, val]) => ({
+      time,
+      duration: val.duration,
+      lines: val.lines,
+      isYrc: val.isYrc,
+      words: val.words
+    }))
     .sort((a, b) => a.time - b.time)
 }
 
@@ -571,5 +651,56 @@ const getLineTexts = (line: LyricLine): string[] => {
   }
   return [text]
 }
+
+// 获取当前字的播放状态类名
+const getWordClass = (word: YrcWord) => {
+  const curTimeMs = playerStore.currentTime * 1000
+  if (curTimeMs >= word.startTime + word.duration) {
+    return 'is-played'
+  } else if (curTimeMs >= word.startTime) {
+    return 'is-playing'
+  }
+  return 'is-pending'
+}
+
+// 计算当前字的染色高亮百分比 (利用 CSS 硬件加速过渡避免 timeupdate 卡顿)
+const getWordStyle = (word: YrcWord) => {
+  const curTimeMs = playerStore.currentTime * 1000
+  if (curTimeMs >= word.startTime && curTimeMs < word.startTime + word.duration) {
+    const remainingTime = Math.max(0, word.startTime + word.duration - curTimeMs)
+    return {
+      'transition': `background-size ${remainingTime}ms linear`
+    }
+  }
+  return {}
+}
 </script>
+
+<style scoped>
+.yrc-word {
+  background: linear-gradient(to right, #ffffff, #ffffff) no-repeat;
+  background-size: 0% 100%;
+  background-color: rgba(255, 255, 255, 0.45);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent !important;
+  display: inline;
+}
+
+.yrc-word.is-played {
+  background-size: 100% 100% !important;
+  transition: none !important;
+}
+
+.yrc-word.is-playing {
+  background-size: 100% 100%;
+  /* transition 将在 HTML 中根据具体 duration 动态配置 */
+}
+
+.yrc-word.is-pending {
+  background-size: 0% 100% !important;
+  transition: none !important;
+}
+</style>
 

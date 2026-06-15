@@ -1,6 +1,7 @@
 from core.models.db import get_db
 from core.services.scanner import SCAN_STATUS, LIBRARY_VERSION
 from core.utils.logger import logger
+from core.models.preferences import get_preference, set_preference
 
 
 def handle_get_system_status() -> tuple:
@@ -22,7 +23,6 @@ def handle_get_system_status() -> tuple:
 
 def handle_get_lyrics_preference() -> tuple:
     """获取歌词刮削来源偏好"""
-    from core.models.preferences import get_preference
     try:
         value = get_preference('lyrics_source_preference', 'embedded')
         return True, {'value': value}, None
@@ -33,7 +33,6 @@ def handle_get_lyrics_preference() -> tuple:
 
 def handle_save_lyrics_preference(value: str) -> tuple:
     """保存歌词刮削来源偏好 (embedded | network)"""
-    from core.models.preferences import set_preference
     if value not in ('embedded', 'network'):
         return False, None, "无效的歌词偏好值，请传入 'embedded' 或 'network'"
     try:

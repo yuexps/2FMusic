@@ -1,10 +1,10 @@
 # 网络与通信契约规范 (docs/server/communication.md)
 
 ## 1. 端口与 UNIX Domain Socket 启动规范
-*   `server/app.py` 根据命令行及环境变量参数，自适应启动三种底层网络模式：
-    1.  **纯端口模式**：监听 TCP 端口（如 0.0.0.0:port），支持多线程并发 (`threaded=True`)。
-    2.  **纯 Socket 模式**：通过 `UnixWSGIServer` 绑定指定的物理 UNIX Domain Socket 文件。在绑定前自动删除历史残留 socket 并分配 `0o666` 物理读写权限，以便反向代理服务器（如 Caddy/Nginx）读取。
-    3.  **端口+Socket 并发模式**：在单独的守护线程里运行 UNIX socket 监听，主线程阻塞运行 TCP 端口服务。
+*   `server/app.py` 根据命令行及环境变量参数，采用 Werkzeug 内置多线程 WSGI 服务器自适应启动三种底层网络模式：
+    1.  **纯端口模式**：使用 Werkzeug 内置的多线程开发服务器监听 TCP 端口（如 0.0.0.0:port），通过 `app.run(threaded=True)` 运行。
+    2.  **纯 Socket 模式**：通过自定义的 `UnixWSGIServer`（基于 `socketserver.ThreadingMixIn` 和 `werkzeug.serving.BaseWSGIServer`）绑定指定的物理 UNIX Domain Socket 文件。在绑定前自动删除历史残留 socket 并配置物理读写权限为 `0666`，以供反向代理服务器（如 Caddy/Nginx）读取。
+    3.  **端口+Socket 并发模式**：在单独 the 守护线程里运行自定义的 `UnixWSGIServer` 监听 UNIX socket，主线程阻塞运行 Werkzeug TCP 端口开发服务。
 
 ## 2. 基准子路径与鉴权拦截
 *   **PrefixMiddleware**：若配置了 `BASE_URL`，在 Flask 顶层利用 WSGI 中间件统一剥离请求前缀（同时支持 `HTTP_X_FORWARDED_PREFIX` 标志识别），实现透明的子路径反向代理适配。

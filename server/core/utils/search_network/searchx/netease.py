@@ -15,8 +15,8 @@ else:
     sys.path.insert(0, os.path.join(BASE_DIR, 'lib'))
 
 import aiohttp
-from mod import textcompare, tools
-from mod.ttscn import t2s
+from .. import textcompare, tools
+from ..ttscn import t2s
 from core.utils.logger import logger
 
 def test_time_print(*args, **kwargs):
@@ -81,7 +81,7 @@ async def search_artist_blur(artist_blur, limit=1):
     artists = []
     try:
         async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(url, timeout=10) as resp:
+            async with session.get(url, timeout=5) as resp:
                 response = await resp.json(content_type=None)
 
         artist_results = response['result']
@@ -103,7 +103,7 @@ async def search_artist_blur(artist_blur, limit=1):
 async def search_albums(artist_id):
     url = ALBUMS_SEARCH_URL.format(artist_id)
     async with aiohttp.ClientSession(headers=headers) as session:
-        async with session.get(url, timeout=10) as resp:
+        async with session.get(url, timeout=5) as resp:
             response = await resp.json(content_type=None)
     if response['code'] == 200:
         return response['hotAlbums']
@@ -127,7 +127,7 @@ def filter_and_get_album_id(album_list, album):
 async def get_album_info_by_id(album_id):
     url = ALBUM_INFO_URL.format(album_id)
     async with aiohttp.ClientSession(headers=headers) as session:
-        async with session.get(url, timeout=10) as resp:
+        async with session.get(url, timeout=5) as resp:
             response = await resp.json(content_type=None)
     if response['code'] == 200:
         return response['album']
@@ -152,7 +152,7 @@ async def get_album_info(artist, album):
 async def get_cover_url(album_id: int):
     url = ALBUM_SEARCH_URL_WANGYI.format(album_id)
     async with aiohttp.ClientSession(headers=headers) as session:
-        async with session.get(url, timeout=10) as resp:
+        async with session.get(url, timeout=5) as resp:
             json_data = await resp.json(content_type=None)
     if json_data.get('album', False) and json_data.get('album').get('picUrl', False):
         return json_data['album']['picUrl']
@@ -162,7 +162,7 @@ async def get_cover_url(album_id: int):
 async def get_lyrics(track_id: int):
     url = LYRIC_URL_WANGYI.format(track_id)
     async with aiohttp.ClientSession(headers=headers) as session:
-        async with session.get(url, timeout=10) as resp:
+        async with session.get(url, timeout=5) as resp:
             json_data = await resp.json(content_type=None)
     origin_lyric = json_data.get('lrc', {}).get('lyric', '')
     trans_lyric = json_data.get('tlyric', {}).get('lyric', '')
@@ -207,7 +207,7 @@ async def search_track(title, artist, album):
     t_start = time.time()
 
     async with aiohttp.ClientSession(headers=headers) as session:
-        async with session.get(url, timeout=10) as resp:
+        async with session.get(url, timeout=5) as resp:
             if resp.status != 200:
                 return None
             song_info = await resp.json(content_type=None)

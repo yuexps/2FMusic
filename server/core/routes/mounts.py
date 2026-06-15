@@ -7,7 +7,8 @@ from core.services.scanner import (
     scan_library_incremental,
     scan_directory_single,
     auto_scrape_missing_metadata,
-    refresh_watchdog_paths
+    refresh_watchdog_paths,
+    notify_library_changed
 )
 from core.utils.logger import logger
 
@@ -68,8 +69,6 @@ def handle_delete_mount_point(path: str) -> tuple:
         
         # 重新刷新 Watchdog 监听器
         refresh_watchdog_paths()
-        
-        from core.services.scanner import notify_library_changed
         notify_library_changed()
         
         return True, None, None
