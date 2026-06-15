@@ -77,7 +77,7 @@
               <n-button round type="primary" @click="triggerBgUpload">
                 选择图片
               </n-button>
-              <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="handleBgUpload" />
+              <input id="bg-file-input" type="file" accept="image/*" class="hidden" @change="handleBgUpload" />
             </div>
           </div>
 
@@ -196,9 +196,9 @@ const settingSections = [
   { id: 'netease', label: '网易云下载全局设置' }
 ]
 
-const fileInputRef = ref<HTMLInputElement | null>(null)
 const triggerBgUpload = () => {
-  fileInputRef.value?.click()
+  const input = document.getElementById('bg-file-input') as HTMLInputElement | null
+  input?.click()
 }
 
 // 缩放设置

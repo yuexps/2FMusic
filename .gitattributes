@@ -10,3 +10,7 @@
 *.exe binary
 fn_build/fnpack* binary
 fnpack.exe binary
+
+# 强制 Windows 批处理脚本使用 CRLF 换行符以避免执行报错
+*.cmd text eol=crlf
+*.bat text eol=crlf
