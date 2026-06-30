@@ -2,13 +2,17 @@
 
 ### This script is called after the user uninstalls the application.
 
-wizard_data_action="$wizard_data_action"
+# 获取用户在向导中的选择
+WIZARD_DATA_ACTION="$wizard_data_action"
 
-if [ "${wizard_data_action}" = "delete" ]; then
-    rm -rf "${TRIM_PKGVAR}"
-    if [ -d "/var/apps/yuexps.2fmusic/shares/2FMusic" ]; then
-        rm -rf /var/apps/yuexps.2fmusic/shares/2FMusic/*
-    fi
+echo "卸载时，用户选择数据保留选项: $WIZARD_DATA_ACTION"
+
+# 根据用户选择执行相应逻辑
+if [ "$WIZARD_DATA_ACTION" = "delete" ]; then
+    echo "开始删除数据目录：$TRIM_PKGVAR ${TRIM_DATA_SHARE_PATHS%%:*}"
+    rm -rf ${TRIM_PKGVAR} ${TRIM_DATA_SHARE_PATHS%%:*}
+else
+    echo "保留数据不动"
 fi
 
 exit 0

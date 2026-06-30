@@ -22,7 +22,7 @@
         "type": "radio",
         "field": "wizard_run_mode",
         "label": "运行方式",
-        "initValue": "both",
+        "initValue": "socket",
         "options": [
           {
             "label": "并发模式 (Port + Socket)",
