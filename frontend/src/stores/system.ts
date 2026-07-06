@@ -6,7 +6,16 @@ import { musicDB } from '../utils/indexedDB'
 import { coverCacheManager } from '../utils/coverCache'
 
 export const useSystemStore = defineStore('system', () => {
-  const songs = ref<Song[]>([])
+  let parsedPlaylist: Song[] = []
+  try {
+    const savedPlaylist = localStorage.getItem('2fmusic_playlist')
+    if (savedPlaylist) {
+      parsedPlaylist = JSON.parse(savedPlaylist)
+    }
+  } catch (e) {
+    console.warn('Failed to parse cached playlist:', e)
+  }
+  const songs = ref<Song[]>(parsedPlaylist)
   const mountPoints = ref<string[]>([])
   const status = ref<SystemStatus>({
     scanning: false,
@@ -104,7 +113,11 @@ export const useSystemStore = defineStore('system', () => {
     wsClient.subscribe('download_status', (data: any) => {
       console.log('WebSocket：收到下载任务状态更新:', data)
       if (data && data.task_id) {
-        downloadTasks.value[data.task_id] = data as DownloadTask
+        if (data.status === 'deleted') {
+          delete downloadTasks.value[data.task_id]
+        } else {
+          downloadTasks.value[data.task_id] = data as DownloadTask
+        }
       }
     })
   }
@@ -315,6 +328,30 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
+  const clearNeteaseDownloadTask = async (taskId: string) => {
+    try {
+      await wsClient.sendRequest('netease/clear_task', { task_id: taskId })
+      delete downloadTasks.value[taskId]
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e.message || '清理异常' }
+    }
+  }
+
+  const clearAllNeteaseDownloadTasks = async () => {
+    try {
+      await wsClient.sendRequest('netease/clear_all_tasks')
+      for (const [tid, task] of Object.entries(downloadTasks.value)) {
+        if (task.status === 'success' || task.status === 'error') {
+          delete downloadTasks.value[tid]
+        }
+      }
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e.message || '清理异常' }
+    }
+  }
+
   const installNeteaseDocker = async () => {
     try {
       await wsClient.sendRequest('netease/install_service')
@@ -371,6 +408,8 @@ export const useSystemStore = defineStore('system', () => {
     fetchNeteaseRecommendSongs,
     clearNeteaseRecommendCache,
     startNeteaseDownload,
+    clearNeteaseDownloadTask,
+    clearAllNeteaseDownloadTasks,
     installNeteaseDocker,
     fetchDockerInstallStatus,
     checkDockerContainer

@@ -1,8 +1,8 @@
 <template>
   <div class="flex flex-col flex-1 min-h-0 local-music-view">
     <!-- 头部操作区 -->
-    <div class="flex justify-between items-center mb-6 max-md:flex-col max-md:items-stretch max-md:gap-3 max-md:mb-4">
-      <div class="flex items-center gap-3 w-full">
+    <div class="flex justify-between items-center mb-6 max-md:flex-col max-md:items-stretch max-md:gap-4 max-md:mb-4">
+      <div class="flex items-center gap-3 shrink-0">
         <n-button v-if="playlistId" circle secondary class="mr-2" @click="goBackToFavorites" title="返回收藏夹">
           <template #icon>
             <SvgIcon name="chevron-left" />
@@ -14,25 +14,37 @@
         </span>
       </div>
 
-      <div class="flex items-center gap-3 max-md:w-full max-md:justify-between max-md:gap-2">
-        <!-- 搜索 -->
-        <n-input v-model:value="searchQuery" placeholder="搜索标题、歌手、专辑..." round clearable
-          class="w-[clamp(180px,24vw,320px)]! max-md:flex-1 max-md:w-full">
-          <template #prefix>
-            <SvgIcon name="search" class="mr-1.5" />
-          </template>
-        </n-input>
+      <div class="flex items-center gap-3 max-md:flex-col max-md:items-stretch max-md:w-full max-md:gap-2.5">
+        <!-- 视图分段选择器，仅在非批量管理且有歌时展示，靠右聚合 -->
+        <n-tabs v-if="!isBatchMode" v-model:value="viewMode" type="segment" size="small"
+          class="w-[240px]! shrink-0 max-md:w-full">
+          <n-tab name="list">单曲</n-tab>
+          <n-tab name="artist">歌手</n-tab>
+          <n-tab name="album">专辑</n-tab>
+          <n-tab name="folder">文件夹</n-tab>
+        </n-tabs>
 
-        <!-- 排序（仅本地音乐显示） -->
-        <div v-if="!playlistId" class="flex items-center gap-1">
-          <n-dropdown trigger="click" :options="sortOptions" @select="handleSortSelect">
-            <n-button round>
-              <template #icon>
-                <SvgIcon :name="sortOrder === 'asc' ? 'sort-amount-down' : 'sort-amount-up'" />
-              </template>
-              {{ currentSortLabel }}
-            </n-button>
-          </n-dropdown>
+        <!-- 搜索与排序在移动端并排在一行 -->
+        <div class="flex items-center gap-2 flex-1 max-md:w-full">
+          <!-- 搜索 -->
+          <n-input v-model:value="searchQuery" placeholder="搜索标题、歌手、专辑..." round clearable
+            class="w-[clamp(180px,18vw,260px)]! flex-1 max-md:w-auto">
+            <template #prefix>
+              <SvgIcon name="search" class="mr-1.5" />
+            </template>
+          </n-input>
+
+          <!-- 排序（仅本地音乐显示） -->
+          <div v-if="!playlistId" class="flex items-center gap-1 shrink-0">
+            <n-dropdown trigger="click" :options="sortOptions" @select="handleSortSelect">
+              <n-button round>
+                <template #icon>
+                  <SvgIcon :name="sortOrder === 'asc' ? 'sort-amount-down' : 'sort-amount-up'" />
+                </template>
+                {{ currentSortLabel }}
+              </n-button>
+            </n-dropdown>
+          </div>
         </div>
       </div>
     </div>
@@ -105,92 +117,272 @@
       </div>
 
       <template v-else>
-        <!-- 固定在顶部的极简表头 -->
-        <div
-          class="song-grid-header max-md:hidden!"
-          :style="{ paddingRight: `${16 + scrollbarWidth}px` }">
-          <div v-if="isBatchMode" class="col-check"></div>
-          <div class="col-title">标题</div>
-          <div class="col-artist">歌手</div>
-          <div class="col-album">专辑</div>
-          <div class="col-size">大小</div>
-          <div class="col-actions"></div>
-        </div>
+        <!-- 1. 单曲列表视图 -->
+        <template v-if="viewMode === 'list'">
+          <!-- 固定在顶部的极简表头 -->
+          <div
+            class="song-grid-header max-md:hidden!"
+            :style="{ paddingRight: `${16 + scrollbarWidth}px` }">
+            <div v-if="isBatchMode" class="col-check"></div>
+            <div class="col-title">标题</div>
+            <div class="col-artist">歌手</div>
+            <div class="col-album">专辑</div>
+            <div class="col-size">大小</div>
+            <div class="col-spacer"></div>
+            <div class="col-actions"></div>
+          </div>
 
-        <!-- 高性能虚拟列表滚动区 -->
-        <n-virtual-list ref="virtualListRef" class="flex-1 min-h-0 overflow-hidden" :item-size="64" :items="filteredSongs" key-field="id"
-          :item-resizable="false" :ignore-item-resize="true" @resize="updateScrollbarWidth">
-          <template #default="{ item: song }">
-            <div
-              class="group song-row max-md:grid! max-md:grid-cols-[auto_auto_1fr_auto] max-md:grid-rows-[auto_auto] max-md:[grid-template-areas:'check_cover_title_action'_'check_cover_artist_action'] max-md:items-center max-md:p-[8px_12px] max-md:gap-x-3 max-md:gap-y-[2px]"
-              :class="{
-                'text-(--primary) font-semibold': playerStore.currentSong?.id === song.id,
-                'bg-(--primary-alpha-16) backdrop-blur-card border border-(--primary-alpha-10) dark:bg-(--primary-on-dark-alpha-16) dark:border-(--primary-on-dark-alpha-12)': selectedSongIds.has(song.id)
-              }" @click="handleRowClick(song)" @dblclick="playSong(song)" @contextmenu.prevent="handleContextMenu($event, song)">
-              <!-- 复选框 -->
-              <div v-if="isBatchMode"
-                class="col-check max-md:[grid-area:check] max-md:w-auto max-md:flex max-md:items-center"
-                @click.stop>
-                <n-checkbox :checked="selectedSongIds.has(song.id)"
-                  @update:checked="(val) => toggleSongSelection(song.id, val)" />
-              </div>
-
-              <!-- 标题（含封面、播放状态指示） -->
+          <!-- 高性能虚拟列表滚动区 -->
+          <n-virtual-list ref="virtualListRef" class="flex-1 min-h-0 overflow-hidden" :item-size="64" :items="filteredSongs" key-field="id"
+            :item-resizable="false" :ignore-item-resize="true" @resize="updateScrollbarWidth">
+            <template #default="{ item: song }">
               <div
-                class="col-title max-md:contents!">
+                class="group song-row max-md:grid! max-md:grid-cols-[auto_auto_1fr_auto] max-md:grid-rows-[auto_auto] max-md:[grid-template-areas:'check_cover_title_action'_'check_cover_artist_action'] max-md:items-center max-md:p-[8px_12px] max-md:gap-x-3 max-md:gap-y-[2px]"
+                :class="{
+                  'text-(--primary) font-semibold': playerStore.currentSong?.id === song.id,
+                  'bg-(--primary-alpha-16) backdrop-blur-card border border-(--primary-alpha-10) dark:bg-(--primary-on-dark-alpha-16) dark:border-(--primary-on-dark-alpha-12)': selectedSongIds.has(song.id)
+                }" @click="handleRowClick(song)" @dblclick="playSong(song)" @contextmenu.prevent="handleContextMenu($event, song)">
+                <!-- 复选框 -->
+                <div v-if="isBatchMode"
+                  class="col-check max-md:[grid-area:check] max-md:w-auto max-md:flex max-md:items-center"
+                  @click.stop>
+                  <n-checkbox :checked="selectedSongIds.has(song.id)"
+                    @update:checked="(val) => toggleSongSelection(song.id, val)" />
+                </div>
+
+                <!-- 标题（含封面、播放状态指示） -->
                 <div
-                  class="w-10 h-10 rounded-md overflow-hidden relative shrink-0 max-md:[grid-area:cover] max-md:row-[span_2] max-md:w-10 max-md:h-10"
-                  @click.stop="handlePlayBtnClick(song)">
-                  <img class="w-full h-full object-cover" v-cached-src="{ id: song.id, src: song.album_art }"
-                    loading="lazy" alt="Cover" />
+                  class="col-title max-md:contents!">
                   <div
-                    class="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 text-xs transition-opacity duration-200 group-hover:opacity-100">
-                    <SvgIcon
-                      :name="playerStore.currentSong?.id === song.id && playerStore.isPlaying ? 'pause' : 'play'" />
+                    class="w-10 h-10 rounded-md overflow-hidden relative shrink-0 max-md:[grid-area:cover] max-md:row-[span_2] max-md:w-10 max-md:h-10"
+                    @click.stop="handlePlayBtnClick(song)">
+                    <img class="w-full h-full object-cover" v-cached-src="{ id: song.id, src: song.album_art }"
+                      loading="lazy" alt="Cover" />
+                    <div
+                      class="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 text-xs transition-opacity duration-200 group-hover:opacity-100">
+                      <SvgIcon
+                        :name="playerStore.currentSong?.id === song.id && playerStore.isPlaying ? 'pause' : 'play'" />
+                    </div>
+                  </div>
+                  <div
+                    class="flex items-center gap-2 overflow-hidden max-md:[grid-area:title] max-md:self-end max-md:overflow-hidden">
+                    <span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">{{ song.title }}</span>
+                    <span v-if="playerStore.currentSong?.id === song.id" class="text-[11px] text-(--primary)">
+                      <SvgIcon name="volume-up" />
+                    </span>
                   </div>
                 </div>
+
+                <!-- 歌手 -->
                 <div
-                  class="flex items-center gap-2 overflow-hidden max-md:[grid-area:title] max-md:self-end max-md:overflow-hidden">
-                  <span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">{{ song.title }}</span>
-                  <span v-if="playerStore.currentSong?.id === song.id" class="text-[11px] text-(--primary)">
-                    <SvgIcon name="volume-up" />
-                  </span>
+                  class="col-artist max-md:[grid-area:artist] max-md:self-start max-md:min-w-0 max-md:text-[12px] max-md:text-body-muted max-md:m-0 max-md:p-0"
+                  :title="song.artist">{{ song.artist }}</div>
+
+                <!-- 专辑 -->
+                <div
+                  class="col-album max-md:hidden!"
+                  :title="song.album">{{ song.album || '-' }}</div>
+
+                <!-- 大小 -->
+                <div class="col-size max-md:hidden!">{{
+                  formatSize(song.size) }}</div>
+
+                <!-- 弹性占位空列 -->
+                <div class="col-spacer max-md:hidden!"></div>
+
+                <!-- 右侧操作 -->
+                <div
+                  class="col-actions max-md:[grid-area:action] max-md:row-[span_2] max-md:w-auto max-md:flex max-md:items-center"
+                  @click.stop>
+                  <n-dropdown trigger="click" :options="getRowDropdownOptions(song)"
+                    @select="(key) => handleRowAction(key, song)">
+                    <n-button circle text :depth="3"
+                      class="bg-transparent border-none text-body-muted cursor-pointer opacity-60 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10">
+                      <template #icon>
+                        <SvgIcon name="ellipsis-h" />
+                      </template>
+                    </n-button>
+                  </n-dropdown>
+                </div>
+              </div>
+            </template>
+          </n-virtual-list>
+        </template>
+
+        <!-- 2. 歌手网格视图 -->
+        <template v-else-if="viewMode === 'artist'">
+          <div class="flex-1 overflow-y-auto min-h-0 p-1">
+            <div class="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6 max-md:grid-cols-[repeat(auto-fill,minmax(100px,1fr))] max-md:gap-4">
+              <div v-for="artist in artistsGroup" :key="artist.name"
+                class="group flex flex-col items-center text-center cursor-pointer select-none transition-all duration-300"
+                @click="openGroupDetail(artist.name, '歌手', artist.songs, artist.cover)">
+                <!-- 圆形歌手头像 -->
+                <div class="relative w-28 h-28 max-md:w-20 max-md:h-20 rounded-full overflow-hidden shadow-md border border-hairline/10 transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg group-hover:border-primary/20">
+                  <img v-if="artist.cover" :src="artist.cover" class="w-full h-full object-cover" loading="lazy" />
+                  <div v-else class="w-full h-full bg-sidebar flex items-center justify-center text-body-muted">
+                    <SvgIcon name="user" class="text-3xl max-md:text-xl" />
+                  </div>
+                  <!-- 遮罩播放状态 -->
+                  <div class="absolute inset-0 bg-black/35 opacity-0 flex items-center justify-center text-white transition-opacity duration-300 group-hover:opacity-100">
+                    <SvgIcon name="play" class="text-xl" />
+                  </div>
+                </div>
+                <!-- 歌手名字与歌曲数 -->
+                <span class="mt-3 text-sm font-semibold text-ink truncate w-full px-1">{{ artist.name }}</span>
+                <span class="text-[11px] text-body-muted mt-0.5">{{ artist.songCount }} 首歌曲</span>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 3. 专辑网格视图 -->
+        <template v-else-if="viewMode === 'album'">
+          <div class="flex-1 overflow-y-auto min-h-0 p-1">
+            <div class="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-6 max-md:grid-cols-[repeat(auto-fill,minmax(110px,1fr))] max-md:gap-4">
+              <div v-for="album in albumsGroup" :key="album.albumName"
+                class="group flex flex-col cursor-pointer select-none transition-all duration-300"
+                @click="openGroupDetail(album.albumName, album.artist, album.songs, album.cover)">
+                <!-- 1:1 专辑封套 -->
+                <div class="relative aspect-square w-full rounded-xl overflow-hidden shadow-md border border-hairline/10 transition-all duration-300 group-hover:scale-103 group-hover:shadow-xl group-hover:border-primary/20">
+                  <img v-if="album.cover" :src="album.cover" class="w-full h-full object-cover" loading="lazy" />
+                  <div v-else class="w-full h-full bg-sidebar flex items-center justify-center text-body-muted">
+                    <SvgIcon name="music" class="text-3xl max-md:text-xl" />
+                  </div>
+                  <!-- 遮罩播放状态 -->
+                  <div class="absolute inset-0 bg-black/35 opacity-0 flex items-center justify-center text-white transition-opacity duration-300 group-hover:opacity-100">
+                    <SvgIcon name="play" class="text-xl" />
+                  </div>
+                </div>
+                <!-- 专辑名字与歌手 -->
+                <span class="mt-3 text-sm font-semibold text-ink truncate w-full px-1">{{ album.albumName }}</span>
+                <span class="text-[11px] text-body-muted mt-0.5 truncate w-full px-1">{{ album.artist }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 4. 文件夹下钻路径文件管理器视图 -->
+        <template v-else-if="viewMode === 'folder'">
+          <div class="flex-1 flex flex-col min-h-0 p-1">
+            <!-- 面包屑导航栏 -->
+            <div class="flex items-center flex-wrap gap-1.5 mb-4 text-xs select-none bg-sidebar/20 p-[8px_16px] rounded-lg border border-hairline/5 w-fit">
+              <span class="text-body-muted cursor-pointer hover:text-primary transition-colors flex items-center gap-1" @click="currentDirPath = ''">
+                <SvgIcon name="music" class="text-xs" />
+                <span>所有挂载</span>
+              </span>
+              <template v-for="crumb in breadcrumbs" :key="crumb.path">
+                <span class="text-body-muted/30 select-none">/</span>
+                <span class="text-ink cursor-pointer hover:text-primary transition-colors font-medium" @click="currentDirPath = crumb.path">
+                  {{ crumb.name.substring(crumb.name.lastIndexOf('/') + 1) || crumb.name }}
+                </span>
+              </template>
+            </div>
+
+            <div class="flex-1 overflow-y-auto min-h-0">
+              <!-- 文件夹网格列表 -->
+              <div v-if="currentFolderContent.folders.length > 0" 
+                class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4 max-md:grid-cols-1 mb-6">
+                <div v-for="folderPath in currentFolderContent.folders" :key="folderPath"
+                  class="flex items-center gap-3 p-3.5 rounded-xl bg-sidebar/30 border border-hairline/10 cursor-pointer select-none transition-all duration-300 hover:bg-sidebar/80 hover:-translate-y-0.5 hover:shadow-md"
+                  @click="currentDirPath = folderPath">
+                  <SvgIcon name="folder" class="text-primary text-2xl shrink-0" />
+                  <div class="flex flex-col min-w-0 flex-1">
+                    <span class="text-sm font-semibold text-ink truncate">
+                      {{ folderPath.substring(folderPath.lastIndexOf('/') + 1) || folderPath }}
+                    </span>
+                  </div>
+                  <SvgIcon name="chevron-right" class="text-body-muted text-xs shrink-0 opacity-40" />
                 </div>
               </div>
 
-              <!-- 歌手 -->
-              <div
-                class="col-artist max-md:[grid-area:artist] max-md:self-start max-md:min-w-0 max-md:text-[12px] max-md:text-body-muted max-md:m-0 max-md:p-0"
-                :title="song.artist">{{ song.artist }}</div>
+              <!-- 当前目录下的单曲文件列表 -->
+              <div v-if="currentFolderContent.songs.length > 0" class="flex flex-col gap-1.5">
+                <div v-for="song in currentFolderContent.songs" :key="song.id"
+                  class="group flex items-center justify-between p-[10px_16px] rounded-xl hover:bg-sidebar/50 cursor-pointer text-sm transition-colors duration-200"
+                  :class="{ 'text-primary font-semibold bg-primary-alpha-16 dark:bg-primary-on-dark-alpha-16': playerStore.currentSong?.id === song.id }"
+                  @click="playSong(song, currentFolderContent.songs)">
+                  <div class="flex items-center gap-4 overflow-hidden min-w-0">
+                    <SvgIcon :name="playerStore.currentSong?.id === song.id && playerStore.isPlaying ? 'pause' : 'play'" 
+                      class="text-xs text-body-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    <div class="flex items-center gap-3 overflow-hidden min-w-0 max-md:flex-col max-md:items-start max-md:gap-0.5">
+                      <span class="text-ink truncate max-w-[280px] max-md:max-w-full font-medium">{{ song.title }}</span>
+                      <span class="text-xs text-body-muted truncate max-w-[180px]">- {{ song.artist }}</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-4 shrink-0 select-none">
+                    <span class="text-xs text-body-muted/80 max-md:hidden">{{ song.album }}</span>
+                    <span class="text-xs text-body-muted/80 mr-4">{{ formatSize(song.size) }}</span>
+                    <!-- 右侧操作 -->
+                    <n-dropdown trigger="click" :options="getRowDropdownOptions(song)" @select="(key) => handleRowAction(key, song)">
+                      <n-button circle text :depth="3" class="w-7 h-7 hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center" @click.stop>
+                        <template #icon>
+                          <SvgIcon name="ellipsis-h" class="text-xs" />
+                        </template>
+                      </n-button>
+                    </n-dropdown>
+                  </div>
+                </div>
+              </div>
 
-              <!-- 专辑 -->
-              <div
-                class="col-album max-md:hidden!"
-                :title="song.album">{{ song.album || '-' }}</div>
+              <!-- 空状态提示 -->
+              <div v-if="currentFolderContent.folders.length === 0 && currentFolderContent.songs.length === 0"
+                class="flex flex-col items-center justify-center py-20 text-center select-none">
+                <SvgIcon name="folder-open" class="text-[40px] text-body-muted mb-4 opacity-70" />
+                <h3 class="m-0 mb-2 text-lg font-semibold text-ink">空文件夹</h3>
+                <p class="m-0 text-[13px] text-body-muted">当前物理目录下没有任何可播放的音乐文件</p>
+              </div>
+            </div>
+          </div>
+        </template>
+      </template>
+    </div>
 
-              <!-- 大小 -->
-              <div class="col-size max-md:hidden!">{{
-                formatSize(song.size) }}</div>
-
-              <!-- 右侧操作 -->
-              <div
-                class="col-actions max-md:[grid-area:action] max-md:row-[span_2] max-md:w-auto max-md:flex max-md:items-center"
-                @click.stop>
-                <n-dropdown trigger="click" :options="getRowDropdownOptions(song)"
-                  @select="(key) => handleRowAction(key, song)">
-                  <n-button circle text :depth="3"
-                    class="bg-transparent border-none text-body-muted cursor-pointer opacity-60 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10">
+    <!-- 专辑/歌手歌曲详情抽屉 -->
+    <n-drawer v-model:show="showDetailDrawer" :width="380" placement="right" class="backdrop-blur-md bg-canvas/90">
+      <n-drawer-content v-if="detailDrawerGroup" closable>
+        <template #header>
+          <div class="flex items-center gap-4 py-1 select-none">
+            <div class="w-14 h-14 rounded-lg overflow-hidden shadow-md shrink-0 border border-hairline/10">
+              <img v-if="detailDrawerGroup.cover" :src="detailDrawerGroup.cover" class="w-full h-full object-cover" />
+              <div v-else class="w-full h-full bg-sidebar flex items-center justify-center text-body-muted">
+                <SvgIcon :name="detailDrawerGroup.subtitle === '歌手' ? 'user' : 'music'" class="text-2xl" />
+              </div>
+            </div>
+            <div class="flex flex-col min-w-0">
+              <span class="text-base font-bold text-ink truncate leading-tight">{{ detailDrawerGroup.title }}</span>
+              <span class="text-xs text-body-muted mt-1">{{ detailDrawerGroup.subtitle }} · {{ detailDrawerGroup.songs.length }} 首歌曲</span>
+            </div>
+          </div>
+        </template>
+        
+        <n-list hoverable clickable class="mt-2">
+          <n-list-item v-for="(song, idx) in detailDrawerGroup.songs" :key="song.id"
+            class="transition-colors duration-200"
+            :class="{ 'text-primary font-semibold': playerStore.currentSong?.id === song.id }"
+            @click="playSong(song, detailDrawerGroup.songs)">
+            <div class="flex items-center justify-between w-full">
+              <div class="flex items-center gap-3 overflow-hidden min-w-0">
+                <span class="text-xs text-body-muted w-4 text-right select-none">{{ idx + 1 }}</span>
+                <div class="flex flex-col min-w-0">
+                  <span class="text-sm text-ink truncate leading-normal">{{ song.title }}</span>
+                  <span class="text-[11px] text-body-muted truncate mt-0.5">{{ song.artist }}</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="text-[11px] text-body-muted">{{ formatSize(song.size) }}</span>
+                <n-dropdown trigger="click" :options="getRowDropdownOptions(song)" @select="(key) => handleRowAction(key, song)">
+                  <n-button circle text :depth="3" class="w-7 h-7 hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center" @click.stop>
                     <template #icon>
-                      <SvgIcon name="ellipsis-h" />
+                      <SvgIcon name="ellipsis-h" class="text-xs" />
                     </template>
                   </n-button>
                 </n-dropdown>
               </div>
             </div>
-          </template>
-        </n-virtual-list>
-      </template>
-    </div>
+          </n-list-item>
+        </n-list>
+      </n-drawer-content>
+    </n-drawer>
 
     <!-- 物理删除确认模态框 -->
     <n-modal v-model:show="showDeleteConfirm" preset="dialog">
@@ -244,7 +436,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useSystemStore } from '../stores/system'
 import { usePlayerStore } from '../stores/player'
 import { useFavoritesStore } from '../stores/favorites'
-import { NDropdown, NCheckbox, NModal, NButton, NInput, NSpace, NVirtualList, NSpin, useMessage } from 'naive-ui'
+import { NDropdown, NCheckbox, NModal, NButton, NInput, NSpace, NVirtualList, NSpin, NTabs, NTab, NDrawer, NDrawerContent, NList, NListItem, useMessage } from 'naive-ui'
 import type { DropdownOption } from 'naive-ui'
 import type { Song } from '../types'
 import SvgIcon from '../components/SvgIcon.vue'
@@ -258,6 +450,249 @@ const message = useMessage()
 
 const searchQuery = ref('')
 const isLoading = ref(false)
+
+// 视图模式定义与 localStorage 持久化记忆
+const savedMode = localStorage.getItem('2fmusic_local_view_mode')
+const viewMode = ref<'list' | 'artist' | 'album' | 'folder'>((savedMode as any) || 'list')
+watch(viewMode, (newVal) => {
+  localStorage.setItem('2fmusic_local_view_mode', newVal)
+})
+
+// 详情抽屉状态与打开方法
+const showDetailDrawer = ref(false)
+const detailDrawerGroup = ref<{ title: string; subtitle: string; songs: Song[]; cover?: string } | null>(null)
+
+const openGroupDetail = (title: string, subtitle: string, songs: Song[], cover?: string) => {
+  detailDrawerGroup.value = { title, subtitle, songs, cover }
+  showDetailDrawer.value = true
+}
+
+// 歌手数据聚合 (纯前端 computed，性能优异)
+const artistsGroup = computed(() => {
+  const map = new Map<string, Song[]>()
+  const sourceSongs = filteredSongs.value
+  sourceSongs.forEach(song => {
+    const artistField = song.artist || '未知歌手'
+    const artists = artistField.split(/[\/\,\，、]/)
+    artists.forEach(rawArt => {
+      const art = rawArt.trim() || '未知歌手'
+      if (!map.has(art)) {
+        map.set(art, [])
+      }
+      map.get(art)!.push(song)
+    })
+  })
+  
+  const rawList = Array.from(map.entries()).map(([name, songs]) => {
+    const firstWithCover = songs.find(s => s.album_art)
+    const latestMtime = Math.max(...songs.map(s => s.mtime || 0))
+    return {
+      name,
+      songs,
+      songCount: songs.length,
+      cover: firstWithCover?.album_art || '',
+      latestMtime
+    }
+  })
+
+  // 根据当前排序设置执行分流排序
+  return rawList.sort((a, b) => {
+    let result = 0
+    if (currentSort.value === 'title') {
+      result = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    } else if (currentSort.value === 'mtime') {
+      result = b.latestMtime - a.latestMtime
+    } else {
+      // 默认按歌曲多寡降序 (即热度/拥有量)
+      result = b.songCount - a.songCount
+    }
+    return sortOrder.value === 'asc' ? result : -result
+  })
+})
+
+// 专辑数据聚合
+const albumsGroup = computed(() => {
+  const map = new Map<string, { albumName: string; artist: string; songs: Song[]; cover: string; latestMtime: number }>()
+  const sourceSongs = filteredSongs.value
+  sourceSongs.forEach(song => {
+    const albumName = song.album || '未知专辑'
+    const artist = song.artist || '未知歌手'
+    const key = `${albumName}_${artist}`
+    if (!map.has(key)) {
+      map.set(key, {
+        albumName,
+        artist,
+        songs: [],
+        cover: song.album_art || '',
+        latestMtime: 0
+      })
+    }
+    const item = map.get(key)!
+    item.songs.push(song)
+    if (song.mtime && song.mtime > item.latestMtime) {
+      item.latestMtime = song.mtime
+    }
+    if (!item.cover && song.album_art) {
+      item.cover = song.album_art
+    }
+  })
+  
+  const rawList = Array.from(map.values())
+  return rawList.sort((a, b) => {
+    let result = 0
+    if (currentSort.value === 'title') {
+      result = a.albumName.localeCompare(b.albumName, undefined, { numeric: true, sensitivity: 'base' })
+    } else if (currentSort.value === 'artist') {
+      result = a.artist.localeCompare(b.artist, undefined, { numeric: true, sensitivity: 'base' })
+    } else if (currentSort.value === 'mtime') {
+      result = b.latestMtime - a.latestMtime
+    } else {
+      // 默认按歌曲数量多寡排序
+      result = b.songs.length - a.songs.length
+    }
+    return sortOrder.value === 'asc' ? result : -result
+  })
+})
+
+// 当前所处的虚拟物理目录绝对路径，如果为空，代表“根挂载目录视图”
+const currentDirPath = ref<string>('')
+
+// 路径分割归一化助手，统一斜杠并移除末尾的斜杠
+const normalizePath = (p: string) => {
+  return p.replace(/\\/g, '/').replace(/\/$/, '')
+}
+
+// 寻找一组路径的最长公共文件夹根前缀
+const getCommonPrefix = (paths: string[]): string => {
+  if (paths.length === 0) return ''
+  const cleanPaths = paths.filter(Boolean)
+  if (cleanPaths.length === 0) return ''
+  
+  const splitPaths = cleanPaths.map(p => p.split('/'))
+  const minLen = Math.min(...splitPaths.map(sp => sp.length))
+  
+  const common: string[] = []
+  for (let i = 0; i < minLen; i++) {
+    const val = splitPaths[0][i]
+    const allMatch = splitPaths.every(sp => sp[i] === val)
+    if (allMatch) {
+      common.push(val)
+    } else {
+      break
+    }
+  }
+  return common.join('/')
+}
+
+// 获取所有的根挂载点目录
+const rootDirs = computed(() => {
+  const list = new Set<string>()
+  
+  // 1. 塞入所有挂载盘符
+  systemStore.mountPoints.forEach(p => {
+    list.add(normalizePath(p))
+  })
+  
+  // 2. 针对不在挂载盘符范围内的歌曲，自适应计算其公共最长前缀目录，作为“默认曲库”
+  const defaultSongsPaths: string[] = []
+  filteredSongs.value.forEach(song => {
+    const sp = normalizePath(song.path || '')
+    const belongsToMount = systemStore.mountPoints.some(mp => sp.startsWith(normalizePath(mp) + '/'))
+    if (!belongsToMount) {
+      const lastSlash = sp.lastIndexOf('/')
+      if (lastSlash !== -1) {
+        defaultSongsPaths.push(sp.substring(0, lastSlash))
+      }
+    }
+  })
+  
+  if (defaultSongsPaths.length > 0) {
+    const commonPrefix = getCommonPrefix(defaultSongsPaths)
+    if (commonPrefix) {
+      list.add(commonPrefix)
+    }
+  }
+  
+  return Array.from(list)
+})
+
+// 面包屑导航数组
+const breadcrumbs = computed(() => {
+  if (!currentDirPath.value) return []
+  const path = currentDirPath.value
+  
+  // 寻找匹配的挂载根目录
+  const matchedRoot = rootDirs.value.find(r => path.startsWith(r))
+  if (!matchedRoot) {
+    return path.split('/').filter(Boolean).map((name, idx, arr) => ({
+      name,
+      path: arr.slice(0, idx + 1).join('/')
+    }))
+  }
+  
+  const relativePart = path.substring(matchedRoot.length).replace(/^\//, '')
+  const result = [{ name: matchedRoot, path: matchedRoot }]
+  if (relativePart) {
+    const parts = relativePart.split('/')
+    let accumPath = matchedRoot
+    parts.forEach(p => {
+      accumPath = `${accumPath}/${p}`
+      result.push({ name: p, path: accumPath })
+    })
+  }
+  return result
+})
+
+// 文件夹下钻核心数据聚合 (包含自然排序与歌曲音轨自然排序)
+const currentFolderContent = computed(() => {
+  const currentPath = currentDirPath.value
+  const songs = filteredSongs.value
+
+  const childFolders = new Set<string>()
+  const childSongs: Song[] = []
+
+  // 1. 如果是在根视图 (currentDirPath 为空)
+  if (!currentPath) {
+    rootDirs.value.forEach(d => {
+      childFolders.add(d)
+    })
+    return { folders: Array.from(childFolders).sort(), songs: [] }
+  }
+
+  // 2. 如果是在具体子目录下
+  songs.forEach(song => {
+    const songPath = normalizePath(song.path || '')
+    if (songPath.startsWith(currentPath + '/')) {
+      const relative = songPath.substring(currentPath.length + 1)
+      const slashIdx = relative.indexOf('/')
+      if (slashIdx === -1) {
+        // 直接在此路径下的单曲音频文件
+        childSongs.push(song)
+      } else {
+        // 在更深子级目录中，提取下一级文件夹路径
+        const nextFolderName = relative.substring(0, slashIdx)
+        childFolders.add(`${currentPath}/${nextFolderName}`)
+      }
+    }
+  })
+
+  // 文件夹自然数排序
+  const sortedFolders = Array.from(childFolders).sort((a, b) => {
+    const getLastName = (p: string) => p.substring(p.lastIndexOf('/') + 1)
+    return getLastName(a).localeCompare(getLastName(b), undefined, { numeric: true, sensitivity: 'base' })
+  })
+
+  // 歌曲排序：强锁文件名自然排序（如 01.mp3, 02.mp3 顺序）
+  const sortedSongs = childSongs.sort((a, b) => {
+    const getFileName = (p: string) => {
+      const lastSlash = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
+      return lastSlash !== -1 ? p.substring(lastSlash + 1) : p
+    }
+    return getFileName(a.path || '').localeCompare(getFileName(b.path || ''), undefined, { numeric: true, sensitivity: 'base' })
+  })
+
+  return { folders: sortedFolders, songs: sortedSongs }
+})
 
 // 路由 id 参数标识收藏夹详情
 const playlistId = computed(() => route.params.id as string)
@@ -485,9 +920,8 @@ const handleRowClick = (song: Song) => {
   }
 }
 
-// 播放歌曲
-const playSong = (song: Song) => {
-  playerStore.playSong(song, filteredSongs.value)
+const playSong = (song: Song, list?: Song[]) => {
+  playerStore.playSong(song, list || filteredSongs.value)
 }
 
 // 播放按钮：控制播放/暂停

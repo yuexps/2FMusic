@@ -134,7 +134,9 @@ def dispatch_ws_action(action: str, data: dict) -> tuple:
                 handle_get_netease_task_detail,
                 handle_get_install_status,
                 handle_install_netease_service,
-                handle_check_docker_container
+                handle_check_docker_container,
+                handle_clear_netease_task,
+                handle_clear_all_netease_tasks
             )
             if action == 'netease/search':
                 return handle_search_netease_music(data.get('keywords'), data.get('limit'))
@@ -157,6 +159,10 @@ def dispatch_ws_action(action: str, data: dict) -> tuple:
                 return handle_download_netease_music(data)
             elif action == 'netease/task_status':
                 return handle_get_netease_task_detail(data.get('task_id'))
+            elif action == 'netease/clear_task':
+                return handle_clear_netease_task(data.get('task_id'))
+            elif action == 'netease/clear_all_tasks':
+                return handle_clear_all_netease_tasks()
             elif action == 'netease/install_status':
                 return handle_get_install_status()
             elif action == 'netease/install_service':

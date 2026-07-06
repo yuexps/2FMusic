@@ -212,7 +212,8 @@
   }
 
   .col-album {
-    @apply flex-1 min-w-[150px] whitespace-nowrap overflow-hidden text-ellipsis text-body-muted;
+    @apply min-w-[150px] whitespace-nowrap overflow-hidden text-ellipsis text-body-muted;
+    flex: 1;
     font-size: var(--font-size-base);
   }
 
@@ -230,8 +231,13 @@
     @apply w-[100px] shrink-0 flex justify-center items-center;
   }
 
+  .col-spacer {
+    flex: 1;
+    max-width: 120px;
+  }
+
   .col-actions {
-    @apply w-[100px] shrink-0 flex justify-end pr-2 md:pr-4;
+    @apply w-[80px] shrink-0 flex justify-end pr-2 md:pr-4;
   }
 
   /* 封面盒子 */

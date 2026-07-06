@@ -36,17 +36,15 @@
           </n-input>
 
           <!-- 浮动任务抽屉按钮 -->
-          <n-button circle secondary type="primary"
-            :class="{ 'bg-primary! text-white! border-primary!': showTaskDrawer }"
-            @click="showTaskDrawer = !showTaskDrawer" title="下载管理" class="relative">
-            <template #icon>
-              <SvgIcon name="download" />
-            </template>
-            <span v-if="runningTasksCount > 0"
-              class="absolute -top-1 -right-1 bg-danger text-white text-[9px] font-semibold w-4 h-4 rounded-full flex items-center justify-center">
-              {{ runningTasksCount }}
-            </span>
-          </n-button>
+          <n-badge :value="runningTasksCount" :show="runningTasksCount > 0" type="error">
+            <n-button circle secondary type="primary"
+              :class="{ 'bg-primary! text-white! border-primary!': showTaskDrawer }"
+              @click="showTaskDrawer = !showTaskDrawer" title="下载管理">
+              <template #icon>
+                <SvgIcon name="download" />
+              </template>
+            </n-button>
+          </n-badge>
 
           <!-- 账号状态区 -->
           <div v-if="systemStore.neteaseUser.logged_in" class="flex items-center gap-2.5">
@@ -116,6 +114,7 @@
               <div class="col-artist">歌手</div>
               <div class="col-album">专辑</div>
               <div class="col-quality">音质</div>
+              <div class="col-spacer"></div>
               <div class="col-actions"></div>
             </div>
 
@@ -149,8 +148,16 @@
                     </n-tag>
                   </div>
 
-                  <div class="col-actions max-md:[grid-area:action] max-md:row-[span_2] max-md:w-auto max-md:flex max-md:items-center max-md:[&_.sm-round-btn]:w-8 max-md:[&_.sm-round-btn]:h-8 max-md:[&_.sm-round-btn]:p-0 max-md:[&_.sm-round-btn]:justify-center max-md:[&_.sm-round-btn]:rounded-full max-md:[&_.sm-round-btn]:shrink-0 max-md:[&_.sm-round-btn_.n-button__content]:hidden! max-md:[&_.sm-round-btn_.n-button__icon]:m-0!" @click.stop>
-                    <n-button class="sm-round-btn" round size="small" type="primary" secondary
+                  <!-- 弹性占位空列 -->
+                  <div class="col-spacer max-md:hidden!"></div>
+
+                  <div class="col-actions max-md:[grid-area:action] max-md:row-[span_2] max-md:w-auto max-md:flex max-md:items-center max-md:[&_.sm-round-btn]:w-8 max-md:[&_.sm-round-btn]:h-8 max-md:[&_.sm-round-btn]:p-0 max-md:[&_.sm-round-btn]:justify-center max-md:[&_.sm-round-btn]:rounded-full max-md:[&_.sm-round-btn_.n-button__content]:hidden! max-md:[&_.sm-round-btn_.n-button__icon]:m-0!" @click.stop>
+                    <n-button v-if="isSongDownloaded(song)" class="sm-round-btn" round size="small" disabled>
+                      <template #icon>
+                        <SvgIcon name="check-circle" />
+                      </template> 已下载
+                    </n-button>
+                    <n-button v-else class="sm-round-btn" round size="small" type="primary" secondary
                       @click="downloadSingleSong(song)">
                       <template #icon>
                         <SvgIcon name="download" />
@@ -166,7 +173,15 @@
 
       <!-- 下载管理任务抽屉 (侧边抽屉) -->
       <n-drawer v-model:show="showTaskDrawer" :width="350" placement="right">
-        <n-drawer-content :title="`下载任务 (${totalTasksCount})`" closable>
+        <n-drawer-content closable>
+          <template #header>
+            <div class="flex justify-between items-center w-full pr-4 box-border">
+              <span class="text-[14px] font-semibold text-ink">下载任务 ({{ totalTasksCount }})</span>
+              <n-button v-if="hasCompletedOrFailedTasks" size="tiny" secondary type="warning" round @click="clearAllTasks">
+                清理已完成
+              </n-button>
+            </div>
+          </template>
           <div v-if="totalTasksCount === 0"
             class="flex flex-col items-center justify-center h-full text-body-muted gap-3 py-10">
             <SvgIcon name="tasks" class="text-[32px]" />
@@ -176,12 +191,20 @@
             <div v-for="task in sortedTasks" :key="task.task_id"
               class="glass-card p-3 rounded-lg flex flex-col gap-2 box-border border border-border-card"
               :class="task.status">
-              <div class="overflow-hidden">
-                <div class="text-[12px] font-semibold text-ink truncate" :title="task.title">
-                  {{ task.title }}</div>
-                <div class="text-[10px] text-body-muted truncate dark:text-white/60" :title="task.artist">{{ task.artist
-                }}
+              <div class="flex justify-between items-start gap-2">
+                <div class="overflow-hidden flex-1">
+                  <div class="text-[12px] font-semibold text-ink truncate" :title="task.title">
+                    {{ task.title }}</div>
+                  <div class="text-[10px] text-body-muted truncate dark:text-white/60" :title="task.artist">{{ task.artist }}
+                  </div>
                 </div>
+                <n-button v-if="task.status === 'success' || task.status === 'error'"
+                  circle size="tiny" quaternary type="default" @click="clearSingleTask(task.task_id)" title="清除记录"
+                  class="shrink-0">
+                  <template #icon>
+                    <SvgIcon name="close" class="w-3 h-3" />
+                  </template>
+                </n-button>
               </div>
 
               <!-- 进度及状态 -->
@@ -236,7 +259,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSystemStore } from '../stores/system'
-import { NDropdown, NCheckbox, NModal, NButton, NInput, NDrawer, NDrawerContent, NProgress, NSpin, NTag, NVirtualList, useMessage } from 'naive-ui'
+import { NDropdown, NCheckbox, NModal, NButton, NInput, NDrawer, NDrawerContent, NProgress, NSpin, NTag, NVirtualList, NBadge, useMessage } from 'naive-ui'
 import { wsClient } from '../api/ws'
 import type { NeteaseSong } from '../types'
 
@@ -601,4 +624,50 @@ onUnmounted(() => {
     unsubscribeLoginStatus = null
   }
 })
+
+// 字符归一化比对工具，消除空格、分隔符大小写影响
+const normalizeName = (str: string) => {
+  return (str || '')
+    .toLowerCase()
+    .replace(/[\s\/\,\\，、\-\—]/g, '')
+}
+
+// 缓存本地已下载歌曲的 title+artist 组合 Set，方便 O(1) 匹配
+const downloadedSongsSet = computed(() => {
+  const set = new Set<string>()
+  systemStore.songs.forEach(s => {
+    const key = `${normalizeName(s.title)}_${normalizeName(s.artist)}`
+    set.add(key)
+  })
+  return set
+})
+
+// 判断单曲是否已被下载入本地音乐库
+const isSongDownloaded = (song: NeteaseSong) => {
+  const key = `${normalizeName(song.title)}_${normalizeName(song.artist)}`
+  return downloadedSongsSet.value.has(key)
+}
+
+// 检查是否有可被清理的已完成或失败任务
+const hasCompletedOrFailedTasks = computed(() => {
+  return tasksList.value.some(t => ['success', 'error'].includes(t.status))
+})
+
+// 清理单条任务记录
+const clearSingleTask = async (taskId: string) => {
+  const res = await systemStore.clearNeteaseDownloadTask(taskId)
+  if (!res.success) {
+    message.error(res.error)
+  }
+}
+
+// 一键清理所有已完成和失败任务记录
+const clearAllTasks = async () => {
+  const res = await systemStore.clearAllNeteaseDownloadTasks()
+  if (res.success) {
+    message.success('已清理所有完成及失败的下载任务')
+  } else {
+    message.error(res.error)
+  }
+}
 </script>

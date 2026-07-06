@@ -25,6 +25,7 @@
           <div class="col-artist">歌手</div>
           <div class="col-album">专辑</div>
           <div class="col-time">播放时间</div>
+          <div class="col-spacer"></div>
           <div class="col-actions"></div>
         </div>
 
@@ -57,6 +58,9 @@
               <div
                 class="col-time max-md:[grid-area:time] max-md:row-[span_2] max-md:w-auto max-md:flex max-md:items-center max-md:text-[11px] max-md:text-body-muted">
                 {{ formatPlayTime(item.time) }}</div>
+
+              <!-- 弹性占位空列 -->
+              <div class="col-spacer max-md:hidden!"></div>
 
           <div
                 class="col-actions max-md:[grid-area:action] max-md:row-[span_2] max-md:w-auto max-md:flex max-md:items-center"

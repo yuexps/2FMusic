@@ -19,7 +19,9 @@ from core.services.downloader import (
     get_active_download_tasks_count,
     NETEASE_MAX_CONCURRENT,
     get_download_task_status,
-    update_download_task
+    update_download_task,
+    clear_download_task,
+    clear_all_download_tasks
 )
 from core.utils.logger import logger
 from core.utils.common import normalize_cookie_string
@@ -38,7 +40,7 @@ INSTALL_STATUS = {
 # 网易云登录用户状态缓存，避免频繁串行请求网易云官网
 _user_status_cache = None
 _user_status_cache_time = 0
-USER_STATUS_CACHE_TTL = 300  # 缓存有效期 5 分钟 (300秒)
+USER_STATUS_CACHE_TTL = 43200  # 缓存有效期 12 小时 (43200秒)
 
 # 网易云每日推荐缓存，缓存格式为列表 [song, ...]
 _daily_recommend_cache = None
@@ -410,6 +412,23 @@ def handle_get_netease_task_detail(task_id: str) -> tuple:
     if not task:
         return False, None, "任务不存在"
     return True, task, None
+
+def handle_clear_netease_task(task_id: str) -> tuple:
+    """清除指定下载任务的状态记录，并向所有客户端广播被删除的状态"""
+    if not task_id:
+        return False, None, "缺少任务ID"
+    success = clear_download_task(task_id)
+    if success:
+        # 向前端广播以同步移除本地任务
+        broadcast_ws_message('download_status', {'task_id': task_id, 'status': 'deleted'})
+    return True, {'task_id': task_id}, None
+
+def handle_clear_all_netease_tasks() -> tuple:
+    """清除所有已完成或失败的下载任务记录，并向所有客户端广播删除的消息"""
+    cleared_ids = clear_all_download_tasks()
+    for tid in cleared_ids:
+        broadcast_ws_message('download_status', {'task_id': tid, 'status': 'deleted'})
+    return True, {'cleared_count': len(cleared_ids)}, None
 
 def handle_check_docker_container() -> tuple:
     """检查 Docker 环境和目标容器状态（不触发安装）"""

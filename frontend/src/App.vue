@@ -20,18 +20,24 @@ const favoritesStore = useFavoritesStore()
 const isReady = ref(false)
 
 // 首屏数据就绪真实进度与文本计算
-const loadedCount = ref(0)
-const totalCount = 6
+const loadingTasks = ref([
+  { id: 'status', label: '同步系统运行状态', status: 'loading' },
+  { id: 'preferences', label: '载入系统用户偏好', status: 'loading' },
+  { id: 'playlists', label: '读取个人收藏列表', status: 'loading' }
+])
+
+const loadedCount = computed(() => {
+  return loadingTasks.value.filter(t => t.status === 'success' || t.status === 'error').length
+})
 const progress = computed(() => {
-  return Math.min(100, Math.round((loadedCount.value / totalCount) * 100))
+  return Math.min(100, Math.round((loadedCount.value / loadingTasks.value.length) * 100))
 })
 
 const loadingText = computed(() => {
-  const p = progress.value
-  if (p < 25) return '正在建立安全连接...'
-  if (p < 50) return '正在同步系统配置...'
-  if (p < 75) return '正在唤醒本地歌曲...'
-  if (p < 100) return '正在构建收藏索引...'
+  const currentLoadingTask = loadingTasks.value.find(t => t.status === 'loading')
+  if (currentLoadingTask) {
+    return `正在加载：${currentLoadingTask.label}...`
+  }
   return '音乐就绪，开启旋律！'
 })
 
@@ -54,38 +60,30 @@ try {
   console.error('初始化无闪烁设置发生异常:', e)
 }
 
-// 2. 异步并行加载系统状态与全部偏好，逐个监听核心任务resolve情况，同步推进真实百分比
+// 2. 异步并行加载系统状态与全部偏好，独立跟踪各初始化任务状态，消除模糊感
 const initApp = async () => {
-  loadedCount.value = 0
-
-  const tasks = [
-    systemStore.fetchSystemStatus(),
-    preferencesStore.fetchPreferences(),
-    systemStore.fetchSongs(),
-    favoritesStore.fetchPlaylists(),
-    systemStore.fetchNeteaseConfig(),
-    systemStore.fetchNeteaseUserStatus()
+  const taskPromises = [
+    { id: 'status', promise: systemStore.fetchSystemStatus() },
+    { id: 'preferences', promise: preferencesStore.fetchPreferences() },
+    { id: 'playlists', promise: favoritesStore.fetchPlaylists() }
   ]
 
-  try {
-    await Promise.all(
-      tasks.map(async (task) => {
-        try {
-          await task
-        } catch (e) {
-          console.error('核心预加载任务失败:', e)
-        } finally {
-          loadedCount.value++
-        }
-      })
-    )
-  } catch (e) {
-    console.error('预加载任务流遇到未知错误:', e)
-  } finally {
-    // 进度达到 100% 后，给用户保留 250ms 的短暂视觉反馈时间，看清进度和欢迎语后优雅切入主页
-    await new Promise(resolve => setTimeout(resolve, 250))
-    isReady.value = true
-  }
+  await Promise.all(
+    taskPromises.map(async (t) => {
+      const taskItem = loadingTasks.value.find(item => item.id === t.id)
+      try {
+        await t.promise
+        if (taskItem) taskItem.status = 'success'
+      } catch (e) {
+        console.error(`核心预加载任务失败 [${t.id}]:`, e)
+        if (taskItem) taskItem.status = 'error'
+      }
+    })
+  )
+
+  // 进度达到 100% 后，给用户保留 300ms 的短暂视觉反馈时间，看清完成状态后优雅切入主页
+  await new Promise(resolve => setTimeout(resolve, 300))
+  isReady.value = true
 }
 
 initApp()
@@ -235,6 +233,11 @@ onMounted(() => {
 
   // 全局拉起并初始化 WebSocket 实时通信信道
   systemStore.initWebSocket()
+
+  // 异步且非阻塞拉取重度/慢速数据，不卡首屏
+  systemStore.fetchSongs()
+  systemStore.fetchNeteaseConfig()
+  systemStore.fetchNeteaseUserStatus()
 })
 
 onUnmounted(() => {
@@ -264,6 +267,27 @@ onUnmounted(() => {
             class="text-[13px] font-medium tracking-wider text-body-muted animate-pulse mt-1 h-[20px] transition-all duration-300">
             {{ loadingText }}
           </span>
+
+          <!-- 详细任务列表，带微动效 -->
+          <div class="flex flex-col gap-2 mt-2 p-[16px_20px] rounded-2xl bg-sidebar/30 border border-hairline/10 w-[min(290px,88vw)] box-border backdrop-blur-md transition-all duration-300">
+            <div v-for="task in loadingTasks" :key="task.id"
+              class="flex items-center justify-between text-[11px] font-medium transition-all duration-300"
+              :class="task.status === 'loading' ? 'opacity-90' : 'opacity-60'">
+              <span class="text-ink truncate mr-2">{{ task.label }}</span>
+              <div class="flex items-center shrink-0">
+                <span v-if="task.status === 'success'" class="text-success font-semibold flex items-center gap-1 select-none">
+                  <span class="text-[10px]">✓</span> 已就绪
+                </span>
+                <span v-else-if="task.status === 'error'" class="text-danger font-semibold flex items-center gap-1 select-none">
+                  <span class="text-[10px]">✗</span> 失败
+                </span>
+                <span v-else class="text-primary font-medium flex items-center gap-1.5 animate-pulse">
+                  <span class="inline-block w-1.5 h-1.5 rounded-full bg-primary animate-ping"></span>
+                  载入中
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div v-else class="app-layout" :class="{ 'has-custom-bg': preferencesStore.customBgEnabled }">

@@ -355,20 +355,21 @@ def fetch_netease_lyrics(song_id: str) -> tuple:
 
 def run_download_task(task_id: str, payload: dict):
     """单独执行下载任务的主线程逻辑"""
-    song_id = payload.get('id')
-    title = (payload.get('title') or '').strip()
-    artist = (payload.get('artist') or '').strip()
-    album = (payload.get('album') or '').strip()
-    level = payload.get('level') or 'exhigh'
-    cover_url = _normalize_cover_url(payload.get('cover') or payload.get('album_art'))
-    cover_bytes = fetch_cover_bytes(cover_url) if cover_url else None
-    
-    target_dir = payload.get('target_dir') or app_config.NETEASE_DOWNLOAD_DIR
-    target_dir = os.path.abspath(target_dir)
-    
+    # 优先更新状态为准备中，避免拉取封面或元数据处理阻塞导致任务卡在 pending 状态
     update_download_task(task_id, status='preparing', progress=0)
 
     try:
+        song_id = payload.get('id')
+        title = str(payload.get('title') or '').strip()
+        artist = str(payload.get('artist') or '').strip()
+        album = str(payload.get('album') or '').strip()
+        level = payload.get('level') or 'exhigh'
+        cover_url = _normalize_cover_url(payload.get('cover') or payload.get('album_art'))
+        cover_bytes = fetch_cover_bytes(cover_url) if cover_url else None
+        
+        target_dir = payload.get('target_dir') or app_config.NETEASE_DOWNLOAD_DIR
+        target_dir = os.path.abspath(target_dir)
+        
         os.makedirs(target_dir, exist_ok=True)
         need_detail_for_level = not payload.get('level')
         need_detail_for_cover = cover_bytes is None
@@ -513,3 +514,23 @@ def run_download_task(task_id: str, payload: dict):
         update_download_task(task_id, status='error', message=str(e))
     finally:
         pass
+
+def clear_download_task(task_id: str) -> bool:
+    """物理清除单个下载任务状态"""
+    global DOWNLOAD_TASKS
+    with download_tasks_lock:
+        if task_id in DOWNLOAD_TASKS:
+            DOWNLOAD_TASKS.pop(task_id, None)
+            return True
+    return False
+
+def clear_all_download_tasks() -> list:
+    """清理所有处于非活跃状态（success / error）的任务，返回被清除的 task_id 列表"""
+    global DOWNLOAD_TASKS
+    cleared_ids = []
+    with download_tasks_lock:
+        for tid, task in list(DOWNLOAD_TASKS.items()):
+            if task.get('status') in ('success', 'error'):
+                DOWNLOAD_TASKS.pop(tid, None)
+                cleared_ids.append(tid)
+    return cleared_ids
