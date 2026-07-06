@@ -511,18 +511,27 @@ const artistsGroup = computed(() => {
   })
 })
 
-// 专辑数据聚合
+// 专辑数据聚合 (支持合辑归并与父目录防碰)
 const albumsGroup = computed(() => {
-  const map = new Map<string, { albumName: string; artist: string; songs: Song[]; cover: string; latestMtime: number }>()
+  const map = new Map<string, { albumName: string; folderPath: string; albumArtist: string | null; songs: Song[]; cover: string; latestMtime: number }>()
   const sourceSongs = filteredSongs.value
+  
   sourceSongs.forEach(song => {
     const albumName = song.album || '未知专辑'
-    const artist = song.artist || '未知歌手'
-    const key = `${albumName}_${artist}`
+    // 提取物理父目录
+    const songPath = song.path || ''
+    const normalized = songPath.replace(/\\/g, '/').replace(/\/$/, '')
+    const lastSlash = normalized.lastIndexOf('/')
+    const folderPath = lastSlash !== -1 ? normalized.substring(0, lastSlash) : ''
+    
+    // 使用“专辑名 + 物理文件夹”作为唯一 Key 聚合，彻底解决合辑被切碎问题
+    const key = `${albumName}_${folderPath}`
+    
     if (!map.has(key)) {
       map.set(key, {
         albumName,
-        artist,
+        folderPath,
+        albumArtist: song.album_artist || null,
         songs: [],
         cover: song.album_art || '',
         latestMtime: 0
@@ -536,9 +545,35 @@ const albumsGroup = computed(() => {
     if (!item.cover && song.album_art) {
       item.cover = song.album_art
     }
+    // 优先捕获并填充非空的 album_artist
+    if (!item.albumArtist && song.album_artist) {
+      item.albumArtist = song.album_artist
+    }
   })
   
-  const rawList = Array.from(map.values())
+  const rawList = Array.from(map.values()).map(item => {
+    // 优先采用标准的专辑艺术家字段，若缺失则动态计算
+    let finalArtist = item.albumArtist
+    if (!finalArtist) {
+      const artists = Array.from(new Set(item.songs.map(s => s.artist || '未知歌手').filter(Boolean)))
+      if (artists.length === 1) {
+        finalArtist = artists[0]
+      } else if (artists.length > 1) {
+        finalArtist = '群星'
+      } else {
+        finalArtist = '未知歌手'
+      }
+    }
+    
+    return {
+      albumName: item.albumName,
+      artist: finalArtist,
+      songs: item.songs,
+      cover: item.cover,
+      latestMtime: item.latestMtime
+    }
+  })
+  
   return rawList.sort((a, b) => {
     let result = 0
     if (currentSort.value === 'title') {

@@ -4,6 +4,7 @@ export interface Song {
   title: string
   artist: string
   album: string
+  album_artist?: string | null
   album_art: string | null
   mtime: number
   size: number

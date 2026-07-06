@@ -27,6 +27,7 @@ def get_all_songs_deduplicated():
                     'title': row['title'],
                     'artist': row['artist'], 
                     'album': row['album'], 
+                    'album_artist': row['album_artist'] if 'album_artist' in row.keys() else None,
                     'album_art': album_art,
                     'mtime': row['mtime'], 
                     'size': row['size'],
@@ -50,15 +51,15 @@ def get_song_by_path(path: str):
         row = conn.execute("SELECT * FROM songs WHERE path=?", (path,)).fetchone()
         return dict(row) if row else None
 
-def insert_or_replace_song(song_id: str, path: str, filename: str, title: str, artist: str, album: str, mtime: float, size: int, has_cover: int, has_lyrics: int = 0):
+def insert_or_replace_song(song_id: str, path: str, filename: str, title: str, artist: str, album: str, mtime: float, size: int, has_cover: int, has_lyrics: int = 0, album_artist: str = None):
     """插入或更新一条歌曲记录"""
     with get_db() as conn:
         conn.execute(
             """
-            INSERT OR REPLACE INTO songs (id, path, filename, title, artist, album, mtime, size, has_cover, has_lyrics, scrape_retry_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+            INSERT OR REPLACE INTO songs (id, path, filename, title, artist, album, album_artist, mtime, size, has_cover, has_lyrics, scrape_retry_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
             """,
-            (song_id, path, filename, title, artist, album, mtime, size, has_cover, has_lyrics)
+            (song_id, path, filename, title, artist, album, album_artist, mtime, size, has_cover, has_lyrics)
         )
         conn.commit()
 

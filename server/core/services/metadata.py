@@ -12,8 +12,8 @@ from core.utils.hasher import generate_song_id
 from core.utils.image import compress_and_convert_to_webp
 
 def get_metadata(file_path: str) -> dict:
-    """提取音频文件元数据 (标题, 艺术家, 专辑)"""
-    metadata = {'title': None, 'artist': None, 'album': None}
+    """提取音频文件元数据 (标题, 艺术家, 专辑, 专辑艺术家)"""
+    metadata = {'title': None, 'artist': None, 'album': None, 'album_artist': None}
     try:
         audio = None
         try:
@@ -47,6 +47,16 @@ def get_metadata(file_path: str) -> dict:
             metadata['title'] = get_tag('title')
             metadata['artist'] = get_tag('artist')
             metadata['album'] = get_tag('album')
+            
+            # 兼容性提取专辑艺术家字段
+            album_artist = get_tag('albumartist') or get_tag('album_artist') or get_tag('album artist')
+            if not album_artist:
+                # 针对非 easy 模式或 M4A (aART) 的 Fallback 标签读取
+                if hasattr(audio, 'get'):
+                    tpe2 = audio.get('TPE2') or audio.get('aART')
+                    if tpe2:
+                        album_artist = str(tpe2[0] if isinstance(tpe2, list) else tpe2)
+            metadata['album_artist'] = album_artist
     except Exception as e:
         logger.error(f"提取元数据失败: {file_path}, 错误: {e}")
         

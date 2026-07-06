@@ -14,6 +14,7 @@ CREATE TABLE songs (
     title TEXT,                   -- 歌曲名
     artist TEXT,                  -- 歌手
     album TEXT,                   -- 专辑
+    album_artist TEXT,            -- 专辑艺术家/唱片艺术家
     mtime REAL,                   -- 文件物理修改时间戳
     size INTEGER,                 -- 文件物理大小 (字节)
     has_cover INTEGER DEFAULT 0,  -- 封面缓存状态 (0: 无, 1: 有)

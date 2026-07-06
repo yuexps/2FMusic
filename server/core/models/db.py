@@ -29,6 +29,7 @@ def init_db():
                     title TEXT,
                     artist TEXT,
                     album TEXT,
+                    album_artist TEXT,
                     mtime REAL,
                     size INTEGER,
                     has_cover INTEGER DEFAULT 0,
@@ -82,6 +83,17 @@ def init_db():
                 )
             ''')
             
+            # 自动追加缺失的 album_artist 字段防止升级崩溃
+            cursor = conn.cursor()
+            try:
+                cursor.execute("PRAGMA table_info(songs)")
+                cols = [row['name'] for row in cursor.fetchall()]
+                if 'album_artist' not in cols:
+                    conn.execute("ALTER TABLE songs ADD COLUMN album_artist TEXT")
+                    logger.info("数据库升级: 成功为 songs 表追加 album_artist 字段。")
+            except Exception as migrate_err:
+                logger.error(f"songs 表结构平滑追加 album_artist 失败: {migrate_err}")
+
             conn.commit()
 
     try:

@@ -376,7 +376,8 @@ def index_single_file(file_path: str):
             mtime=stat.st_mtime,
             size=stat.st_size,
             has_cover=has_cover,
-            has_lyrics=has_lyrics
+            has_lyrics=has_lyrics,
+            album_artist=meta.get('album_artist')
         )
         logger.info(f"单文件索引完成: {file_path}")
     except Exception as e:

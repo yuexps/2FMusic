@@ -9,6 +9,9 @@
 - 在 [LocalMusic.vue](frontend/src/views/LocalMusic.vue) 中实现了本地音乐的单曲、歌手、专辑、物理文件夹 4 个视图的聚合显示，支持 `localStorage` 视图记忆。
 - 在“歌手”与“专辑”视图中接入了 A-Z 拼音姓名、修改时间（新曲入库置顶）以及歌曲数量排序的综合适配。
 - 为“文件夹”视图重构了逐级下钻的物理面包屑文件浏览器，自适应在前端计算出了默认曲库的绝对根路径，支持多挂载盘符归并。
+- 在后端 SQLite 中拓展了 [songs](docs/server/db.md) 表结构，新增 `album_artist` 字段，并在 [db.py](server/core/models/db.py) 中实现数据库平滑升级逻辑。
+- 升级元数据解析引擎 [metadata.py](server/core/services/metadata.py)，支持 EasyID3、FLAC/Vorbis、MP4 等主流标签中专辑艺术家（albumartist）信息的解析。
+- 升级前端 [types.ts](frontend/src/types.ts) 的 `Song` 接口与 [LocalMusic.vue](frontend/src/views/LocalMusic.vue) 专辑聚合逻辑，优先使用 `album_artist` 展现并提供群星回退兼容。
 
 ### 修复
 - 修复了 [LocalMusic.vue](frontend/src/views/LocalMusic.vue) 在部署至子路径下时，其歌手头像、专辑封面及详情抽屉封面的 `:src` 未能适配 Base URL 导致加载 404 的 Bug。引入了 `getApiUrl()` 对这些图片地址进行了幂等转换。
@@ -17,6 +20,7 @@
 - 修复了下载管理按钮在出现正在任务数角标时，内部 Flex 布局挤压导致下载图标偏斜的 Bug，改为使用官方标准的 [NBadge](frontend/src/views/NeteaseDownloader.vue) 组件包裹。
 
 ### 优化
+- 重构了 [LocalMusic.vue](frontend/src/views/LocalMusic.vue) 的本地专辑聚合算法。改用“专辑名 + 物理父目录”作为聚合 Key，防止不同歌手同名专辑碰撞，同时根据曲目歌手情况动态识别并归并为“群星”合辑，彻底解决多歌手/合唱曲目导致同一张专辑在界面被切碎成多个独立同名专辑的体验硬伤。
 - 优化了三大歌曲表格（本地音乐、播放记录、网易下载）在宽屏下的列宽排版，在大小/音质与操作菜单之间引入了 `.col-spacer`（最大限制为 120px）弹性空列占位符。在保证长歌名自适应宽幅显示的同时，防止操作按钮在宽屏下被无限抛出，视线聚焦更为紧实。
 - 同步更新了 [services.md](docs/server/services.md) 状态流转规范。
 
