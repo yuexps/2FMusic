@@ -21,6 +21,7 @@
 - 修复了下载管理按钮在出现正在任务数角标时，内部 Flex 布局挤压导致下载图标偏斜的 Bug，改为使用官方标准的 [NBadge](frontend/src/views/NeteaseDownloader.vue) 组件包裹。
 
 ### 优化
+- 优化了 [LocalMusic.vue](frontend/src/views/LocalMusic.vue) 文件夹下钻视图中的单曲展示排版，引入规范的 `song-grid-header` 与 `.song-row` 布局，补全专辑封面图、高亮播放图标，并对齐行双击播放、右键上下文菜单和批量多选操作，消除其排版与功能体验的割裂感。
 - 重构了 [LocalMusic.vue](frontend/src/views/LocalMusic.vue) 的本地专辑聚合算法。改用“专辑名 + 物理父目录”作为聚合 Key，防止不同歌手同名专辑碰撞，同时根据曲目歌手情况动态识别并归并为“群星”合辑，彻底解决多歌手/合唱曲目导致同一张专辑在界面被切碎成多个独立同名专辑的体验硬伤。
 - 优化了三大歌曲表格（本地音乐、播放记录、网易下载）在宽屏下的列宽排版，在大小/音质与操作菜单之间引入了 `.col-spacer`（最大限制为 120px）弹性空列占位符。在保证长歌名自适应宽幅显示的同时，防止操作按钮在宽屏下被无限抛出，视线聚焦更为紧实。
 - 同步更新了 [services.md](docs/server/services.md) 状态流转规范。

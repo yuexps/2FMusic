@@ -296,33 +296,90 @@
               </div>
 
               <!-- 当前目录下的单曲文件列表 -->
-              <div v-if="currentFolderContent.songs.length > 0" class="flex flex-col gap-1.5">
-                <div v-for="song in currentFolderContent.songs" :key="song.id"
-                  class="group flex items-center justify-between p-[10px_16px] rounded-xl hover:bg-sidebar/50 cursor-pointer text-sm transition-colors duration-200"
-                  :class="{ 'text-primary font-semibold bg-primary-alpha-16 dark:bg-primary-on-dark-alpha-16': playerStore.currentSong?.id === song.id }"
-                  @click="playSong(song, currentFolderContent.songs)">
-                  <div class="flex items-center gap-4 overflow-hidden min-w-0">
-                    <SvgIcon :name="playerStore.currentSong?.id === song.id && playerStore.isPlaying ? 'pause' : 'play'" 
-                      class="text-xs text-body-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                    <div class="flex items-center gap-3 overflow-hidden min-w-0 max-md:flex-col max-md:items-start max-md:gap-0.5">
-                      <span class="text-ink truncate max-w-[280px] max-md:max-w-full font-medium">{{ song.title }}</span>
-                      <span class="text-xs text-body-muted truncate max-w-[180px]">- {{ song.artist }}</span>
+              <template v-if="currentFolderContent.songs.length > 0">
+                <div
+                  class="song-grid-header max-md:hidden!"
+                  :style="{ paddingRight: `${16 + scrollbarWidth}px` }">
+                  <div v-if="isBatchMode" class="col-check"></div>
+                  <div class="col-title">标题</div>
+                  <div class="col-artist">歌手</div>
+                  <div class="col-album">专辑</div>
+                  <div class="col-size">大小</div>
+                  <div class="col-spacer"></div>
+                  <div class="col-actions"></div>
+                </div>
+
+                <div class="flex flex-col gap-1.5">
+                  <div v-for="song in currentFolderContent.songs" :key="song.id"
+                    class="group song-row max-md:grid! max-md:grid-cols-[auto_auto_1fr_auto] max-md:grid-rows-[auto_auto] max-md:[grid-template-areas:'check_cover_title_action'_'check_cover_artist_action'] max-md:items-center max-md:p-[8px_12px] max-md:gap-x-3 max-md:gap-y-[2px]"
+                    :class="{
+                      'text-(--primary) font-semibold': playerStore.currentSong?.id === song.id,
+                      'bg-(--primary-alpha-16) backdrop-blur-card border border-(--primary-alpha-10) dark:bg-(--primary-on-dark-alpha-16) dark:border-(--primary-on-dark-alpha-12)': selectedSongIds.has(song.id)
+                    }" @click="handleRowClick(song)" @dblclick="playSong(song, currentFolderContent.songs)" @contextmenu.prevent="handleContextMenu($event, song)">
+                    
+                    <!-- 复选框 -->
+                    <div v-if="isBatchMode"
+                      class="col-check max-md:[grid-area:check] max-md:w-auto max-md:flex max-md:items-center"
+                      @click.stop>
+                      <n-checkbox :checked="selectedSongIds.has(song.id)"
+                        @update:checked="(val) => toggleSongSelection(song.id, val)" />
+                    </div>
+
+                    <!-- 封面与标题 -->
+                    <div class="col-title max-md:contents!">
+                      <div
+                        class="w-10 h-10 rounded-md overflow-hidden relative shrink-0 max-md:[grid-area:cover] max-md:row-[span_2] max-md:w-10 max-md:h-10"
+                        @click.stop="handlePlayBtnClick(song, currentFolderContent.songs)">
+                        <img class="w-full h-full object-cover" v-cached-src="{ id: song.id, src: song.album_art }"
+                          loading="lazy" alt="Cover" />
+                        <div
+                          class="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 text-xs transition-opacity duration-200 group-hover:opacity-100">
+                          <SvgIcon
+                            :name="playerStore.currentSong?.id === song.id && playerStore.isPlaying ? 'pause' : 'play'" />
+                        </div>
+                      </div>
+                      <div
+                        class="flex items-center gap-2 overflow-hidden max-md:[grid-area:title] max-md:self-end max-md:overflow-hidden">
+                        <span class="text-sm whitespace-nowrap overflow-hidden text-ellipsis">{{ song.title }}</span>
+                        <span v-if="playerStore.currentSong?.id === song.id" class="text-[11px] text-(--primary)">
+                          <SvgIcon name="volume-up" />
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- 歌手 -->
+                    <div
+                      class="col-artist max-md:[grid-area:artist] max-md:self-start max-md:min-w-0 max-md:text-[12px] max-md:text-body-muted max-md:m-0 max-md:p-0"
+                      :title="song.artist">{{ song.artist }}</div>
+
+                    <!-- 专辑 -->
+                    <div
+                      class="col-album max-md:hidden!"
+                      :title="song.album">{{ song.album || '-' }}</div>
+
+                    <!-- 大小 -->
+                    <div class="col-size max-md:hidden!">{{ formatSize(song.size) }}</div>
+
+                    <!-- 弹性占位空列 -->
+                    <div class="col-spacer max-md:hidden!"></div>
+
+                    <!-- 右侧操作 -->
+                    <div
+                      class="col-actions max-md:[grid-area:action] max-md:row-[span_2] max-md:w-auto max-md:flex max-md:items-center"
+                      @click.stop>
+                      <n-dropdown trigger="click" :options="getRowDropdownOptions(song)"
+                        @select="(key) => handleRowAction(key, song)">
+                        <n-button circle text :depth="3"
+                          class="bg-transparent border-none text-body-muted cursor-pointer opacity-60 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10">
+                          <template #icon>
+                            <SvgIcon name="ellipsis-h" />
+                          </template>
+                        </n-button>
+                      </n-dropdown>
                     </div>
                   </div>
-                  <div class="flex items-center gap-4 shrink-0 select-none">
-                    <span class="text-xs text-body-muted/80 max-md:hidden">{{ song.album }}</span>
-                    <span class="text-xs text-body-muted/80 mr-4">{{ formatSize(song.size) }}</span>
-                    <!-- 右侧操作 -->
-                    <n-dropdown trigger="click" :options="getRowDropdownOptions(song)" @select="(key) => handleRowAction(key, song)">
-                      <n-button circle text :depth="3" class="w-7 h-7 hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center" @click.stop>
-                        <template #icon>
-                          <SvgIcon name="ellipsis-h" class="text-xs" />
-                        </template>
-                      </n-button>
-                    </n-dropdown>
-                  </div>
                 </div>
-              </div>
+              </template>
 
               <!-- 空状态提示 -->
               <div v-if="currentFolderContent.folders.length === 0 && currentFolderContent.songs.length === 0"
@@ -961,7 +1018,7 @@ const playSong = (song: Song, list?: Song[]) => {
 }
 
 // 播放按钮：控制播放/暂停
-const handlePlayBtnClick = (song: Song) => {
+const handlePlayBtnClick = (song: Song, list?: Song[]) => {
   if (isBatchMode.value) {
     toggleSongSelection(song.id, !selectedSongIds.value.has(song.id))
     return
@@ -969,7 +1026,7 @@ const handlePlayBtnClick = (song: Song) => {
   if (playerStore.currentSong?.id === song.id) {
     playerStore.togglePlay()
   } else {
-    playSong(song)
+    playSong(song, list)
   }
 }
 
