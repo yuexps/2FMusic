@@ -218,7 +218,7 @@
                 @click="openGroupDetail(artist.name, '歌手', artist.songs, artist.cover)">
                 <!-- 圆形歌手头像 -->
                 <div class="relative w-28 h-28 max-md:w-20 max-md:h-20 rounded-full overflow-hidden shadow-md border border-hairline/10 transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg group-hover:border-primary/20">
-                  <img v-if="artist.cover" :src="artist.cover" class="w-full h-full object-cover" loading="lazy" />
+                  <img v-if="artist.cover" :src="getApiUrl(artist.cover)" class="w-full h-full object-cover" loading="lazy" />
                   <div v-else class="w-full h-full bg-sidebar flex items-center justify-center text-body-muted">
                     <SvgIcon name="user" class="text-3xl max-md:text-xl" />
                   </div>
@@ -244,7 +244,7 @@
                 @click="openGroupDetail(album.albumName, album.artist, album.songs, album.cover)">
                 <!-- 1:1 专辑封套 -->
                 <div class="relative aspect-square w-full rounded-xl overflow-hidden shadow-md border border-hairline/10 transition-all duration-300 group-hover:scale-103 group-hover:shadow-xl group-hover:border-primary/20">
-                  <img v-if="album.cover" :src="album.cover" class="w-full h-full object-cover" loading="lazy" />
+                  <img v-if="album.cover" :src="getApiUrl(album.cover)" class="w-full h-full object-cover" loading="lazy" />
                   <div v-else class="w-full h-full bg-sidebar flex items-center justify-center text-body-muted">
                     <SvgIcon name="music" class="text-3xl max-md:text-xl" />
                   </div>
@@ -343,7 +343,7 @@
         <template #header>
           <div class="flex items-center gap-4 py-1 select-none">
             <div class="w-14 h-14 rounded-lg overflow-hidden shadow-md shrink-0 border border-hairline/10">
-              <img v-if="detailDrawerGroup.cover" :src="detailDrawerGroup.cover" class="w-full h-full object-cover" />
+              <img v-if="detailDrawerGroup.cover" :src="getApiUrl(detailDrawerGroup.cover)" class="w-full h-full object-cover" />
               <div v-else class="w-full h-full bg-sidebar flex items-center justify-center text-body-muted">
                 <SvgIcon :name="detailDrawerGroup.subtitle === '歌手' ? 'user' : 'music'" class="text-2xl" />
               </div>
@@ -440,6 +440,7 @@ import { NDropdown, NCheckbox, NModal, NButton, NInput, NSpace, NVirtualList, NS
 import type { DropdownOption } from 'naive-ui'
 import type { Song } from '../types'
 import SvgIcon from '../components/SvgIcon.vue'
+import { getApiUrl } from '../utils/path'
 
 const route = useRoute()
 const router = useRouter()

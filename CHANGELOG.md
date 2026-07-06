@@ -11,6 +11,7 @@
 - 为“文件夹”视图重构了逐级下钻的物理面包屑文件浏览器，自适应在前端计算出了默认曲库的绝对根路径，支持多挂载盘符归并。
 
 ### 修复
+- 修复了 [LocalMusic.vue](frontend/src/views/LocalMusic.vue) 在部署至子路径下时，其歌手头像、专辑封面及详情抽屉封面的 `:src` 未能适配 Base URL 导致加载 404 的 Bug。引入了 `getApiUrl()` 对这些图片地址进行了幂等转换。
 - 修复了网易云下载时长时间卡在“排队中”（`pending`）状态，并在结束后瞬间拉满进度条的问题。调整了 [downloader.py](server/core/services/downloader.py) 中 [run_download_task](server/core/services/downloader.py#L356) 状态机流转，优先切为 `preparing`，并增加防御性 `try...except` 块。
 - 修复了详情抽屉和文件夹点歌时，播放队列上下文（`playlist`）没有切换导致下一首播放断裂的体验问题。
 - 修复了下载管理按钮在出现正在任务数角标时，内部 Flex 布局挤压导致下载图标偏斜的 Bug，改为使用官方标准的 [NBadge](frontend/src/views/NeteaseDownloader.vue) 组件包裹。
