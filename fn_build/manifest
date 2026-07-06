@@ -1,8 +1,8 @@
 appname               = yuexps.2fmusic
-version               = 0.1.6
+version               = 0.1.7
 display_name          = 2FMusic
 desc                  = """
-<stronge>2FMusic</strong> 轻量本地音乐播放器
+<strong>2FMusic</strong> 轻量本地音乐播放器
 - <strong>本地音乐库</strong>: 自动扫描目录、识别 ID3 元数据（封面、歌词），支持网络源自动补充
 - <strong>沉浸式播放器</strong>: 响应式 UI、歌词滚动显示、封面主题色提取、快捷键控制
 - <strong>目录管理</strong>: 添加服务器任意文件夹到音乐库，无需移动文件

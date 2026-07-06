@@ -23,6 +23,7 @@ def get_all_songs_deduplicated():
                     album_art = f"/api/music/covers/{row['id']}.webp"
                 songs.append({
                     'id': row['id'],
+                    'path': row['path'],
                     'filename': row['filename'], 
                     'title': row['title'],
                     'artist': row['artist'], 

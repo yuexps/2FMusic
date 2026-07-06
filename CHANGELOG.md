@@ -14,6 +14,7 @@
 - 升级前端 [types.ts](frontend/src/types.ts) 的 `Song` 接口与 [LocalMusic.vue](frontend/src/views/LocalMusic.vue) 专辑聚合逻辑，优先使用 `album_artist` 展现并提供群星回退兼容。
 
 ### 修复
+- 修复了后端 [song.py](server/core/models/song.py) 中的 `get_all_songs_deduplicated` 接口未返回 `path` 字段，导致前端 [LocalMusic.vue](frontend/src/views/LocalMusic.vue) 文件夹视图在展开具体目录时路径过滤逻辑失效、显示为空的 Bug。
 - 修复了 [LocalMusic.vue](frontend/src/views/LocalMusic.vue) 在部署至子路径下时，其歌手头像、专辑封面及详情抽屉封面的 `:src` 未能适配 Base URL 导致加载 404 的 Bug。引入了 `getApiUrl()` 对这些图片地址进行了幂等转换。
 - 修复了网易云下载时长时间卡在“排队中”（`pending`）状态，并在结束后瞬间拉满进度条的问题。调整了 [downloader.py](server/core/services/downloader.py) 中 [run_download_task](server/core/services/downloader.py#L356) 状态机流转，优先切为 `preparing`，并增加防御性 `try...except` 块。
 - 修复了详情抽屉和文件夹点歌时，播放队列上下文（`playlist`）没有切换导致下一首播放断裂的体验问题。
