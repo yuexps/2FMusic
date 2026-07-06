@@ -1,5 +1,5 @@
 appname               = yuexps.2fmusic
-version               = 0.1.5
+version               = 0.1.6
 display_name          = 2FMusic
 desc                  = """
 <stronge>2FMusic</strong> 轻量本地音乐播放器
