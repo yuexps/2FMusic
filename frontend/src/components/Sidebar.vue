@@ -67,6 +67,7 @@ const menuItems = [
   { path: '/favorites', label: '我的收藏', icon: 'heart-o' },
   { path: '/history', label: '播放记录', icon: 'history' },
   { path: '/mounts', label: '目录管理', icon: 'network' },
+  { path: '/folia', label: '辞曲新境', icon: 'diamond' },
   { path: '/netease', label: '网易下载', icon: 'cloud-download' },
   { path: '/upload', label: '上传音乐', icon: 'cloud-upload' },
   { path: '/settings', label: '设置', icon: 'cog' }

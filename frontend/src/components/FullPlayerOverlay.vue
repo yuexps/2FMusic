@@ -1,5 +1,14 @@
 <template>
   <div class="fixed left-0 w-[calc(100vw/var(--ui-scale,1))] h-[calc(100vh/var(--ui-scale,1))] bg-black z-1000 flex flex-col transition-[top,visibility] duration-400 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden text-white" :class="[ show ? 'top-0 visible pointer-events-auto' : 'top-[120vh] invisible pointer-events-none' ]">
+    <!-- Folia 全屏覆盖舞台 -->
+    <div v-if="foliaMode" class="absolute inset-0 w-full h-full z-50 bg-black flex flex-col">
+      <iframe
+        :src="foliaIframeUrl"
+        class="w-full h-full border-none flex-1"
+        allow="autoplay"
+      ></iframe>
+    </div>
+
     <!-- 虚化背景封面 -->
     <div class="absolute inset-0 -z-1 overflow-hidden">
       <img v-cached-src="{ id: playerStore.currentSong?.id, src: playerStore.currentSong?.album_art }"
@@ -12,7 +21,13 @@
       <button class="bg-transparent border-none text-white text-[20px] cursor-pointer opacity-60 transition-all duration-150 hover:opacity-100 hover:translate-y-0.5 flex items-center justify-center" @click="emit('close')" title="收起">
         <SvgIcon name="chevron-down" />
       </button>
-      <span class="text-sm font-medium tracking-wider opacity-60">{{ playerStore.isPlaying ? '正在播放' : '已暂停' }}</span>
+      <div class="flex items-center gap-3">
+        <span class="text-[11px] font-semibold tracking-widest opacity-40 uppercase select-none">{{ playerStore.isPlaying ? '正在播放' : '已暂停' }}</span>
+        <span class="text-white/10 select-none">|</span>
+        <button class="px-3 py-0.5 text-[11px] font-medium border border-white/15 bg-white/3 rounded-full hover:bg-white/8 cursor-pointer text-white/70 hover:text-white transition-all active:scale-[0.96] select-none" @click="foliaMode = true" title="切换至 Folia 舞台模式">
+          Folia模式
+        </button>
+      </div>
       <!-- 右侧三点菜单 -->
       <n-dropdown trigger="click" :options="dropdownOptions" @select="handleMenuSelect">
         <button class="bg-transparent border-none text-white text-[20px] cursor-pointer opacity-60 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:opacity-100 hover:bg-white/12 active:scale-[0.93]" title="更多操作">
@@ -159,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onBeforeUpdate } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUpdate, onMounted, onUnmounted } from 'vue'
 import { usePlayerStore } from '../stores/player'
 import { useFavoritesStore } from '../stores/favorites'
 import { useSystemStore } from '../stores/system'
@@ -204,6 +219,36 @@ const lyricElements = ref<HTMLElement[]>([])
 onBeforeUpdate(() => {
   lyricElements.value = []
 })
+
+// === Folia 模式拓展实现 ===
+const foliaMode = ref(false)
+
+// 动态构造 iframe URL，透传 2FMusic 后端的网易云 API 地址
+const foliaIframeUrl = computed(() => {
+  const base = './folia/index.html?mode=iframe&from=FullPlayerOverlay'
+  const api = systemStore.neteaseConfig.api_base
+  if (api) {
+    return `${base}&netease_api=${encodeURIComponent(api)}`
+  }
+  return base
+})
+
+// 反向遥控事件监听，由宿主 2FMusic 执行真实控制
+const handleFoliaMessage = (event: MessageEvent) => {
+  const { type } = event.data || {}
+  if (type === 'folia-exit') {
+    foliaMode.value = false
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('message', handleFoliaMessage)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('message', handleFoliaMessage)
+})
+// === Folia 模式结束 ===
 
 // 加载歌曲歌词
 const loadLyricsForSong = async (song: any, skipCache: boolean = false) => {

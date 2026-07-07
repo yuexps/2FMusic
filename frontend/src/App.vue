@@ -10,6 +10,9 @@ import { useSystemStore } from './stores/system'
 import { usePlayerStore } from './stores/player'
 import { usePreferencesStore } from './stores/preferences'
 import { useFavoritesStore } from './stores/favorites'
+import { watch } from 'vue'
+import { wsClient } from './api/ws'
+import { musicDB } from './utils/indexedDB'
 
 const route = useRoute()
 const systemStore = useSystemStore()
@@ -158,6 +161,7 @@ const pageTitle = computed(() => {
     '/mounts': '目录管理',
     '/netease': '网易下载',
     '/upload': '上传音乐',
+    '/folia': '辞曲新境',
     '/settings': '系统设置'
   }
   return map[route.path] || '2FMusic'
@@ -227,9 +231,203 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
   }
 })
 
+// === Folia 全局广播与反向遥控逻辑 ===
+const getApiUrl = (url: string) => {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  const apiBase = systemStore.neteaseConfig.api_base || ''
+  return `${apiBase.replace(/\/$/, '')}/${url.replace(/^\//, '')}`
+}
+
+const sendToAllFoliaIframes = (type: string, data?: any) => {
+  const iframes = document.querySelectorAll('iframe')
+  iframes.forEach((iframe) => {
+    try {
+      const src = iframe.getAttribute('src') || ''
+      if (src.includes('folia/')) {
+        iframe.contentWindow?.postMessage({ type, data }, '*')
+      }
+    } catch (e) {
+      // 跨域防御
+    }
+  })
+}
+
+const getAbsoluteCoverUrl = (art?: string) => {
+  if (!art) return ''
+  if (art.startsWith('http://') || art.startsWith('https://')) return art
+  if (art.startsWith('/') || art.startsWith('api/')) {
+    const base = window.location.origin
+    return `${base}/${art.replace(/^\//, '')}`
+  }
+  return getApiUrl(art)
+}
+
+const sendCurrentTrackToFolia = () => {
+  if (playerStore.currentSong) {
+    sendToAllFoliaIframes('2fmusic-track', {
+      id: playerStore.currentSong.id,
+      title: playerStore.currentSong.title,
+      author: playerStore.currentSong.artist,
+      album: playerStore.currentSong.album,
+      cover: getAbsoluteCoverUrl(playerStore.currentSong.album_art || ''),
+      duration: playerStore.duration || 0
+    })
+  }
+}
+
+const rawLyrics = ref('')
+
+const sendCurrentLyricToFolia = () => {
+  sendToAllFoliaIframes('2fmusic-lyric', {
+    lrc: rawLyrics.value,
+    hasLyric: !!rawLyrics.value
+  })
+}
+
+const sendCurrentStateToFolia = () => {
+  let loopMode: 'all' | 'one' | 'off' = 'all'
+  if (playerStore.playMode === 'single') loopMode = 'one'
+  else if (playerStore.playMode === 'random') loopMode = 'off'
+
+  sendToAllFoliaIframes('2fmusic-state', {
+    isPaused: !playerStore.isPlaying,
+    progressMs: Math.round(playerStore.currentTime * 1000),
+    loopMode
+  })
+}
+
+const sendCurrentQueueToFolia = () => {
+  const queue = playerStore.playlist.map(song => ({
+    id: song.id,
+    title: song.title,
+    artist: song.artist,
+    album: song.album,
+    cover: getAbsoluteCoverUrl(song.album_art || ''),
+    durationMs: (song.duration || 0) * 1000
+  }))
+  sendToAllFoliaIframes('2fmusic-queue', { queue })
+}
+
+const handleAllFoliaReady = () => {
+  sendCurrentTrackToFolia()
+  sendCurrentLyricToFolia()
+  sendCurrentStateToFolia()
+  sendCurrentQueueToFolia()
+}
+
+const loadLyricsForSong = async (song: any) => {
+  if (!song) {
+    rawLyrics.value = ''
+    sendCurrentLyricToFolia()
+    return
+  }
+  try {
+    const cacheEnabled = localStorage.getItem('2fmusic_cache_lyrics') === 'true'
+    if (cacheEnabled) {
+      const cachedLyrics = await musicDB.getLyrics(song.id)
+      if (cachedLyrics) {
+        rawLyrics.value = cachedLyrics
+        sendCurrentLyricToFolia()
+        return
+      }
+    }
+
+    const data = await wsClient.sendRequest('music/lyrics', {
+      title: song.title,
+      artist: song.artist,
+      filename: song.filename,
+      song_id: song.id,
+      yrc: true
+    })
+
+    if (data && data.lyrics) {
+      rawLyrics.value = data.lyrics
+      sendCurrentLyricToFolia()
+      if (cacheEnabled) {
+        musicDB.saveLyrics(song.id, data.lyrics).catch(() => {})
+      }
+    } else {
+      rawLyrics.value = ''
+      sendCurrentLyricToFolia()
+    }
+  } catch (e) {
+    rawLyrics.value = ''
+    sendCurrentLyricToFolia()
+  }
+}
+
+const handleFoliaMessage = (event: MessageEvent) => {
+  const { type, data } = event.data || {}
+  switch (type) {
+    case 'folia-ready':
+      handleAllFoliaReady()
+      break
+    case 'folia-toggle-play':
+      playerStore.togglePlay()
+      break
+    case 'folia-next':
+      playerStore.next()
+      break
+    case 'folia-prev':
+      playerStore.prev()
+      break
+    case 'folia-seek':
+      if (data && typeof data.positionMs === 'number') {
+        playerStore.seek(data.positionMs / 1000)
+      }
+      break
+    case 'folia-toggle-loop': {
+      const modes: ('list' | 'single' | 'random')[] = ['list', 'single', 'random']
+      const nextIdx = (modes.indexOf(playerStore.playMode) + 1) % modes.length
+      playerStore.playMode = modes[nextIdx]
+      const saved = localStorage.getItem('2fmusic_state')
+      const state = saved ? JSON.parse(saved) : {}
+      state.playMode = playerStore.playMode
+      localStorage.setItem('2fmusic_state', JSON.stringify(state))
+      break
+    }
+    case 'folia-play-song':
+      if (data && data.id) {
+        const song = playerStore.playlist.find(s => s.id === data.id)
+        if (song) {
+          playerStore.playSong(song)
+        }
+      }
+      break
+  }
+}
+
+watch(() => playerStore.currentSong, (newSong) => {
+  if (newSong) {
+    sendCurrentTrackToFolia()
+    loadLyricsForSong(newSong)
+  }
+})
+
+watch(() => playerStore.isPlaying, () => {
+  sendCurrentStateToFolia()
+})
+
+watch(() => playerStore.playMode, () => {
+  sendCurrentStateToFolia()
+})
+
+watch(() => playerStore.playlist, () => {
+  sendCurrentQueueToFolia()
+}, { deep: true })
+
+watch(() => playerStore.currentTime, (time) => {
+  sendToAllFoliaIframes('2fmusic-progress', {
+    progressMs: Math.round(time * 1000)
+  })
+})
+// === Folia 广播逻辑结束 ===
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('mouseup', handleMouseUp)
+  window.addEventListener('message', handleFoliaMessage)
 
   // 全局拉起并初始化 WebSocket 实时通信信道
   systemStore.initWebSocket()
@@ -238,11 +436,17 @@ onMounted(() => {
   systemStore.fetchSongs()
   systemStore.fetchNeteaseConfig()
   systemStore.fetchNeteaseUserStatus()
+  
+  // 初始化载入当前歌曲的歌词
+  if (playerStore.currentSong) {
+    loadLyricsForSong(playerStore.currentSong)
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('mouseup', handleMouseUp)
+  window.removeEventListener('message', handleFoliaMessage)
 })
 </script>
 
@@ -325,7 +529,14 @@ onUnmounted(() => {
               <div class="w-8"></div>
             </header>
 
-            <div class="main-scroll flex-1 min-h-0 overflow-y-auto p-[24px_28px] max-md:p-[16px_12px] box-border">
+            <div 
+              :class="[
+                'flex-1 min-h-0 box-border',
+                route.path === '/folia' 
+                  ? 'w-full h-full overflow-hidden' 
+                  : 'main-scroll overflow-y-auto p-[24px_28px] max-md:p-[16px_12px]'
+              ]"
+            >
               <router-view />
             </div>
 

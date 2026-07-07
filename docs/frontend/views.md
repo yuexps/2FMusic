@@ -36,3 +36,16 @@
 *   **歌手视图聚合**：歌手数据基于前端对歌曲 `artist` 字段按照分割符（如 `/`、`,`、`，`、`、`）拆分后聚合产生，首张有封面的歌曲封面作为该歌手的临时头像。
 
 
+## 5. Folia 全屏播放器内嵌模式 (Folia 模式) 契约
+
+*   **iframe 容器挂载**：在 `FullPlayerOverlay.vue` 中支持一键进入 Folia 模式，以 `absolute inset-0 z-10 w-full h-full` 的全屏 iframe 容器加载 `./folia/index.html?mode=iframe`。
+*   **通信总线规范**：2FMusic 宿主和 Folia iframe 之间采用同源 `postMessage` 进行双向控制与数据同步，杜绝中介代理或网络转发：
+    - **正向数据推送 (2FMusic -> Folia)**：
+        - `2fmusic-track`：推送正在播放的歌曲元数据（ID、歌名、歌手、专辑、封面 URL、总时长）。
+        - `2fmusic-lyric`：推送当前拉取并解析成功的歌词纯文本。
+        - `2fmusic-state`：推送包含播放状态 `isPaused` 和精准毫秒级播放时间 `progressMs` 的复合包，由 Folia 进行插值时钟校准。
+    - **反向遥控控制 (Folia -> 2FMusic)**：
+        - `folia-exit`：用户在 Folia 右上角点击“经典模式”返回，2FMusic 切回常规播放器分栏界面。
+        - `folia-toggle-play`：Folia 劫持其自身的播放/暂停动作并发送，2FMusic 执行 `playerStore.togglePlay()`。
+        - `folia-next` / `folia-prev`：Folia 劫持切歌并发送，2FMusic 执行 `playerStore.next()` / `playerStore.prev()`。
+        - `folia-seek`：Folia 劫持跳转并发送目标毫秒值 `positionMs`，2FMusic 执行 `playerStore.seek(positionMs / 1000)`。

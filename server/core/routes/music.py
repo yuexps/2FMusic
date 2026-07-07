@@ -2,7 +2,7 @@ import os
 import time
 import shutil
 import threading
-from urllib.parse import unquote, quote
+from urllib.parse import unquote, quote, urlparse
 import requests
 import uuid
 from flask import Blueprint, request, jsonify, send_file
@@ -599,3 +599,50 @@ def play_external_file():
     if os.path.exists(path): 
         return send_file(path, conditional=True)
     return jsonify({'error': '文件未找到'}), 404
+
+
+def is_allowed_lyric_proxy_host(hostname: str) -> bool:
+    if not hostname:
+        return False
+    return (hostname == 'qq.com' or hostname.endswith('.qq.com') or
+            hostname == 'kugou.com' or hostname.endswith('.kugou.com') or
+            hostname == 'amll-ttml-db.stevexmh.net')
+
+
+@music_bp.route('/api/lyric-proxy', methods=['GET', 'POST', 'OPTIONS'])
+def lyric_proxy():
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    target_url = request.args.get('url')
+    if not target_url:
+        return jsonify({'error': 'Missing url parameter'}), 400
+
+    try:
+        parsed_url = urlparse(target_url)
+        hostname = parsed_url.hostname
+        if not is_allowed_lyric_proxy_host(hostname):
+            return jsonify({'error': 'Forbidden: Domain not allowed'}), 403
+
+        # Filter headers to forward
+        ignored_headers = {'host', 'connection', 'content-length', 'origin', 'referer', 'accept-encoding'}
+        headers = {}
+        for k, v in request.headers.items():
+            if k.lower() not in ignored_headers:
+                headers[k] = v
+
+        method = request.method
+        if method == 'POST':
+            data = request.get_data()
+            resp = requests.post(target_url, headers=headers, data=data, timeout=15)
+        else:
+            resp = requests.get(target_url, headers=headers, timeout=15)
+
+        response_headers = {
+            'Content-Type': resp.headers.get('Content-Type', 'application/json')
+        }
+        return resp.content, resp.status_code, response_headers
+
+    except Exception as e:
+        logger.error(f"Lyric proxy request failed: {e}")
+        return jsonify({'error': 'Proxy request failed', 'details': str(e)}), 500

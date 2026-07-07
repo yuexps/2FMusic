@@ -21,7 +21,8 @@ import {
   SyncOutline, ChevronDown, ChevronUp, ChevronForward, ChevronBack,
   ArrowBack, SwapVerticalOutline,
   LogoGithub, ServerOutline, LogInOutline,
-  ShieldCheckmarkOutline, SparklesOutline, WifiOutline, ColorPaletteOutline, MenuOutline
+  ShieldCheckmarkOutline, SparklesOutline, WifiOutline, ColorPaletteOutline, MenuOutline,
+  DiamondOutline
 } from '@vicons/ionicons5'
 
 const props = defineProps({
@@ -105,7 +106,8 @@ const COMPONENT_MAP: Record<string, any> = {
   'magic': SparklesOutline,
   'palette': ColorPaletteOutline,
   'wifi': WifiOutline,
-  'menu': MenuOutline
+  'menu': MenuOutline,
+  'diamond': DiamondOutline
 }
 
 const iconComponent = computed(() => {

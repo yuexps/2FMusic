@@ -4,6 +4,31 @@
 
 ---
 
+## [2026-07-07]
+### 新增
+- **侧边栏集成独立 Folia 视图**：侧边栏新增“辞曲新境”入口，复用 Folia 完整页面。在未开启“舞台”模式下默认为独立播放器逻辑，保留完整功能交互，不使用全屏播放页 iframe 自动跳转与劫持逻辑。
+- **Stage 模式歌词在线匹配与缓存重载**：在全屏 iframe 模式下放行歌词匹配 UI。基于歌曲标题和歌手计算稳定的负数歌曲 ID 作为标识，歌曲加载时自动读取 IndexedDB 缓存中的在线匹配歌词。
+- **全屏播放器 Folia 模式**：[FullPlayerOverlay.vue](frontend/src/components/FullPlayerOverlay.vue) 顶部 Header 引入 Folia 模式切换，通过独立全屏 iframe 嵌入 Folia 界面。
+- **Folia 握手就绪协议**：引入 `folia-ready` 反向通信信号，在 Folia 完成 `start()` 挂载后通知宿主，规避加载初期的推数竞态。
+- **播放状态与队列双向遥控**：主机同步播放状态、循环模式及播放队列至 Folia（`2fmusic-state` / `2fmusic-queue`）；Folia 侧边栏及队列切歌事件反向控制主机播放（`folia-play-song` / `folia-toggle-loop`）。
+- **多源自动歌词检索**：当 Stage 推送无精确词轨时，后台静默通过网易云、QQ 音乐、酷狗、AMLLDB 接口检索并下载匹配高精度逐字歌词。
+- **外部 Base URL 透传**：Folia 自动从 query 参数 `netease_api` 中动态抓取当前 2FMusic 后端的 API 基址，实现多渠道云端歌词搜索。
+- **经典模式悬浮按钮**：在 `folia-major/src/App.tsx` 中注入“经典模式”返回按钮（磨砂玻璃悬浮风格），当点击时向父窗口发送 `folia-exit`，通知宿主退回到经典播放模式。
+
+### 修复
+- **接口 401 及代理 404 报错**：在 Python 后端实现 `/api/lyric-proxy` 白名单代理路由（支持 QQ、酷狗、AMLLDB），并忽略 `accept-encoding` 头以解压缩响应数据，避免乱码。在 Folia 端请求中移除 `credentials: 'omit'` 以在同源请求时携带 Session 凭证。
+- **解除 iframe 下的控制及按键锁定**：解除 Stage 模式下的 `isNowPlayingControlDisabled` 限制，恢复空格及左右键控制；修复在无物理音频流时播放状态 Toggle 的点击禁用问题。
+- **屏蔽本地 Progress 接口报错**：在 `queryNowPlayingPreciseProgress` 轮询前拦截 `isIframeMode`，阻止持续对本地 9863 端口发起网络请求引发的连接拒绝错误。
+
+### 优化
+- **isIframeMode 条件解耦**：移除对 `window.self !== window.top` 的依赖，解耦 iframe 状态判定，仅对具备特定 query 参数的 FullPlayerOverlay 场景生效，隔离侧边栏常规内嵌场景。
+- **Now Playing 设置项锁定**：在非 Electron 网页端（包含侧边栏与独立网页版），将 `enableNowPlayingStage` 强制置为 `true`。置灰锁定“启用 Now Playing”设置开关并限制点击，简化设置界面。
+- **主工作区填充与样式优化**：移除 [FullPlayerOverlay.vue](frontend/src/components/FullPlayerOverlay.vue) 中的脉冲绿点并加入分割线。调整 [App.vue](frontend/src/App.vue) 中 `<router-view>` 容器的布局，处于 `/folia` 路由时自适应填充 100% 窗口，移除 Padding 缩进。
+- **2FMusic 全局持久化 Folia 广播**：重构了广播机制，将数据推送与反向遥控逻辑统一上移至宿主根组件 [App.vue](frontend/src/App.vue)。支持持续向页面上所有 Folia 相关 iframe 广播，同时在 Folia 端 `nowPlayingProvider.ts` 开启了对非全屏模式 iframe 内嵌场景下的 message 消息接收，实现“辞曲新境”等常规内嵌页面在切换到“舞台”模式时对宿主播放状态的静默接收与同步。
+- **FullPlayerOverlay.vue 冗余变量清理**：删除了从未被读取且无用的 `foliaIframe` 变量声明与模板 `ref="foliaIframe"` 绑定属性，清空了相关的控制台警告提示。
+- **侧边栏图标更新**：在 `SvgIcon.vue` 中导入并映射了 `DiamondOutline` 图标，并将侧边栏菜单“辞曲新境”的图标升级为更具精致切面与设计美感的 `diamond` 图标。
+- 升级 `build_frontend.cmd` 构建流程，引入 `BUILD_BASE=./` 环境变量支持，实现自动打包编译 Folia-major 播放器并部署至静态资源子目录 `www/folia` 的闭环链路。
+
 ## [2026-07-06]
 ### 新增
 - 在 [LocalMusic.vue](frontend/src/views/LocalMusic.vue) 中实现了本地音乐的单曲、歌手、专辑、物理文件夹 4 个视图的聚合显示，支持 `localStorage` 视图记忆。
