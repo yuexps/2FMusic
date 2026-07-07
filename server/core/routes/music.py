@@ -610,6 +610,7 @@ def is_allowed_lyric_proxy_host(hostname: str) -> bool:
 
 
 @music_bp.route('/api/lyric-proxy', methods=['GET', 'POST', 'OPTIONS'])
+@music_bp.route('/folia/api/lyric-proxy', methods=['GET', 'POST', 'OPTIONS'])
 def lyric_proxy():
     if request.method == 'OPTIONS':
         return '', 200
