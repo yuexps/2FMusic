@@ -23,6 +23,7 @@
     - **ProxyFix 中间件**：为了适配 Nginx / Caddy 反向代理，后端工厂函数中注入了 `ProxyFix(x_for=1, x_proto=1, x_host=1, x_prefix=1)`。这确保了后端获取客户端真实 IP（用于 IP 防爆破）以及识别外部反代协议的准确性。
     - **HTML 资源防缓存重绘**：为了保证重构部署后客户端浏览器能 100% 刷入最新静态资源包，对所有 HTML 页面响应统一强制写入 `Cache-Control: no-cache, no-store, must-revalidate` 头；同时通过对 HTML 二进制内容计算 MD5 哈希作为强 `ETag` 缓存检验指针写入 Header。
     - **全域 CORS 放行**：对所有 HTTP 响应默认注入跨域 CORS 允许响应头（`Access-Control-Allow-Origin: *` 等），以保障第三方 Android 客户端直接调用 REST 流媒体的灵活性。
+    - **网易云 API 代理 Header 过滤规约**：在后端代理路由 `proxy_netease_api` 转发请求响应时，为了防范网易云登录成功状态下返回的极长或畸形 `Set-Cookie` 响应头导致外部反向代理服务器（如 Caddy/Nginx）缓冲区溢出抛出 502 Bad Gateway 错误，且由于客户端并不依赖浏览器头写入 Cookie，必须在返回响应前物理过滤并移除其中的 `Set-Cookie` 头部字段。
 
 
 ## 3. WebSocket 数据帧契约 (`/api/ws`)

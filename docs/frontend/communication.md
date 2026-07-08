@@ -50,3 +50,10 @@
     - 在模板中绑定可能包含 `/api/` 相对路径的资源到 DOM 属性（如 `<img>` 的 `:src`）时，必须使用 `getApiUrl()` 函数包裹，或者使用已封装该处理的自定义指令（如 `v-cached-src`）。
     - 严禁直接使用 `:src="item.cover"` 或 `:src="item.album_art"` 来绑定以 `/api/` 开头的相对路径，必须转换为 `:src="getApiUrl(item.cover)"`。
     - 外部的绝对 URL（包含 `http://` 或 `https://`）以及 Blob URL、Data URL 传入 `getApiUrl()` 时会自动原样返回，无需做额外条件判定。
+
+## 5. 接口异常与非 JSON 响应容错规范
+*   **设计原则**：对于所有由前端直接发起或通过后端代理转发的 REST API 请求（如网易云 API），前端网络库及数据接口方法**必须具备非 JSON 响应（如 502 Bad Gateway/504 Gateway Timeout 等返回的 HTML 页面）和网络错误的捕获及容错解析能力**。
+*   **健壮性要求**：
+    1.  解析响应时，需先判断响应头中的 `Content-Type` 是否包含 `application/json`；或在进行 `res.json()` 解析时使用 `try-catch` 包裹。
+    2.  若响应类型非 JSON，或解析过程中抛出异常，必须平滑捕获并将返回格式统一转换为结构化的 `{ code, message }` 错误对象（例如网关 502 时构造为 `{ code: 502, message: 'Non-JSON response received' }`），避免直接在业务主线程抛出未捕获的 SyntaxError 异常引起崩溃。
+

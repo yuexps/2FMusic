@@ -558,7 +558,8 @@ def proxy_netease_api(subpath):
             timeout=10.0
         )
         
-        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        # 过滤 set-cookie 防止反代缓冲区溢出 502
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection', 'set-cookie']
         headers = [
             (name, value) for name, value in resp.raw.headers.items()
             if name.lower() not in excluded_headers

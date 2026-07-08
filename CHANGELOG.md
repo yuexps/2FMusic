@@ -5,13 +5,17 @@
 ---
 
 ## [2026-07-08]
+- **网易云 API 扫码与代理异常防崩溃优化**：
+  - 更新 [docs/frontend/communication.md](./docs/frontend/communication.md) 和 [docs/server/communication.md](./docs/server/communication.md) 补全非 JSON 兼容解析及代理过滤规约。
+  - 优化 [netease.ts](./folia-major/src/services/netease.ts) 中的 `fetchWithCreds` 接口解析逻辑，支持 `res.clone().json()` 尝试，失败时 fallback 至 `res.text()` 并兼容前端单元测试的 Mock 行为，避免 502 等 HTML 报错导致解析崩溃。
+  - 修复 [netease.py](./server/core/routes/netease.py) 中的 `proxy_netease_api` 转发代理，在返回前将响应头中的 `Set-Cookie` 物理剔除，从源头根治扫码成功瞬间由超长 Header 导致的反代 502 Bad Gateway 报错。
 - **全屏播放模式切换优化**：
   - 重构顶部导航为 Segmented Control 滑块菜单，支持“经典全屏”与“Folia”模式切换与本地偏好持久化。
   - 优化模式切换下的 Header 层级、磨砂背景渲染，以及切回经典播放器时的歌词自动重新对齐。
 - **Folia 大模型主题配色与后端持久化联动**：
-  - 支持在宿主设置页一站式配置 AI 配色，敏感密钥由后端 [folia.py](file:///d:/Users/yuyue/Documents/Code/2FMusic/server/core/routes/folia.py) 模块安全代发与出站代理，避免本地浏览器泄露。
+  - 支持在宿主设置页一站式配置 AI 配色，敏感密钥由后端 [folia.py](./server/core/routes/folia.py) 模块安全代发与出站代理，避免本地浏览器泄露。
   - 客户端通过 `get2FMusicBaseUrl()` 动态感知 BaseUrl 兼容子目录反代，修复 `foliaAiConfig` 漏返引发的 Vue 类型编译 Bug。
-  - 更新 [.github/workflows/test-build.yml](file:///d:/Users/yuyue/Documents/Code/2FMusic/.github/workflows/test-build.yml) 自动化测试流以支持子模块拉取与自动集成打包。
+  - 更新 [.github/workflows/test-build.yml](./.github/workflows/test-build.yml) 自动化测试流以支持子模块拉取与自动集成打包。
 - **Folia 界面与独立遥控优化**：
   - 移除 iframe 模式下的 `'account'` 选项卡，基于 Framer Motion 重建了 Tab 背景物理滑动动画。
   - 对 Iframe 从机模式的 localStorage 键自动加 `overlay_` 前缀隔离，屏蔽新手引导和自动更新弹窗，重构了统一的等待音频提示遮罩。
@@ -23,7 +27,7 @@
 - **Folia Stage 模式多维联动升级**：
   - 修复并打通了从机播放列表（Queue）的播歌控制（`folia-play-song`）、数据结构映射规范化、以及收藏/喜欢（`liked`）状态及红心按钮的双向事件反向遥控。
   - 宿主与 Folia 之间实现了音量双向联动（`volume` / `folia-volume`），防死循环更新；在 Stage 模式下适配了当前歌曲的高亮与自动滚动定位。
-  - 移除了过时的 `/folia` 路由及废弃的 [FoliaPlayer.vue](file:///d:/Users/yuyue/Documents/Code/2FMusic/frontend/src/views/FoliaPlayer.vue)；更新 [folia.md](file:///d:/Users/yuyue/Documents/Code/2FMusic/docs/folia.md) 中嵌入模式描述。
+  - 移除了过时的 `/folia` 路由及废弃的 [FoliaPlayer.vue](./frontend/src/views/FoliaPlayer.vue)；更新 [folia.md](./docs/folia.md) 中嵌入模式描述。
 
 ### 优化
 - **Folia 入口体验优化**：
