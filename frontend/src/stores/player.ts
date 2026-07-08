@@ -94,18 +94,22 @@ export const usePlayerStore = defineStore('player', () => {
           playMode.value = state.playMode
         }
         if (state.currentSong) {
-          currentSong.value = { ...state.currentSong }
+          const restored = { ...state.currentSong }
+          if (restored.album_art && /^blob:/.test(restored.album_art)) {
+            restored.album_art = ''
+          }
+          currentSong.value = restored
           audio.src = getApiUrl(`/api/music/play/${state.currentSong.id}`)
           
-          loadSongCover(state.currentSong).then(artUrl => {
-            if (currentSong.value && currentSong.value.id === state.currentSong.id) {
+          loadSongCover(restored).then(artUrl => {
+            if (currentSong.value && currentSong.value.id === restored.id) {
               currentSong.value.album_art = artUrl
               updateMediaSession()
             }
           })
 
-          if (!state.currentSong.album_art) {
-            fetchAlbumArt(state.currentSong)
+          if (!restored.album_art) {
+            fetchAlbumArt(restored)
           } else {
             updateMediaSession()
           }
@@ -150,10 +154,14 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   const saveState = () => {
+    const song = currentSong.value ? { ...currentSong.value } : null
+    if (song && song.album_art && /^blob:/.test(song.album_art)) {
+      song.album_art = ''
+    }
     const state = {
       volume: volume.value,
       playMode: playMode.value,
-      currentSong: currentSong.value
+      currentSong: song
     }
     localStorage.setItem('2fmusic_state', JSON.stringify(state))
   }

@@ -13,6 +13,7 @@ import { useFavoritesStore } from './stores/favorites'
 import { watch } from 'vue'
 import { wsClient } from './api/ws'
 import { musicDB } from './utils/indexedDB'
+import { getApiUrl } from './utils/path'
 
 const route = useRoute()
 const systemStore = useSystemStore()
@@ -232,13 +233,6 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
 })
 
 // === Folia 全局广播与反向遥控逻辑 ===
-const getApiUrl = (url: string) => {
-  if (!url) return ''
-  if (url.startsWith('http://') || url.startsWith('https://')) return url
-  const apiBase = systemStore.neteaseConfig.api_base || ''
-  return `${apiBase.replace(/\/$/, '')}/${url.replace(/^\//, '')}`
-}
-
 const sendToAllFoliaIframes = (type: string, data?: any) => {
   // 1. 广播给所有的 iframe (原有的全屏 Stage 模式)
   const iframes = document.querySelectorAll('iframe')
@@ -274,12 +268,13 @@ const sendCurrentTrackToFolia = () => {
   const currentSong = playerStore.currentSong
   if (currentSong) {
     const isLiked = favoritesStore.favoriteSongIds.some(id => String(id) === String(currentSong.id))
+    const coverUrl = getAbsoluteCoverUrl(currentSong.album_art || '')
     const payload = {
       id: currentSong.id,
       title: currentSong.title,
       author: currentSong.artist,
       album: currentSong.album,
-      cover: getAbsoluteCoverUrl(currentSong.album_art || ''),
+      cover: coverUrl,
       duration: playerStore.duration || 0,
       liked: isLiked
     }

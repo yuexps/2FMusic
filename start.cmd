@@ -25,6 +25,6 @@ if errorlevel 1 (
 )
 
 echo "[INFO] 正在启动 2FMusic 后端服务..."
-call .venv\Scripts\python server/app.py --music-library-path ./test_tmp/Music --log-path ./test_tmp/app.log --port 23237 --password 123456
+call .venv\Scripts\python server/app.py --music-library-path ./test_tmp/Music --log-path ./test_tmp/app.log --port 23237 --password 123456 --base-url /app/2fmusic
 
 pause
