@@ -5,6 +5,12 @@
 ---
 
 ## [2026-07-08]
+- **全屏播放页顶部模式切换重构为持久化滑块菜单**：
+  - 移除了顶部的“正在播放 / 已暂停”状态文本标签。
+  - 重构顶部导航为精致的 Segmented Control 二元滑动菜单，包含“经典”（2FMusic 全屏播放页）与“Folia”（Folia 播放页，以 `from=FullPlayerOverlay` 舞台从机模式运行），使用 `transform` 实现流畅的背景滑条切换。
+  - 滑块模式使用 `playModeTab` 并写入本地存储 `2fmusic_fullplayer_mode` 实行状态持久化，下次打开全屏播放器时自动恢复上一次偏好。
+  - 将 `<header>` 的 `z-index` 调整至 `z-60`，并在 Folia 模式下启用半透明磨砂背景（`bg-black/25 backdrop-blur-md`），确保无论 Folia 激活与否，顶部 header 始终浮在最上层，方便用户随时切换模式或点击 `chevron-down` 关闭全屏层。
+  - 为经典播放器主体 `<main>` 和 `<footer>` 增加了 `v-if="!foliaMode"` 控制。在切回经典播放器时自动通过 `nextTick` 触发 `scrollToActiveLyric` 重新滚动对齐当前进度歌词，防止歌词对齐遗失。
 - **Folia 大模型主题配色与后端持久化深层联动**：
   - 宿主一站式配置：宿主设置页新增大模型开关、URL、Key、Model 及 HTTP 代理输入，统一管理配置。
   - 安全代理请求：新建后端 [folia.py](file:///d:/Users/yuyue/Documents/Code/2FMusic/server/core/routes/folia.py) 模块安全代理请求，支持 HTTP 出站代理，规避 CORS 限制；敏感密钥禁止写入 `localStorage` 且自动清除历史残留，防浏览器明文泄露。
