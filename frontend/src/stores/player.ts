@@ -93,6 +93,9 @@ export const usePlayerStore = defineStore('player', () => {
         if (state.playMode) {
           playMode.value = state.playMode
         }
+        if (state.playlist) {
+          playlist.value = state.playlist
+        }
         if (state.currentSong) {
           const restored = { ...state.currentSong }
           if (restored.album_art && /^blob:/.test(restored.album_art)) {
@@ -158,10 +161,18 @@ export const usePlayerStore = defineStore('player', () => {
     if (song && song.album_art && /^blob:/.test(song.album_art)) {
       song.album_art = ''
     }
+    const cleanPlaylist = playlist.value.map(s => {
+      const cleanSong = { ...s }
+      if (cleanSong.album_art && /^blob:/.test(cleanSong.album_art)) {
+        cleanSong.album_art = ''
+      }
+      return cleanSong
+    })
     const state = {
       volume: volume.value,
       playMode: playMode.value,
-      currentSong: song
+      currentSong: song,
+      playlist: cleanPlaylist
     }
     localStorage.setItem('2fmusic_state', JSON.stringify(state))
   }

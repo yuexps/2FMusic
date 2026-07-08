@@ -6,7 +6,9 @@
 *   **状态恢复**：从 `localStorage` 中的 `2fmusic_state` 提取配置并覆盖：
     - `volume` -> 设置原生 `audio.volume` 及 Store 响应值。
     - `playMode` -> 列表 `list`、单曲 `single`、随机 `random`。
+    - `playlist` -> 恢复上次保存的当前播放列表。
     - `currentSong` -> 若存在当前歌曲，自动拼接并加载流地址：`/api/music/play/${song.id}`，并通过异步回调加载其本地缓存封面。
+*   **状态保存**：在执行 `saveState` 时，将当前 `playlist` 同步写入 `localStorage`。存入前须过滤或重置歌曲对象中可能包含的临时 `blob:` 封面 URL 属性。
 *   **原生 HTMLAudioElement 事件绑定**：
     - `play` / `pause` 事件：同步 `isPlaying` 变量并更新 `MediaSession.playbackState`。
     - `timeupdate` / `durationchange` 事件：实时更新 `currentTime` 及 `duration`，并同步系统的媒体会话位置。

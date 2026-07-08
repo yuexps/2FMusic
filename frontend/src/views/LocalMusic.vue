@@ -1023,10 +1023,14 @@ const handlePlayBtnClick = (song: Song, list?: Song[]) => {
     toggleSongSelection(song.id, !selectedSongIds.value.has(song.id))
     return
   }
+  const playList = list || filteredSongs.value
   if (playerStore.currentSong?.id === song.id) {
+    if (playerStore.playlist.length === 0 && playList && playList.length > 0) {
+      playerStore.playlist = playList
+    }
     playerStore.togglePlay()
   } else {
-    playSong(song, list)
+    playSong(song, playList)
   }
 }
 

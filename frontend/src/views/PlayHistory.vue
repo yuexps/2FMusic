@@ -150,6 +150,9 @@ const handleRowClick = (song: Song) => {
 
 const handlePlayBtnClick = (song: Song) => {
   if (playerStore.currentSong?.id === song.id) {
+    if (playerStore.playlist.length === 0) {
+      playerStore.playlist = historyList.value.map(h => h.song)
+    }
     playerStore.togglePlay()
   } else {
     playSong(song)

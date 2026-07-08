@@ -141,7 +141,8 @@
           <div class="flex justify-between items-center py-4 border-b border-border-main gap-4">
             <div class="flex-1 min-w-0">
               <h4 class="m-0 mb-1 text-sm font-semibold text-ink">启用 AI 自定义配色主题</h4>
-              <p class="m-0 text-xs text-body-muted leading-relaxed">开启后可直接在此配置大模型 API。由 2FMusic 后端安全代理请求大模型为当前歌曲生成沉浸式歌词主题（敏感密钥不暴露给浏览器，支持代理出站）。</p>
+              <p class="m-0 text-xs text-body-muted leading-relaxed">开启后可直接在此配置大模型 API。由 2FMusic
+                后端代理请求大模型为当前歌曲生成沉浸式歌词主题。</p>
             </div>
             <n-switch v-model:value="enableFoliaAi" />
           </div>
@@ -167,8 +168,8 @@
 
             <div class="flex flex-col gap-2 w-full">
               <label for="folia-openai-proxy" class="text-xs font-semibold text-body-muted">自定义 HTTP 代理地址 (可选)</label>
-              <n-input id="folia-openai-proxy" v-model:value="foliaOpenaiProxy"
-                placeholder="例如: http://127.0.0.1:7890" @update:value="handleFoliaAiInputUpdate" />
+              <n-input id="folia-openai-proxy" v-model:value="foliaOpenaiProxy" placeholder="例如: http://127.0.0.1:7890"
+                @update:value="handleFoliaAiInputUpdate" />
             </div>
           </div>
         </div>
