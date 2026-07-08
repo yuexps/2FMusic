@@ -267,11 +267,10 @@ const sendToAllFoliaIframes = (type: string, data?: any) => {
 const getAbsoluteCoverUrl = (art?: string) => {
   if (!art) return ''
   if (art.startsWith('http://') || art.startsWith('https://')) return art
-  if (art.startsWith('/') || art.startsWith('api/')) {
-    const base = window.location.origin
-    return `${base}/${art.replace(/^\//, '')}`
-  }
-  return getApiUrl(art)
+  // 相对路径先经 getApiUrl 拼上 basePath，再拼 origin
+  const withBase = getApiUrl(art)
+  if (withBase.startsWith('http://') || withBase.startsWith('https://')) return withBase
+  return `${window.location.origin}${withBase.startsWith('/') ? '' : '/'}${withBase.replace(/^\//, '')}`
 }
 
 const sendCurrentTrackToFolia = () => {
