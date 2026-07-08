@@ -278,7 +278,7 @@ const sendCurrentTrackToFolia = () => {
   const currentSong = playerStore.currentSong
   if (currentSong) {
     const isLiked = favoritesStore.favoriteSongIds.some(id => String(id) === String(currentSong.id))
-    sendToAllFoliaIframes('2fmusic-track', {
+    const payload = {
       id: currentSong.id,
       title: currentSong.title,
       author: currentSong.artist,
@@ -286,17 +286,21 @@ const sendCurrentTrackToFolia = () => {
       cover: getAbsoluteCoverUrl(currentSong.album_art || ''),
       duration: playerStore.duration || 0,
       liked: isLiked
-    })
+    }
+    ;(window as any).currentFoliaTrack = payload
+    sendToAllFoliaIframes('2fmusic-track', payload)
   }
 }
 
 const rawLyrics = ref('')
 
 const sendCurrentLyricToFolia = () => {
-  sendToAllFoliaIframes('2fmusic-lyric', {
+  const payload = {
     lrc: rawLyrics.value,
     hasLyric: !!rawLyrics.value
-  })
+  }
+  ;(window as any).currentFoliaLyric = payload
+  sendToAllFoliaIframes('2fmusic-lyric', payload)
 }
 
 const sendCurrentStateToFolia = () => {
@@ -304,12 +308,14 @@ const sendCurrentStateToFolia = () => {
   if (playerStore.playMode === 'single') loopMode = 'one'
   else if (playerStore.playMode === 'random') loopMode = 'off'
 
-  sendToAllFoliaIframes('2fmusic-state', {
+  const payload = {
     isPaused: !playerStore.isPlaying,
     progressMs: Math.round(playerStore.currentTime * 1000),
     loopMode,
     volume: playerStore.volume
-  })
+  }
+  ;(window as any).currentFoliaState = payload
+  sendToAllFoliaIframes('2fmusic-state', payload)
 }
 
 const sendCurrentQueueToFolia = () => {
@@ -321,6 +327,7 @@ const sendCurrentQueueToFolia = () => {
     cover: getAbsoluteCoverUrl(song.album_art || ''),
     durationMs: (song.duration || 0) * 1000
   }))
+  ;(window as any).currentFoliaQueue = { queue }
   sendToAllFoliaIframes('2fmusic-queue', { queue })
 }
 

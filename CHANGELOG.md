@@ -10,6 +10,7 @@
   - 安全代理请求：新建后端 [folia.py](file:///d:/Users/yuyue/Documents/Code/2FMusic/server/core/routes/folia.py) 模块安全代理请求，支持 HTTP 出站代理，规避 CORS 限制；敏感密钥禁止写入 `localStorage` 且自动清除历史残留，防浏览器明文泄露。
   - 子目录反代兼容：Folia 发包前拼接 `get2FMusicBaseUrl()` 感知 BaseUrl，解决反代子目录下请求根域名引发的 404 挂死。
   - 修复宿主 Pinia Store [system.ts](file:///d:/Users/yuyue/Documents/Code/2FMusic/frontend/src/stores/system.ts) 漏返 `foliaAiConfig` 状态导致的 Vue 类型编译 Bug。
+  - 流水线集成：更新了 [.github/workflows/test-build.yml](file:///d:/Users/yuyue/Documents/Code/2FMusic/.github/workflows/test-build.yml) 自动化测试包构建流，加入对 Folia 子模块的拉取、npm 依赖缓存以及编译产物拷贝，打通完整前端集成自动打包。
 - **Folia 右下角面板与界面定制优化**：
   - 隐藏账户入口：在从机 iframe 模式下剔除选项卡中的 `'account'` 账户入口。
   - 滑块动画重建：在选项卡切换处基于 Framer Motion 重建了灵动的物理阻尼平滑背景滑动效果。
@@ -18,6 +19,8 @@
   - 屏蔽引导弹窗：拦截从机模式下自动触发的版本更新及新手引导弹窗，精简 UI。
   - 兼容状态修正：修复 Electron 嵌入 iframe 下 `stageSource` 误判为 null 的问题，使其强制定向至 `now-playing`。
   - 遮罩等待体验：重构了从机模式下“等待 now-playing”的遮罩层提示，不显示服务报错信息，而是呈现“等待宿主播放歌曲，请在 2FMusic 播放器中选择歌曲并播放”的一体化引导。
+  - 同源无闪现初始同步：宿主广播时同步将歌曲、歌词、播放列表和状态挂载在全局 `window` 上；Folia 启动第一帧直接通过同源特权读取 `window.parent` 上的缓存作为 React 初始状态。从时序上彻底消灭了 postMessage 握手时延导致的 0.x 秒画面闪现，且保证了从机播放列表（Queue）首帧即 100% 完整展现，绝不为空。
+  - 拦截从机播放列表清空：修复了 `loadNowPlayingIntoPlayback` 机制在解析及刷新 Now Playing 轨道时无差别执行 `setPlayQueue([])` 的历史遗留 Bug。改为当处于 `fromFullPlayerOverlay` 状态时拦截清空操作，完美保留宿主推送和同源同步的播放列表，彻底根治了从机列表卡空的问题。
 - **Folia 双向同步稳定性与控制链打通（播放队列随机/收藏按钮比对/默认列表就绪）**：
   - 修复了 Folia 端 `areTracksEqual` 比对函数未将 `liked` 字段纳入比对的缺陷。由于此过滤漏洞，当宿主更新并推送新的收藏状态时，Folia 错误地判定轨道“无变化”并直接 return 忽略，导致 Folia 端的收藏红心按钮无论点击多少次都无法点亮。
   - 修复了宿主 `App.vue` 初始化时未拉取默认收藏夹歌曲列表的问题。在 `onMounted` 钩子中补充了 `favoritesStore.fetchPlaylistSongs('default')` 自动拉取，使得首次判定有了正确的初始数据。
