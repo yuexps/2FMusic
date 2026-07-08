@@ -282,6 +282,22 @@ export const usePlayerStore = defineStore('player', () => {
     queue.value = []
   }
 
+  const shufflePlaylist = () => {
+    if (playlist.value.length <= 1) return
+    const currentId = currentSong.value?.id
+    let songsToShuffle = playlist.value.filter(s => s.id !== currentId)
+    
+    for (let i = songsToShuffle.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [songsToShuffle[i], songsToShuffle[j]] = [songsToShuffle[j], songsToShuffle[i]]
+    }
+    
+    playlist.value = currentSong.value 
+      ? [currentSong.value, ...songsToShuffle] 
+      : songsToShuffle
+    saveState()
+  }
+
   const recordPlayHistory = (song: Song) => {
     try {
       const historyStore = useHistoryStore()
@@ -427,6 +443,7 @@ export const usePlayerStore = defineStore('player', () => {
     addToQueue,
     removeFromQueue,
     clearQueue,
+    shufflePlaylist,
     fetchAlbumArt,
     currentLyric,
     updateLyric

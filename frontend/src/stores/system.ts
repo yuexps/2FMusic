@@ -50,6 +50,15 @@ export const useSystemStore = defineStore('system', () => {
     logged_in: false
   })
 
+  // Folia AI 配色设置
+  const foliaAiConfig = ref({
+    folia_enable_ai: false,
+    openai_url: 'https://api.openai.com/v1',
+    openai_model: 'gpt-4o',
+    openai_key: '',
+    openai_proxy: ''
+  })
+
   // Docker 自动安装网易云 API 进度
   const dockerInstallStatus = ref({
     status: 'idle', // idle, running, success, error
@@ -84,6 +93,7 @@ export const useSystemStore = defineStore('system', () => {
       fetchMountPoints()
       fetchNeteaseConfig()
       fetchNeteaseUserStatus()
+      fetchFoliaAiConfig()
     })
 
     // 库扫描状态
@@ -230,6 +240,65 @@ export const useSystemStore = defineStore('system', () => {
       status.value = data
     } catch (e) {
       console.error('通过 WebSocket 获取系统状态失败:', e)
+    }
+  }
+
+  // Folia AI 配置接口
+  const fetchFoliaAiConfig = async () => {
+    try {
+      const data = await wsClient.sendRequest('system/get_folia_ai_config')
+      foliaAiConfig.value = data
+      localStorage.setItem('folia_enable_ai', String(data.folia_enable_ai))
+      
+      // 深度联动安全机制：API Key 仅保存在 2FMusic 后端，即用即取。
+      // 清除浏览器本地 localStorage 中残留的敏感 Key。
+      localStorage.removeItem('openai_api_url')
+      localStorage.removeItem('openai_api_model')
+      localStorage.removeItem('openai_api_key')
+      localStorage.removeItem('openai_api_proxy')
+      localStorage.removeItem('ai_provider')
+      localStorage.removeItem('overlay_openai_api_url')
+      localStorage.removeItem('overlay_openai_api_model')
+      localStorage.removeItem('overlay_openai_api_key')
+      localStorage.removeItem('overlay_openai_api_proxy')
+      localStorage.removeItem('overlay_ai_provider')
+    } catch (e) {
+      console.error('通过 WebSocket 获取 Folia AI 配置失败:', e)
+    }
+  }
+
+  const saveFoliaAiConfig = async (enableAi: boolean, openaiUrl: string, openaiModel: string, openaiKey: string, openaiProxy: string) => {
+    try {
+      await wsClient.sendRequest('system/save_folia_ai_config', {
+        enable_ai: enableAi,
+        openai_url: openaiUrl,
+        openai_model: openaiModel,
+        openai_key: openaiKey,
+        openai_proxy: openaiProxy
+      })
+      foliaAiConfig.value = {
+        folia_enable_ai: enableAi,
+        openai_url: openaiUrl,
+        openai_model: openaiModel,
+        openai_key: openaiKey,
+        openai_proxy: openaiProxy
+      }
+      
+      localStorage.setItem('folia_enable_ai', String(enableAi))
+      // 彻底清理/禁止写入 localStorage 敏感凭证
+      localStorage.removeItem('openai_api_url')
+      localStorage.removeItem('openai_api_model')
+      localStorage.removeItem('openai_api_key')
+      localStorage.removeItem('openai_api_proxy')
+      localStorage.removeItem('ai_provider')
+      localStorage.removeItem('overlay_openai_api_url')
+      localStorage.removeItem('overlay_openai_api_model')
+      localStorage.removeItem('overlay_openai_api_key')
+      localStorage.removeItem('overlay_openai_api_proxy')
+      localStorage.removeItem('overlay_ai_provider')
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e.message || '保存异常' }
     }
   }
 
@@ -391,6 +460,7 @@ export const useSystemStore = defineStore('system', () => {
     dockerInstallStatus,
     dockerContainerStatus,
     neteaseRecommendSongs,
+    foliaAiConfig,
     initWebSocket,
     fetchSongs,
     deleteSong,
@@ -401,6 +471,8 @@ export const useSystemStore = defineStore('system', () => {
     triggerScan,
     triggerRescrape,
     fetchSystemStatus,
+    fetchFoliaAiConfig,
+    saveFoliaAiConfig,
     fetchNeteaseConfig,
     saveNeteaseConfig,
     fetchNeteaseUserStatus,

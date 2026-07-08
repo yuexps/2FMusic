@@ -6,7 +6,6 @@ import MountManager from '../views/MountManager.vue'
 import NeteaseDownloader from '../views/NeteaseDownloader.vue'
 import MusicUploader from '../views/MusicUploader.vue'
 import Settings from '../views/Settings.vue'
-import FoliaPlayer from '../views/FoliaPlayer.vue'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -48,11 +47,6 @@ const routes: RouteRecordRaw[] = [
     path: '/settings',
     name: 'Settings',
     component: Settings
-  },
-  {
-    path: '/folia',
-    name: 'FoliaPlayer',
-    component: FoliaPlayer
   }
 ]
 

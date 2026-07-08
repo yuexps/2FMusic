@@ -223,14 +223,9 @@ onBeforeUpdate(() => {
 // === Folia 模式拓展实现 ===
 const foliaMode = ref(false)
 
-// 动态构造 iframe URL，透传 2FMusic 后端的网易云 API 地址
+// 动态构造 iframe URL，不再透传地址，直接使用相对路径运行
 const foliaIframeUrl = computed(() => {
-  const base = './folia/index.html?mode=iframe&from=FullPlayerOverlay'
-  const api = systemStore.neteaseConfig.api_base
-  if (api) {
-    return `${base}&netease_api=${encodeURIComponent(api)}`
-  }
-  return base
+  return './folia/?from=FullPlayerOverlay'
 })
 
 // 反向遥控事件监听，由宿主 2FMusic 执行真实控制

@@ -4,6 +4,40 @@
 
 ---
 
+## [2026-07-08]
+- **Folia 大模型主题配色与后端持久化深层联动**：
+  - 宿主一站式配置：宿主设置页新增大模型开关、URL、Key、Model 及 HTTP 代理输入，统一管理配置。
+  - 安全代理请求：新建后端 [folia.py](file:///d:/Users/yuyue/Documents/Code/2FMusic/server/core/routes/folia.py) 模块安全代理请求，支持 HTTP 出站代理，规避 CORS 限制；敏感密钥禁止写入 `localStorage` 且自动清除历史残留，防浏览器明文泄露。
+  - 子目录反代兼容：Folia 发包前拼接 `get2FMusicBaseUrl()` 感知 BaseUrl，解决反代子目录下请求根域名引发的 404 挂死。
+  - 修复宿主 Pinia Store [system.ts](file:///d:/Users/yuyue/Documents/Code/2FMusic/frontend/src/stores/system.ts) 漏返 `foliaAiConfig` 状态导致的 Vue 类型编译 Bug。
+- **Folia 右下角面板与界面定制优化**：
+  - 隐藏账户入口：在从机 iframe 模式下剔除选项卡中的 `'account'` 账户入口。
+  - 滑块动画重建：在选项卡切换处基于 Framer Motion 重建了灵动的物理阻尼平滑背景滑动效果。
+- **Folia iframe 独立遥控定制化**：
+  - 数据物理隔离：代理 `Storage.prototype` 读写，在从机模式下存取 Key 自动加 `overlay_` 前缀，隔离常规缓存。
+  - 屏蔽引导弹窗：拦截从机模式下自动触发的版本更新及新手引导弹窗，精简 UI。
+  - 兼容状态修正：修复 Electron 嵌入 iframe 下 `stageSource` 误判为 null 的问题，使其强制定向至 `now-playing`。
+  - 遮罩等待体验：重构了从机模式下“等待 now-playing”的遮罩层提示，不显示服务报错信息，而是呈现“等待宿主播放歌曲，请在 2FMusic 播放器中选择歌曲并播放”的一体化引导。
+- **Folia 双向同步稳定性与控制链打通（播放队列随机/收藏按钮比对/默认列表就绪）**：
+  - 修复了 Folia 端 `areTracksEqual` 比对函数未将 `liked` 字段纳入比对的缺陷。由于此过滤漏洞，当宿主更新并推送新的收藏状态时，Folia 错误地判定轨道“无变化”并直接 return 忽略，导致 Folia 端的收藏红心按钮无论点击多少次都无法点亮。
+  - 修复了宿主 `App.vue` 初始化时未拉取默认收藏夹歌曲列表的问题。在 `onMounted` 钩子中补充了 `favoritesStore.fetchPlaylistSongs('default')` 自动拉取，使得首次判定有了正确的初始数据。
+  - 实现了播放列表的“随机打乱（Shuffle）”控制双向同步。在宿主端 `player.ts` 引入 `shufflePlaylist` 动作（使用 Fisher-Yates 算法，保留当前正在播放曲目，打乱余下列表）；在 Folia 端 `App.tsx` 代理并劫持 Stage 模式下的随机播放按钮，将其拦截并发送 `folia-shuffle-queue` 消息给宿主。宿主响应后打乱列表并深度 watch 重新推送新列表至 Folia 刷新显示，形成闭环。
+  - 在宿主 `App.vue` 消息处理器中增加了更详尽的 `console.log` 和 `warn` 日志，以便更直观地跟踪消息类型及列表中的歌曲匹配结构。
+  - 解决了握手初期 iframe 中 shouldPublishNowPlayingState 为 false 导致接收宿主全量推送播放列表被丢弃的竞态 Bug。通过在 `useStagePlaybackController.ts` 中声明 `shouldPublishNowPlayingState` 时放开对 `fromFullPlayerOverlay` 为真（iframe 遥控端）的拦截门控，使其从生命周期第一帧起即可完美同步宿主全量播放列表，解决了“播放列表经常为空”的硬伤。
+- **Folia Stage 模式双向同步升级（播放列表/收藏按钮/音量联动）**：
+  - 解决了在 `fromFullPlayerOverlay` 场景下，Folia 的 Queue 播放列表点击歌曲时未能向父窗口发送 `folia-play-song` postMessage 导致同步失效的 Bug。将全局 `playSong` 拦截层提前至 hook 解构后原地包装，使所有侧边栏及主控 UI 调用的播歌逻辑均能被正确拦截。
+  - 修复了 Folia 播放列表（Queue）点击失效和字段渲染空白问题。在 `useStagePlaybackController.ts` 的 `onQueue` 消息回调里增加 `normalizeQueueSong` 规范化映射函数，将宿主原始的 `{ title, artist }` 属性映射为标准的 `SongResult` 结构（`name` 与 `ar` 数组），彻底解决因字段缺失引发的渲染与交互故障。
+  - 解决跨窗口传输 ID 类型（String / Number）不匹配导致的收藏及播放失效故障。在宿主端 `App.vue` 中对所有 `folia-play-song` 及 `folia-toggle-like` 匹配逻辑、以及 `sendCurrentTrackToFolia`   - 入口跳转形式改为直接在新标签页中打开 Folia Player，彻底规避了 iframe 在剪贴板权限、热键监听和屏幕尺寸等方面的限制，极大提升了交互的流畅度与视野。
+  - 彻底删除了原本的 `/folia` 路由及废弃的 [FoliaPlayer.vue](frontend/src/views/FoliaPlayer.vue) 视图文件。
+  - 更新了 [folia.md](docs/folia.md) 中的嵌入模式描述。进行强制 `String()` 转换后比对，彻底打通收藏状态与点击切歌；同时在 Folia 端 `QueueTab.tsx` 针对 Stage 模式适配了当前歌曲的高亮与自动滚动定位（基于歌名和歌手匹配）。
+  - 新增并打通了“单曲收藏/喜欢”状态的同步。在 `2fmusic-track` 消息负载中拓展了 `liked` 字段以推送当前曲目的收藏状态；并引入了 `folia-toggle-like` 反向控制事件，当在 Folia 界面点击红心/收藏按钮时，会将收藏变更消息发送至宿主 2FMusic，由宿主 `favoritesStore` 修改收藏并重新广播状态。引入了轻量级 `liked` 的 `useEffect` 局部监听，实现完美且高效的收藏状态闭环。
+  - 实现了音量的双向联动。宿主通过 `2fmusic-state` 携带并 watch 广播 `volume` 属性，Folia 收到后调用 `handleSetVolumeOriginal` 静默对齐音量；当 Folia 侧进行音量拖拽时，触发包装后的 `handleSetVolume` 拦截向宿主发送 `folia-volume` 消息，在实现同步调节的同时天然规避了更新环路。
+
+### 优化
+- **Folia 全功能入口体验优化**：
+  - 将“辞曲新境 (Folia)”全功能入口从侧边栏移除，改到“系统设置”页面中作为一个独立的卡片选项呈现。
+
+
 ## [2026-07-07]
 ### 新增
 - **侧边栏集成独立 Folia 视图**：侧边栏新增“辞曲新境”入口，复用 Folia 完整页面。在未开启“舞台”模式下默认为独立播放器逻辑，保留完整功能交互，不使用全屏播放页 iframe 自动跳转与劫持逻辑。

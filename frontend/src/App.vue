@@ -240,6 +240,7 @@ const getApiUrl = (url: string) => {
 }
 
 const sendToAllFoliaIframes = (type: string, data?: any) => {
+  // 1. 广播给所有的 iframe (原有的全屏 Stage 模式)
   const iframes = document.querySelectorAll('iframe')
   iframes.forEach((iframe) => {
     try {
@@ -251,6 +252,16 @@ const sendToAllFoliaIframes = (type: string, data?: any) => {
       // 跨域防御
     }
   })
+
+  // 2. 广播给新标签页打开的 Folia Player (如果有且未被关闭)
+  try {
+    const foliaWin = (window as any).foliaWindow
+    if (foliaWin && !foliaWin.closed) {
+      foliaWin.postMessage({ type, data }, '*')
+    }
+  } catch (e) {
+    // 跨域防御
+  }
 }
 
 const getAbsoluteCoverUrl = (art?: string) => {
@@ -264,14 +275,17 @@ const getAbsoluteCoverUrl = (art?: string) => {
 }
 
 const sendCurrentTrackToFolia = () => {
-  if (playerStore.currentSong) {
+  const currentSong = playerStore.currentSong
+  if (currentSong) {
+    const isLiked = favoritesStore.favoriteSongIds.some(id => String(id) === String(currentSong.id))
     sendToAllFoliaIframes('2fmusic-track', {
-      id: playerStore.currentSong.id,
-      title: playerStore.currentSong.title,
-      author: playerStore.currentSong.artist,
-      album: playerStore.currentSong.album,
-      cover: getAbsoluteCoverUrl(playerStore.currentSong.album_art || ''),
-      duration: playerStore.duration || 0
+      id: currentSong.id,
+      title: currentSong.title,
+      author: currentSong.artist,
+      album: currentSong.album,
+      cover: getAbsoluteCoverUrl(currentSong.album_art || ''),
+      duration: playerStore.duration || 0,
+      liked: isLiked
     })
   }
 }
@@ -293,7 +307,8 @@ const sendCurrentStateToFolia = () => {
   sendToAllFoliaIframes('2fmusic-state', {
     isPaused: !playerStore.isPlaying,
     progressMs: Math.round(playerStore.currentTime * 1000),
-    loopMode
+    loopMode,
+    volume: playerStore.volume
   })
 }
 
@@ -357,8 +372,13 @@ const loadLyricsForSong = async (song: any) => {
   }
 }
 
-const handleFoliaMessage = (event: MessageEvent) => {
+const handleFoliaMessage = async (event: MessageEvent) => {
   const { type, data } = event.data || {}
+  
+  if (type && String(type).startsWith('folia-')) {
+    console.log('[Host] Received folia control event:', type, 'data:', data)
+  }
+
   switch (type) {
     case 'folia-ready':
       handleAllFoliaReady()
@@ -389,10 +409,37 @@ const handleFoliaMessage = (event: MessageEvent) => {
     }
     case 'folia-play-song':
       if (data && data.id) {
-        const song = playerStore.playlist.find(s => s.id === data.id)
+        const song = playerStore.playlist.find(s => String(s.id) === String(data.id))
+        console.log('[Host] Matching song found in playlist:', song)
         if (song) {
           playerStore.playSong(song)
+        } else {
+          console.warn('[Host] folia-play-song: song not found in playlist for id:', data.id)
         }
+      }
+      break
+    case 'folia-toggle-like':
+      if (playerStore.currentSong) {
+        const song = playerStore.currentSong
+        const isLiked = favoritesStore.favoriteSongIds.some(id => String(id) === String(song.id))
+        console.log('[Host] folia-toggle-like current song:', song.title, 'isLiked:', isLiked)
+        if (isLiked) {
+          await favoritesStore.removeFavorite([song.id], ['default'])
+        } else {
+          await favoritesStore.addFavorite(
+            [song.id],
+            ['default'],
+            { [song.id]: { title: song.title, artist: song.artist } }
+          )
+        }
+      }
+      break
+    case 'folia-shuffle-queue':
+      playerStore.shufflePlaylist()
+      break
+    case 'folia-volume':
+      if (data && typeof data.volume === 'number') {
+        playerStore.volume = data.volume
       }
       break
   }
@@ -412,6 +459,14 @@ watch(() => playerStore.isPlaying, () => {
 watch(() => playerStore.playMode, () => {
   sendCurrentStateToFolia()
 })
+
+watch(() => playerStore.volume, () => {
+  sendCurrentStateToFolia()
+})
+
+watch(() => favoritesStore.favoriteSongIds, () => {
+  sendCurrentTrackToFolia()
+}, { deep: true })
 
 watch(() => playerStore.playlist, () => {
   sendCurrentQueueToFolia()
@@ -436,7 +491,8 @@ onMounted(() => {
   systemStore.fetchSongs()
   systemStore.fetchNeteaseConfig()
   systemStore.fetchNeteaseUserStatus()
-  
+  favoritesStore.fetchPlaylistSongs('default')
+
   // 初始化载入当前歌曲的歌词
   if (playerStore.currentSong) {
     loadLyricsForSong(playerStore.currentSong)

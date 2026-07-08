@@ -111,7 +111,7 @@ def dispatch_ws_action(action: str, data: dict) -> tuple:
             from core.routes.system import (
                 handle_get_system_status,
                 handle_get_lyrics_preference,
-                handle_save_lyrics_preference
+                handle_save_lyrics_preference,
             )
             if action == 'system/get_status':
                 return handle_get_system_status()
@@ -119,6 +119,18 @@ def dispatch_ws_action(action: str, data: dict) -> tuple:
                 return handle_get_lyrics_preference()
             elif action == 'system/save_lyrics_preference':
                 return handle_save_lyrics_preference(data.get('value'))
+            elif action == 'system/get_folia_ai_config':
+                from core.routes.folia import handle_get_folia_ai_config
+                return handle_get_folia_ai_config()
+            elif action == 'system/save_folia_ai_config':
+                from core.routes.folia import handle_save_folia_ai_config
+                return handle_save_folia_ai_config(
+                    enable_ai=data.get('enable_ai'),
+                    openai_url=data.get('openai_url'),
+                    openai_model=data.get('openai_model'),
+                    openai_key=data.get('openai_key'),
+                    openai_proxy=data.get('openai_proxy')
+                )
 
         # 5. 网易云音乐相关 action
         elif action.startswith('netease/'):

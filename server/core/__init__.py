@@ -1,13 +1,14 @@
 import os
 import hashlib
 from datetime import timedelta
-from flask import Flask, render_template, send_file, url_for, jsonify
+from flask import Flask, render_template, send_file, url_for, jsonify, redirect
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from core.config import app_config
 from core.routes.auth import auth_bp
 from core.routes.music import music_bp
 from core.routes.netease import netease_bp
+from core.routes.folia import folia_bp
 from core.routes.ws import register_ws
 
 
@@ -33,6 +34,7 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(music_bp)
     app.register_blueprint(netease_bp)
+    app.register_blueprint(folia_bp)
 
     # 2. 初始化并注册 WebSocket 服务
     register_ws(app)
@@ -61,9 +63,17 @@ def create_app() -> Flask:
         h.update(data)
         return h.hexdigest()
 
-    # 5. 主页路由
+    # 5. 主页与子应用路由
     @app.route('/')
     def index():
         return send_file(os.path.join(app_config.WWW_DIR, 'index.html'))
+
+    @app.route('/folia')
+    def folia_redirect():
+        return redirect('/folia/')
+
+    @app.route('/folia/')
+    def folia_index():
+        return send_file(os.path.join(app_config.WWW_DIR, 'folia', 'index.html'))
 
     return app

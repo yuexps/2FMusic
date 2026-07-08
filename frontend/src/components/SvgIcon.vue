@@ -9,7 +9,7 @@ import { computed, type PropType } from 'vue'
 import { NIcon } from 'naive-ui'
 import { Docker, SortAmountDown, SortAmountUp } from '@vicons/fa'
 import { Playlist, Repeat, RepeatOne, Shuffle } from '@vicons/carbon'
-import { Previous32Filled, Next32Filled, Play48Filled, Pause48Filled } from '@vicons/fluent'
+import { Previous32Filled, Next32Filled, Play48Filled, Pause48Filled, DrawerPlay24Regular } from '@vicons/fluent'
 import {
   VolumeHighOutline, VolumeMuteOutline,
   Heart, HeartOutline, Add, Close,
@@ -21,8 +21,7 @@ import {
   SyncOutline, ChevronDown, ChevronUp, ChevronForward, ChevronBack,
   ArrowBack, SwapVerticalOutline,
   LogoGithub, ServerOutline, LogInOutline,
-  ShieldCheckmarkOutline, SparklesOutline, WifiOutline, ColorPaletteOutline, MenuOutline,
-  DiamondOutline
+  ShieldCheckmarkOutline, SparklesOutline, WifiOutline, ColorPaletteOutline, MenuOutline
 } from '@vicons/ionicons5'
 
 const props = defineProps({
@@ -107,7 +106,7 @@ const COMPONENT_MAP: Record<string, any> = {
   'palette': ColorPaletteOutline,
   'wifi': WifiOutline,
   'menu': MenuOutline,
-  'diamond': DiamondOutline
+  'folia': DrawerPlay24Regular
 }
 
 const iconComponent = computed(() => {
@@ -120,5 +119,3 @@ export default {
   name: 'SvgIcon'
 }
 </script>
-
-

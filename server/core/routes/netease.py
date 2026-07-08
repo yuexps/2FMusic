@@ -4,7 +4,7 @@ import threading
 import subprocess
 import datetime
 import requests
-from flask import Blueprint, redirect
+from flask import Blueprint, redirect, request, Response
 from core.config import app_config
 from core.models.db import get_db
 from core.services.downloader import (
@@ -536,3 +536,35 @@ def handle_install_netease_service() -> tuple:
 def netease_download_page():
     """网易云下载落地页跳转"""
     return redirect("https://music.163.com/client")
+
+@netease_bp.route('/api/netease/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+def proxy_netease_api(subpath):
+    """代理网易云 API 请求"""
+    if not app_config.NETEASE_API_BASE:
+        return {"success": False, "error": "网易云 API 服务未配置"}, 400
+    
+    url = f"{app_config.NETEASE_API_BASE}/{subpath}"
+    if request.query_string:
+        url += f"?{request.query_string.decode('utf-8')}"
+        
+    try:
+        resp = requests.request(
+            method=request.method,
+            url=url,
+            headers={key: value for key, value in request.headers if key.lower() not in ('host', 'content-length')},
+            data=request.get_data(),
+            cookies=request.cookies,
+            allow_redirects=False,
+            timeout=10.0
+        )
+        
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        headers = [
+            (name, value) for name, value in resp.raw.headers.items()
+            if name.lower() not in excluded_headers
+        ]
+        
+        return Response(resp.content, resp.status_code, headers)
+    except Exception as e:
+        logger.warning(f"代理网易云 API 请求失败 (url: {url}): {e}")
+        return {"success": False, "error": f"代理失败: {str(e)}"}, 500
