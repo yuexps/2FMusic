@@ -5,6 +5,9 @@
 ---
 
 ## [2026-07-08]
+- **PWA Manifest 免登录资源豁免修复**：
+  - 修复 [auth.py](./server/core/routes/auth.py) 路由鉴权拦截钩子，将 `.webmanifest`（如 `manifest.webmanifest`）和 `icon.svg` 静态资源加入免登录豁免白名单，从而彻底解决未登录客户端访问时被重定向至登录页（HTML 格式）导致浏览器在解析 JSON 时抛出 `Manifest: Line: 1, column: 1, Syntax error` 的报错。
+  - 同步更新 [communication.md](./docs/server/communication.md) 补充免登录静态资源豁免规范。
 - **网易云 API 扫码与代理异常防崩溃优化**：
   - 更新 [docs/frontend/communication.md](./docs/frontend/communication.md) 和 [docs/server/communication.md](./docs/server/communication.md) 补全非 JSON 兼容解析及代理过滤规约。
   - 优化 [netease.ts](./folia-major/src/services/netease.ts) 中的 `fetchWithCreds` 接口解析逻辑，支持 `res.clone().json()` 尝试，失败时 fallback 至 `res.text()` 并兼容前端单元测试的 Mock 行为，避免 502 等 HTML 报错导致解析崩溃。

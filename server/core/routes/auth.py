@@ -37,7 +37,9 @@ def require_auth():
             path.startswith('/login') or
             path in ('/ICON.PNG', '/manifest.json') or
             path.endswith('/manifest.json') or
-            path.endswith('/ICON.PNG')):
+            path.endswith('/manifest.webmanifest') or
+            path.endswith('/ICON.PNG') or
+            path.endswith('/icon.svg')):
         return
 
     # 放行 CORS OPTIONS 预检请求
