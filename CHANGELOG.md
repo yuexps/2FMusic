@@ -117,3 +117,10 @@
 - 修复了设置页面中点击“选择图片”按钮时抛出 `TypeError: o.value?.click is not a function` 错误从而导致“无法选择背景图片”的问题。
 - 将 `Settings.vue` 里的 `ref="fileInputRef"` 改用原生 DOM 属性 `id="bg-file-input"` 定位，并替换为原生 `document.getElementById('bg-file-input')?.click()` 触发调用，彻底解决了 Vite 生产环境混淆分包可能导致 ref 引用失效的 Bug。
 
+��。
+- 同步更新了 `docs/server/communication.md` 明确了音乐库物理路径配置的适配规范。
+
+### 修复
+- 修复了设置页面中点击“选择图片”按钮时抛出 `TypeError: o.value?.click is not a function` 错误从而导致“无法选择背景图片”的问题。
+- 将 `Settings.vue` 里的 `ref="fileInputRef"` 改用原生 DOM 属性 `id="bg-file-input"` 定位，并替换为原生 `document.getElementById('bg-file-input')?.click()` 触发调用，彻底解决了 Vite 生产环境混淆分包可能导致 ref 引用失效的 Bug。
+
