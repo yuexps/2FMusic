@@ -27,3 +27,15 @@ graph TD
 *   **前端应用规范**：[docs/frontend/](./docs/frontend/) - 前端状态管理、网络接口及大图引用计数缓存契约。
 *   **后端服务规范**：[docs/server/](./docs/server/) - 后端 SQLite DDL、Watchdog 防抖异步扫描及下载状态机。
 *   **系统架构及 API 原始指南**：[API_DOCUMENTATION.md](./docs/API_DOCUMENTATION.md) - 2FMusic 核心通信、鉴权与业务数据交互协议总览。
+
+## 5. 仓库结构与更新指南
+*   **仓库结构**：
+    *   本仓库 `2FMusic` 为主项目。
+    *   [folia-major](./folia-major/) 是一个 fork 自上游开源项目 `https://github.com/chthollyphile/folia-major` 的定制化前端展示子模块（独立仓库 `https://github.com/yuexps/folia-major`），作为 Git Submodule 关联在主项目下。
+*   **子模块同步上游最新代码指南**：
+    1. **进入子模块**：`cd folia-major`
+    2. **配置上游源**：`git remote add upstream https://github.com/chthollyphile/folia-major.git` (已配置可忽略)
+    3. **拉取更新**：`git fetch upstream`
+    4. **合并并解决冲突**：`git merge upstream/main`（需妥善保留/融合 2FMusic 在 `App.tsx`、`SettingsModal.tsx` 等处的 iframe 适配与样式定制）。
+    5. **安装依赖与验证构建**：运行 `npm install` 并通过 `npm run build` 确保无警告（修复如 `z-[85]` 等类名为 `z-85`）成功打包。
+    6. **推送与指针更新**：通过本地终端执行 `git push origin main`。最后在 `2FMusic` 主项目仓库下提交子项目指针和 `CHANGELOG.md` 更新。

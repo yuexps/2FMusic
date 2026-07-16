@@ -43,5 +43,6 @@ python server/app.py --music-library-path ./Music --port 23237
 
 ## 开源致谢
 
+- **沉浸式歌词界面**: [folia-major](https://github.com/chthollyphile/folia-major) (AGPL-3.0)
 - **歌词/封面 API**: [LrcApi](https://github.com/HisAtri/LrcApi) (GPL-3.0)
 - **网易云 API**: [NeteaseCloudMusicApiEnhanced](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced) (MIT)

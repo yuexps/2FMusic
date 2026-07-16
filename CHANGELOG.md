@@ -4,6 +4,13 @@
 
 ---
 
+## [2026-07-16]
+- **Folia-Major 子仓库代码合并与冲突消解**：
+  - 将上游开源项目 `https://github.com/chthollyphile/folia-major` 的最新修改合并至 fork 仓库中，合并了包括 3D 可视化场景等在内的多项更新。
+  - 精细消解了在 `App.tsx`、`ArtistGridView.tsx`、`GridMap.tsx`、`GridView.tsx`、`UnifiedPanel.tsx` 和 `SettingsModal.tsx` 等组件中由于 2FMusic 特有大图层 iframe 适配、背景配置、样式和国际化所产生的所有冲突。
+  - 更新了项目依赖并安装新引入的 `@react-three/fiber`、`@react-three/drei` 和 `three` 等 3D 支持库。
+  - 修复了合并后编译过程中的冗余 CSS 类名和任意值 z-index 引起的 Tailwind/linter 警告（将 `z-[xx]` 重构为更规范的常规 Tailwind 类 `z-85`、`z-70`、`z-100` 等），实现了零警告通过 `npm run build` 打包。
+
 ## [2026-07-08]
 - **PWA Manifest 免登录资源豁免修复**：
   - 修复 [auth.py](./server/core/routes/auth.py) 路由鉴权拦截钩子，将 `.webmanifest`（如 `manifest.webmanifest`）和 `icon.svg` 静态资源加入免登录豁免白名单，从而彻底解决未登录客户端访问时被重定向至登录页（HTML 格式）导致浏览器在解析 JSON 时抛出 `Manifest: Line: 1, column: 1, Syntax error` 的报错。
