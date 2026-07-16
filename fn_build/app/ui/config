@@ -15,7 +15,7 @@
                 "fullUrlPerm": "readonly",
                 "portPerm": "readonly",
                 "pathPerm": "readonly"
-            },
+            }
         },
         "yuexps.2fmusic.folia": {
             "title": "Folia",
@@ -32,7 +32,7 @@
                 "fullUrlPerm": "readonly",
                 "portPerm": "readonly",
                 "pathPerm": "readonly"
-            },
+            }
         }
     }
 }
