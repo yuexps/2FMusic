@@ -202,6 +202,36 @@ const favoritesStore = useFavoritesStore()
 const systemStore = useSystemStore()
 const message = useMessage()
 
+watch(() => props.show, async (newShow) => {
+  if (newShow) {
+    if (playerStore.playlist.length === 0) {
+      console.log('[FullPlayerOverlay] 播放队列为空，尝试自动填充本地歌曲...')
+      let localSongs = systemStore.songs || []
+      if (localSongs.length === 0) {
+        const cached = localStorage.getItem('2fmusic_playlist')
+        if (cached) {
+          try {
+            localSongs = JSON.parse(cached)
+          } catch (e) {}
+        }
+      }
+      if (localSongs.length === 0) {
+        try {
+          await systemStore.fetchSongs()
+          localSongs = systemStore.songs || []
+        } catch (e) {}
+      }
+      if (localSongs.length > 0) {
+        playerStore.playlist = [...localSongs]
+        if (!playerStore.currentSong) {
+          const firstSong = localSongs[0]
+          playerStore.playSong(firstSong, playerStore.playlist)
+        }
+      }
+    }
+  }
+})
+
 // 逐字歌词字级时值结构
 interface YrcWord {
   text: string

@@ -5,11 +5,16 @@
 ---
 
 ## [2026-07-16]
-- **Folia-Major 子仓库代码合并与冲突消解**：
-  - 将上游开源项目 `https://github.com/chthollyphile/folia-major` 的最新修改合并至 fork 仓库中，合并了包括 3D 可视化场景等在内的多项更新。
-  - 精细消解了在 `App.tsx`、`ArtistGridView.tsx`、`GridMap.tsx`、`GridView.tsx`、`UnifiedPanel.tsx` 和 `SettingsModal.tsx` 等组件中由于 2FMusic 特有大图层 iframe 适配、背景配置、样式和国际化所产生的所有冲突。
-  - 更新了项目依赖并安装新引入的 `@react-three/fiber`、`@react-three/drei` 和 `three` 等 3D 支持库。
-  - 修复了合并后编译过程中的冗余 CSS 类名和任意值 z-index 引起的 Tailwind/linter 警告（将 `z-[xx]` 重构为更规范的常规 Tailwind 类 `z-85`、`z-70`、`z-100` 等），实现了零警告通过 `npm run build` 打包。
+- **Folia 全屏播放页无歌播放同步与深度控制重构**：
+  - 新增冷启动自愈：当队列为空打开全屏时，自动填充本地歌曲并首选播放。
+  - 支持空播放状态同步：宿主可向 iframe 广播 `null` 曲目并彻底重置 Folia 唱片与歌词状态。
+  - 优化空队列引导：当队列不为空时智能提示“暂无正在播放”，引导用户直接在全屏页触发播放。
+  - 打通列表外点播：扩展 `folia-play-song-external` 与 `folia-add-to-playlist` 通信协议，支持直接点播或向宿主注入列表外的外部歌曲。
+  - 增加主动同步：新增 `folia-request-sync` 信令，支持子页面主动拉取最新播放器状态。
+
+- **Folia-Major 子模块上游代码合并与冲突消解**：
+  - 合并上游开源最新修改，并消解 `App.tsx`、`SettingsModal.tsx` 等组件的 2FMusic 自定义样式与配置冲突。
+  - 安装并适配 `@react-three/fiber`、`@react-three/drei` 及 `three` 以支持最新的 3D 可视化场景。
 
 ## [2026-07-08]
 - **PWA Manifest 免登录资源豁免修复**：

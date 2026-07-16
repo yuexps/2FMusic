@@ -280,6 +280,9 @@ const sendCurrentTrackToFolia = () => {
     }
     ;(window as any).currentFoliaTrack = payload
     sendToAllFoliaIframes('2fmusic-track', payload)
+  } else {
+    ;(window as any).currentFoliaTrack = null
+    sendToAllFoliaIframes('2fmusic-track', null)
   }
 }
 
@@ -379,6 +382,7 @@ const handleFoliaMessage = async (event: MessageEvent) => {
 
   switch (type) {
     case 'folia-ready':
+    case 'folia-request-sync':
       handleAllFoliaReady()
       break
     case 'folia-toggle-play':
@@ -416,6 +420,25 @@ const handleFoliaMessage = async (event: MessageEvent) => {
         }
       }
       break
+    case 'folia-play-song-external':
+      if (data && data.song) {
+        const song = data.song
+        const existIdx = playerStore.playlist.findIndex(s => String(s.id) === String(song.id))
+        if (existIdx === -1) {
+          playerStore.playlist.push(song)
+        }
+        playerStore.playSong(song)
+      }
+      break
+    case 'folia-add-to-playlist':
+      if (data && data.song) {
+        const song = data.song
+        const existIdx = playerStore.playlist.findIndex(s => String(s.id) === String(song.id))
+        if (existIdx === -1) {
+          playerStore.playlist.push(song)
+        }
+      }
+      break
     case 'folia-toggle-like':
       if (playerStore.currentSong) {
         const song = playerStore.currentSong
@@ -444,10 +467,8 @@ const handleFoliaMessage = async (event: MessageEvent) => {
 }
 
 watch(() => playerStore.currentSong, (newSong) => {
-  if (newSong) {
-    sendCurrentTrackToFolia()
-    loadLyricsForSong(newSong)
-  }
+  sendCurrentTrackToFolia()
+  loadLyricsForSong(newSong)
 })
 
 watch(() => playerStore.isPlaying, () => {
