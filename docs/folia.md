@@ -60,6 +60,11 @@ const [activePlaybackContext, setActivePlaybackContext] =
     *   载荷数据：`{queue: [{id,title,artist,album,cover,durationMs}]}`
     *   触发时机：`playlist` 播放队列发生变化时
 
+**时序与高精度对齐机制**：
+*   **切歌立即同步**：在切换歌曲（`currentSong` 变更）时，在发送 `'2fmusic-track'` 的同时，必须立即补发一次 `'2fmusic-state'`，清零展示端的播放起点。
+*   **异步装载同步**：由于歌词通过异步网络请求拉取，拉取完成并发送 `'2fmusic-lyric'` 后，必须立即补发一次 `'2fmusic-state'`，将网络缓冲期间宿主已前移的真实播放进度重新对齐给展示端。
+*   **Seek 纠偏防抖**：在展示端发生 Seek 动作（发送 `'folia-seek'`）后的 1 秒（1000ms）时间窗口内，展示端必须主动忽略来自宿主的所有高频进度纠偏 `'2fmusic-progress'` 广播，以防止由于网络往返延迟导致的进度条及歌词拉扯回弹；宿主在执行 seek 完毕后，可补发一次 `'2fmusic-state'` 消息以让展示端立即建立新的时钟基准。
+
 **cover 绝对化**（位于 `../frontend/src/App.vue` 中的 `getAbsoluteCoverUrl`）：
 *   `http(s)://` -> 原样返回
 *   `/` 或 `api/` 开头 -> `${window.location.origin}/${stripped}`
@@ -69,6 +74,11 @@ const [activePlaybackContext, setActivePlaybackContext] =
 *   2FMusic `'list'` -> Folia `'all'`
 *   2FMusic `'single'` -> Folia `'one'`
 *   2FMusic `'random'` -> Folia `'off'`
+
+**同源跨标签页通信 (BroadcastChannel)**：
+为了支持 Folia 在独立新标签页中运行，引入了 BroadcastChannel 频道 `'2fmusic-folia-sync-channel'`。
+* 宿主端不仅通过 `postMessage` 向 iframe 广播数据，也向该 Channel 投递相同格式的消息 `{type, data}`。
+* 展示端（包括 iframe、popup 或独立标签页）的反向控制指令在向父窗口 `postMessage` 的同时，也一并向该 Channel 广播。宿主在接收到 Channel 指令时以相同逻辑处理，实现跨 Tab 级别的双向播放同步。
 
 ---
 
@@ -114,10 +124,23 @@ const [activePlaybackContext, setActivePlaybackContext] =
     *   载荷数据：无
     *   宿主处理者：`../frontend/src/App.vue`
     *   行为执行：调用 `playerStore.shufflePlaylist()` 对播放列表进行洗牌
+*   **`'folia-remove-song'`**
+    *   载荷数据：`{index}`
+    *   宿主处理者：`../frontend/src/App.vue`
+    *   行为执行：在播放列表 `playerStore.playlist` 中删除该索引处的歌曲，同步存入 `localStorage`。如果被删的是当前播放曲目，执行防悬空保护（自动切入下一首或列表为空时停止播放）。
+*   **`'folia-move-song-to-end'`**
+    *   载荷数据：`{index}`
+    *   宿主处理者：`../frontend/src/App.vue`
+    *   行为执行：将该索引处的歌曲从播放列表中提取，追加移动到列表最末尾，同步存入 `localStorage`。
+*   **`'folia-move-song-to-next'`**
+    *   载荷数据：`{index}`
+    *   宿主处理者：`../frontend/src/App.vue`
+    *   行为执行：将该索引处的歌曲移动到当前正在播放歌曲的下一首（即 `currentIndex + 1` 位置），同步存入 `localStorage`。如操作的是当前歌曲本身，则静默忽略。
 *   **`'folia-exit'`**
     *   载荷数据：无
     *   宿主处理者：`../frontend/src/components/FullPlayerOverlay.vue`
     *   行为执行：设置 `foliaMode.value = false`（卸载 iframe 并退出全屏 Stage 模式）
+
 
 ---
 
@@ -193,3 +216,21 @@ Folia 生成 AI 主题配色时，向宿主同源后端接口发起 Post 请求�
 *   **代理与前缀拼接**：
     *   **baseUrl 动态感知**：客户端调用 `../folia-major/src/utils/path.ts` 中的 `get2FMusicBaseUrl()` 动态拼装子路径前缀，避免在非根路径部署时出现 404 错误。
     *   **HTTP 出站代理**：后端支持通过 `proxies` 参数进行代理调用，以解决服务器环境无法连接官方大模型端点的问题。
+
+
+
+---
+
+## 上游同步合并与回归适配指南
+
+当未来需要拉取合并上游 `folia-major` 的最新 Commit 时，建议遵循以下流程进行兼容性核对与适配，防止功能丢失：
+
+### 1. 代码层面核对（宿主集成代理）
+*   **确保 Hook 兼容**：上游合并后，首先核对 `App.tsx` 中的 `useFoliaHostBridge` 调用及 `recordLocalSeek` 的绑定是否被冲掉。
+*   **依赖解耦**：所有从 `wrappedCallbacks` 中导出的方法（如 `removeQueueSong` 等），如上游组件（如 `UnifiedPanel`）有重构，只需将这几项包装后的方法对齐传入其新参数即可，无需碰其内部逻辑。
+
+### 2. 回归验证优先级列表
+*   **时钟平滑性与 Seek 防抖**：手动拖动进度条，确保 ignore 隔离（1s内不回弹）在最新的渲染机制中工作正常。
+*   **同源 BroadcastChannel 跨 Tab 联调**：用新标签页独立打开 `./folia/` 并在宿主端切歌、点击播放，验证同源 BroadcastChannel 在无 DOM 关系下是否能稳定对准。
+*   **播放队列操纵**：在列表里点击删除和置于下一首，验证宿主列表是否保持强同步更改。
+

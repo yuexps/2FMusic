@@ -232,6 +232,8 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
   }
 })
 
+let foliaBC: BroadcastChannel | null = null
+
 // === Folia 全局广播与反向遥控逻辑 ===
 const sendToAllFoliaIframes = (type: string, data?: any) => {
   // 1. 广播给所有的 iframe (原有的全屏 Stage 模式)
@@ -255,6 +257,15 @@ const sendToAllFoliaIframes = (type: string, data?: any) => {
     }
   } catch (e) {
     // 跨域防御
+  }
+
+  // 3. 广播给 BroadcastChannel 同源独立标签页
+  try {
+    if (foliaBC) {
+      foliaBC.postMessage({ type, data })
+    }
+  } catch (e) {
+    // 跨标签页通信异常防御
   }
 }
 
@@ -345,6 +356,7 @@ const loadLyricsForSong = async (song: any) => {
       if (cachedLyrics) {
         rawLyrics.value = cachedLyrics
         sendCurrentLyricToFolia()
+        sendCurrentStateToFolia()
         return
       }
     }
@@ -360,16 +372,19 @@ const loadLyricsForSong = async (song: any) => {
     if (data && data.lyrics) {
       rawLyrics.value = data.lyrics
       sendCurrentLyricToFolia()
+      sendCurrentStateToFolia()
       if (cacheEnabled) {
         musicDB.saveLyrics(song.id, data.lyrics).catch(() => {})
       }
     } else {
       rawLyrics.value = ''
       sendCurrentLyricToFolia()
+      sendCurrentStateToFolia()
     }
   } catch (e) {
     rawLyrics.value = ''
     sendCurrentLyricToFolia()
+    sendCurrentStateToFolia()
   }
 }
 
@@ -397,6 +412,7 @@ const handleFoliaMessage = async (event: MessageEvent) => {
     case 'folia-seek':
       if (data && typeof data.positionMs === 'number') {
         playerStore.seek(data.positionMs / 1000)
+        sendCurrentStateToFolia()
       }
       break
     case 'folia-toggle-loop': {
@@ -462,12 +478,65 @@ const handleFoliaMessage = async (event: MessageEvent) => {
       if (data && typeof data.volume === 'number') {
         playerStore.volume = data.volume
       }
-      break
+      break;
+    case 'folia-remove-song':
+      if (data && typeof data.index === 'number') {
+        if (data.index >= 0 && data.index < playerStore.playlist.length) {
+          const removedSong = playerStore.playlist[data.index]
+          const isCurrent = playerStore.currentSong && String(removedSong.id) === String(playerStore.currentSong.id)
+          playerStore.playlist.splice(data.index, 1)
+          localStorage.setItem('2fmusic_playlist', JSON.stringify(playerStore.playlist))
+          
+          if (isCurrent) {
+            if (playerStore.playlist.length > 0) {
+              const nextIdx = data.index % playerStore.playlist.length
+              playerStore.playSong(playerStore.playlist[nextIdx])
+            } else {
+              if (playerStore.isPlaying) {
+                playerStore.togglePlay()
+              }
+              playerStore.currentSong = null
+            }
+          }
+        }
+      }
+      break;
+    case 'folia-move-song-to-end':
+      if (data && typeof data.index === 'number') {
+        if (data.index >= 0 && data.index < playerStore.playlist.length) {
+          const song = playerStore.playlist[data.index]
+          playerStore.playlist.splice(data.index, 1)
+          playerStore.playlist.push(song)
+          localStorage.setItem('2fmusic_playlist', JSON.stringify(playerStore.playlist))
+        }
+      }
+      break;
+    case 'folia-move-song-to-next':
+      if (data && typeof data.index === 'number') {
+        if (data.index >= 0 && data.index < playerStore.playlist.length) {
+          const song = playerStore.playlist[data.index]
+          const isCurrent = playerStore.currentSong && String(song.id) === String(playerStore.currentSong.id)
+          if (isCurrent) {
+            break
+          }
+          playerStore.playlist.splice(data.index, 1)
+          let insertIdx = 0
+          const currentSong = playerStore.currentSong
+          if (currentSong) {
+            const currIdx = playerStore.playlist.findIndex(s => s.id === currentSong.id)
+            insertIdx = currIdx + 1
+          }
+          playerStore.playlist.splice(insertIdx, 0, song)
+          localStorage.setItem('2fmusic_playlist', JSON.stringify(playerStore.playlist))
+        }
+      }
+      break;
   }
 }
 
 watch(() => playerStore.currentSong, (newSong) => {
   sendCurrentTrackToFolia()
+  sendCurrentStateToFolia()
   loadLyricsForSong(newSong)
 })
 
@@ -503,6 +572,16 @@ onMounted(() => {
   window.addEventListener('mouseup', handleMouseUp)
   window.addEventListener('message', handleFoliaMessage)
 
+  // 初始化 BroadcastChannel 同源频道
+  try {
+    foliaBC = new BroadcastChannel('2fmusic-folia-sync-channel')
+    foliaBC.onmessage = (event) => {
+      handleFoliaMessage(event)
+    }
+  } catch (e) {
+    console.warn('跨标签页 BroadcastChannel 初始化失败:', e)
+  }
+
   // 全局拉起并初始化 WebSocket 实时通信信道
   systemStore.initWebSocket()
 
@@ -522,6 +601,10 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('mouseup', handleMouseUp)
   window.removeEventListener('message', handleFoliaMessage)
+  if (foliaBC) {
+    foliaBC.close()
+    foliaBC = null
+  }
 })
 </script>
 
