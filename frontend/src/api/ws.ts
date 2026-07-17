@@ -53,7 +53,7 @@ class WSClient {
       this.ws = new WebSocket(this.url)
 
       this.ws.onopen = () => {
-        console.log('WebSocket connection established')
+        console.log('WebSocket 连接已建立')
         this.isConnecting = false
         this.reconnectAttempt = 0
         if (this.reconnectTimer) {
@@ -66,7 +66,7 @@ class WSClient {
         this.offlineQueue = []
         queue.forEach((item) => {
           if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            console.log(`Sending queued request: ${item.action} (seq: ${item.seq})`)
+            console.log(`正在发送排队请求：${item.action} (seq: ${item.seq})`)
             const payload: WSRequest = { seq: item.seq, action: item.action, data: item.data }
             this.pendingRequests.set(item.seq, { resolve: item.resolve, reject: item.reject, timer: item.timer })
             try {
@@ -116,22 +116,22 @@ class WSClient {
             this.dispatch(payload.type, payload.data)
           }
         } catch (e) {
-          console.error('Failed to parse WebSocket message:', e)
+          console.error('解析 WebSocket 消息失败：', e)
         }
       }
 
       this.ws.onclose = () => {
-        console.log('WebSocket connection closed, reconnecting...')
+        console.log('WebSocket 连接关闭，正在重新连接...')
         this.cleanup()
         this.scheduleReconnect()
       }
 
       this.ws.onerror = (err) => {
-        console.error('WebSocket error:', err)
+        console.error('WebSocket 错误：', err)
         this.ws?.close()
       }
     } catch (e) {
-      console.error('Failed to create WebSocket:', e)
+      console.error('创建 WebSocket 失败：', e)
       this.isConnecting = false
       this.scheduleReconnect()
     }
@@ -172,7 +172,7 @@ class WSClient {
         }
       } else {
         // 未连接时放入离线等待队列
-        console.log(`WebSocket not ready. Queueing request: ${action} (seq: ${currentSeq})`)
+        console.log(`WebSocket 未就绪。正在排队请求：${action} (seq: ${currentSeq})`)
         this.offlineQueue.push({ action, data, resolve, reject, seq: currentSeq, timer })
         
         // 自动拉起连接
@@ -201,7 +201,7 @@ class WSClient {
         try {
           cb(data)
         } catch (e) {
-          console.error(`Error in WS subscriber for ${type}:`, e)
+          console.error(`WS 订阅回调出错（事件 ${type}）：`, e)
         }
       })
     }
@@ -219,7 +219,7 @@ class WSClient {
 
       // 40 秒无消息判定断线
       if (Date.now() - this.lastActiveTime > 40000) {
-        console.warn('WebSocket heartbeat timeout, closing connection...')
+        console.warn('WebSocket 心跳超时，正在关闭连接...')
         this.ws.close()
         return
       }
@@ -227,7 +227,7 @@ class WSClient {
       try {
         this.ws.send(JSON.stringify({ action: 'ping' }))
       } catch (e) {
-        console.error('Failed to send heartbeat ping:', e)
+        console.error('发送心跳 ping 失败：', e)
       }
     }, 20000) // 每 20 秒发送一次 ping
   }
@@ -246,7 +246,7 @@ class WSClient {
     // 引入 0-30% 抖动
     delay = delay + Math.random() * delay * 0.3
 
-    console.log(`WebSocket reconnect scheduled in ${(delay / 1000).toFixed(2)}s (attempt ${this.reconnectAttempt + 1})`)
+    console.log(`计划在 ${(delay / 1000).toFixed(2)} 秒后重新连接 WebSocket (第 ${this.reconnectAttempt + 1} 次尝试)`)
 
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null

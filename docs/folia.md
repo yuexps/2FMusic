@@ -45,7 +45,7 @@ const [activePlaybackContext, setActivePlaybackContext] =
 广播入口：`sendToAllFoliaIframes(type, data)` — 遍历页面中 `src` 包含 `folia/` 的所有 iframe 元素。
 
 *   **`'2fmusic-track'`**
-    *   载荷数据：`{id, title, author, album, cover, duration, liked?: boolean}`
+    *   载荷数据：`{id, title, author, album, cover, duration, liked?: boolean, path?: string, filename?: string}`
     *   触发时机：`currentSong` 变更或歌曲收藏状态变化时
 *   **`'2fmusic-lyric'`**
     *   载荷数据：`{lrc: string, hasLyric: boolean}`
@@ -57,7 +57,7 @@ const [activePlaybackContext, setActivePlaybackContext] =
     *   载荷数据：`{progressMs: number}`
     *   触发时机：`currentTime` 每次发生变化时（高频上报）
 *   **`'2fmusic-queue'`**
-    *   载荷数据：`{queue: [{id,title,artist,album,cover,durationMs}]}`
+    *   载荷数据：`{queue: [{id,title,artist,album,cover,durationMs,path?:string,filename?:string}]}`
     *   触发时机：`playlist` 播放队列发生变化时
 
 **时序与高精度对齐机制**：
@@ -140,6 +140,10 @@ const [activePlaybackContext, setActivePlaybackContext] =
     *   载荷数据：无
     *   宿主处理者：`../frontend/src/components/FullPlayerOverlay.vue`
     *   行为执行：设置 `foliaMode.value = false`（卸载 iframe 并退出全屏 Stage 模式）
+*   **`'folia-play-song-external'`**
+    *   载荷数据：`{song: {id,title,artist,album,album_art,duration,path,filename,...}}`
+    *   宿主处理者：`../frontend/src/App.vue`
+    *   行为执行：触发播放第三方或嵌入端推送的新单曲。宿主在此处采取**字段保护策略**：若歌曲已在宿主列表中存在，直接播放列表中的歌曲（保留数据库最完整字段，避免被回传的简版对象覆盖）；若不存在则插入并播放。
 
 
 ---
@@ -178,13 +182,15 @@ return api ? `${base}&netease_api=${encodeURIComponent(api)}` : base
 *   禁用右下角菜单按钮的滑动唤出侧边栏手势。
 *   屏蔽 `usePlaybackInteractionBridge` 模块中除常规播放控制按键（`Space`/`ArrowLeft`/`ArrowRight`）外的全局键盘 `keydown` 拦截与全局快捷键逻辑。
 *   完全放开在线歌词匹配交互 UI（包括在线匹配与清除匹配）。
+*   **屏蔽会话恢复 (Session Restore)**：完全禁用 Folia 本地播放历史与队列会话恢复，以防止它与宿主推送的最新状态及播放列表发生竞态。
+*   **继承真实歌曲 ID**：优先在 `playQueue` 播放队列中按 String 值匹配 `track.id`。若匹配成功，当前播放歌曲将直接继承其原始 `id` 属性，以保证列表中当前播放歌曲高亮及切换顺畅。
 
 ---
 
 ## Stage 歌曲 ID 与 IndexedDB 缓存（fromFullPlayerOverlay === true 专用）
 
-*   歌曲 ID 生成：基于 `(title, artist)` 计算出的哈希生成稳定负整数，以保证唯一且不易漂移。
-*   加载逻辑：根据稳定 ID 在本地 IndexedDB 缓存中查询 `onlineLyricsState`。如存在，则用缓存的歌词覆盖推送的默认歌词。
+*   歌曲 ID 生成：对于无宿主提供 ID 的曲目，基于 `(title, artist)` 计算出的哈希生成稳定负整数以保证唯一且不易漂移。若宿主提供了有效歌曲 ID，则直接继承使用。
+*   加载逻辑：根据稳定 ID 在本地 IndexedDB 缓存中查询 `onlineLyricsState`。如存在，则用缓存的歌词覆盖推送的默认歌词。但**若宿主已经推送了有效歌词，将强行忽略此 IndexedDB 缓存，并仅在刮削到比宿主更高精度（如带逐字时间戳）的歌词时才允许覆盖宿主歌词**。
 
 ---
 

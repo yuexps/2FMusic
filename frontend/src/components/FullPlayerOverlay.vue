@@ -157,15 +157,9 @@
             <span class="text-[13px] text-body-muted shrink-0 w-15">大小</span>
             <span class="text-sm text-ink text-right break-all truncate max-w-[calc(100%-70px)]">{{ formatSize(playerStore.currentSong.size) }}</span>
           </div>
-          <div class="flex-col items-start gap-2 flex border-b border-border-card pb-3 last:border-none last:pb-0" v-if="playerStore.currentSong?.path">
+          <div class="flex justify-between items-center border-b border-border-card pb-3 last:border-none last:pb-0" v-if="playerStore.currentSong?.path">
             <span class="text-[13px] text-body-muted shrink-0 w-15">路径</span>
-            <div class="flex w-full items-center gap-3">
-              <span class="text-left flex-1 font-mono text-[12px] bg-white/5 p-[6px_10px] rounded-[6px] text-white/70 overflow-hidden text-ellipsis whitespace-nowrap" :title="playerStore.currentSong.path">{{ playerStore.currentSong.path
-                }}</span>
-              <button class="bg-white/8 border border-white/10 text-white py-1.5 px-3 text-[12px] rounded-[6px] cursor-pointer flex items-center gap-1 transition-all duration-150 hover:bg-white/15 hover:border-white/20 active:scale-95" @click="copyText(playerStore.currentSong.path)" title="复制完整路径">
-                <SvgIcon name="copy" /> 复制
-              </button>
-            </div>
+            <span class="text-sm text-ink text-right break-all truncate max-w-[calc(100%-70px)]" :title="playerStore.currentSong.path">{{ playerStore.currentSong.path }}</span>
           </div>
         </div>
         <div class="mt-6 flex justify-center">
@@ -581,29 +575,6 @@ const formatSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-// 复制路径到剪贴板
-const copyText = (text: string) => {
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).then(() => {
-      message.success('路径已成功复制到剪贴板')
-    }).catch(err => {
-      console.error('复制失败:', err)
-      message.error('复制失败')
-    })
-  } else {
-    const input = document.createElement('textarea')
-    input.value = text
-    document.body.appendChild(input)
-    input.select()
-    try {
-      document.execCommand('copy')
-      message.success('路径已成功复制到剪贴板')
-    } catch (err) {
-      message.error('复制失败')
-    }
-    document.body.removeChild(input)
-  }
-}
 
 const dropdownOptions = computed(() => {
   const song = playerStore.currentSong

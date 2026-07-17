@@ -287,7 +287,9 @@ const sendCurrentTrackToFolia = () => {
       album: currentSong.album,
       cover: coverUrl,
       duration: playerStore.duration || 0,
-      liked: isLiked
+      liked: isLiked,
+      path: currentSong.path || '',
+      filename: currentSong.filename || ''
     }
     ;(window as any).currentFoliaTrack = payload
     sendToAllFoliaIframes('2fmusic-track', payload)
@@ -330,7 +332,9 @@ const sendCurrentQueueToFolia = () => {
     artist: song.artist,
     album: song.album,
     cover: getAbsoluteCoverUrl(song.album_art || ''),
-    durationMs: (song.duration || 0) * 1000
+    durationMs: (song.duration || 0) * 1000,
+    path: song.path || '',
+    filename: song.filename || ''
   }))
   ;(window as any).currentFoliaQueue = { queue }
   sendToAllFoliaIframes('2fmusic-queue', { queue })
@@ -392,7 +396,7 @@ const handleFoliaMessage = async (event: MessageEvent) => {
   const { type, data } = event.data || {}
   
   if (type && String(type).startsWith('folia-')) {
-    console.log('[Host] Received folia control event:', type, 'data:', data)
+    console.log('[Host] 收到 Folia 控制指令：', type, '数据：', data)
   }
 
   switch (type) {
@@ -428,11 +432,11 @@ const handleFoliaMessage = async (event: MessageEvent) => {
     case 'folia-play-song':
       if (data && data.id) {
         const song = playerStore.playlist.find(s => String(s.id) === String(data.id))
-        console.log('[Host] Matching song found in playlist:', song)
+        console.log('[Host] 播放列表中找到匹配歌曲：', song)
         if (song) {
           playerStore.playSong(song)
         } else {
-          console.warn('[Host] folia-play-song: song not found in playlist for id:', data.id)
+          console.warn('[Host] folia-play-song: 列表中未找到该 ID 对应的歌曲：', data.id)
         }
       }
       break
@@ -442,8 +446,10 @@ const handleFoliaMessage = async (event: MessageEvent) => {
         const existIdx = playerStore.playlist.findIndex(s => String(s.id) === String(song.id))
         if (existIdx === -1) {
           playerStore.playlist.push(song)
+          playerStore.playSong(song)
+        } else {
+          playerStore.playSong(playerStore.playlist[existIdx])
         }
-        playerStore.playSong(song)
       }
       break
     case 'folia-add-to-playlist':
@@ -459,7 +465,7 @@ const handleFoliaMessage = async (event: MessageEvent) => {
       if (playerStore.currentSong) {
         const song = playerStore.currentSong
         const isLiked = favoritesStore.favoriteSongIds.some(id => String(id) === String(song.id))
-        console.log('[Host] folia-toggle-like current song:', song.title, 'isLiked:', isLiked)
+        console.log('[Host] folia-toggle-like 当前歌曲：', song.title, '收藏状态：', isLiked)
         if (isLiked) {
           await favoritesStore.removeFavorite([song.id], ['default'])
         } else {

@@ -13,7 +13,7 @@ export const useSystemStore = defineStore('system', () => {
       parsedPlaylist = JSON.parse(savedPlaylist)
     }
   } catch (e) {
-    console.warn('Failed to parse cached playlist:', e)
+    console.warn('解析缓存播放列表失败：', e)
   }
   const songs = ref<Song[]>(parsedPlaylist)
   const mountPoints = ref<string[]>([])
