@@ -75,6 +75,8 @@ export const usePlayerStore = defineStore('player', () => {
   const playMode = ref<'list' | 'single' | 'random'>('list')
 
   let audio: HTMLAudioElement | null = null
+  let isSongReported = false
+  let lastSongId = ''
 
   // 初始化播放器
   const init = () => {
@@ -141,6 +143,24 @@ export const usePlayerStore = defineStore('player', () => {
       if (audio) {
         currentTime.value = audio.currentTime
         updateMediaPlaybackPosition()
+
+        // 自动上报播放历史：播放超过 60 秒或进度超过 50%
+        const song = currentSong.value
+        if (song && song.id) {
+          const songId = song.id
+          if (songId !== lastSongId) {
+            isSongReported = false
+            lastSongId = songId
+          }
+
+          if (!isSongReported) {
+            const dur = audio.duration || 0
+            if (audio.currentTime >= 60 || (dur > 0 && audio.currentTime / dur >= 0.5)) {
+              isSongReported = true
+              recordPlayHistory(song)
+            }
+          }
+        }
       }
     })
 
@@ -205,7 +225,6 @@ export const usePlayerStore = defineStore('player', () => {
     if (isNewSong) {
       currentSong.value = { ...song }
       audio.src = getApiUrl(`/api/music/play/${song.id}`)
-      recordPlayHistory(song)
       
       // 异步加载本地封面并刷新 MediaSession
       loadSongCover(song).then(artUrl => {

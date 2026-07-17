@@ -5,6 +5,7 @@ from core.models.history import (
     remove_from_history
 )
 from core.utils.logger import logger
+from core.routes.ws import broadcast_ws_message
 
 def handle_add_play_history(song_id: str) -> tuple:
     """包装添加历史记录逻辑，返回 (success, data, error) 格式元组"""
@@ -12,6 +13,7 @@ def handle_add_play_history(song_id: str) -> tuple:
         return False, None, "歌曲 ID 不能为空"
     try:
         add_play_history(song_id)
+        broadcast_ws_message('library_changed', {})
         return True, None, None
     except Exception as e:
         logger.exception(f"处理添加播放历史请求失败: {e}")
@@ -30,6 +32,7 @@ def handle_clear_play_history() -> tuple:
     """包装清空播放历史逻辑"""
     try:
         clear_play_history()
+        broadcast_ws_message('library_changed', {})
         return True, None, None
     except Exception as e:
         logger.exception(f"处理清空播放历史请求失败: {e}")
@@ -41,6 +44,7 @@ def handle_remove_play_history(song_id: str, play_time: float) -> tuple:
         return False, None, "缺少歌曲 ID 或时间戳"
     try:
         remove_from_history(song_id, play_time)
+        broadcast_ws_message('library_changed', {})
         return True, None, None
     except Exception as e:
         logger.exception(f"处理单条删除历史记录请求失败: {e}")

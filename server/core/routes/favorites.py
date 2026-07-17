@@ -11,6 +11,7 @@ from core.models.favorite import (
     batch_move_favorites
 )
 from core.utils.logger import logger
+from core.routes.ws import broadcast_ws_message
 
 def handle_get_favorite_playlists() -> tuple:
     """获取所有收藏夹列表（含各自歌曲数）"""
@@ -32,6 +33,7 @@ def handle_create_favorite_playlist(name: str) -> tuple:
             
         result = create_playlist(name)
         logger.info(f"创建收藏夹成功: {name} (ID: {result['id']})")
+        broadcast_ws_message('library_changed', {})
         return True, result, None
     except Exception as e:
         logger.exception(f"创建收藏夹失败: {e}")
@@ -46,6 +48,7 @@ def handle_delete_favorite_playlist(playlist_id: str) -> tuple:
         if not success:
             return False, None, "默认收藏夹不能删除"
             
+        broadcast_ws_message('library_changed', {})
         return True, None, None
     except Exception as e:
         logger.exception(f"删除收藏夹失败，ID: {playlist_id}, 错误: {e}")
@@ -72,6 +75,7 @@ def handle_add_favorite(song_ids: list, playlist_ids: list = None, songs: dict =
 
     try:
         res = batch_add_to_favorites(song_ids, p_ids, songs_meta)
+        broadcast_ws_message('library_changed', {})
         return True, res, None
     except Exception as e:
         logger.exception(f"添加收藏失败: {e}")
@@ -86,6 +90,7 @@ def handle_remove_favorite(song_ids: list, playlist_ids: list = None) -> tuple:
 
     try:
         res = batch_remove_from_favorites(song_ids, p_ids)
+        broadcast_ws_message('library_changed', {})
         return True, res, None
     except Exception as e:
         logger.exception(f"移除收藏失败: {e}")
@@ -103,6 +108,7 @@ def handle_batch_move_favorites(song_ids: list, from_playlist_id: str, to_playli
         return False, None, "源收藏夹和目标收藏夹不能相同"
     try:
         res = batch_move_favorites(song_ids, from_playlist_id, to_playlist_id)
+        broadcast_ws_message('library_changed', {})
         return True, res, None
     except Exception as e:
         logger.exception(f"批量移动收藏失败: {e}")

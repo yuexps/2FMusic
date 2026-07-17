@@ -11,7 +11,7 @@
 *   **状态保存**：在执行 `saveState` 时，将当前 `playlist` 同步写入 `localStorage`。存入前须过滤或重置歌曲对象中可能包含的临时 `blob:` 封面 URL 属性。
 *   **原生 HTMLAudioElement 事件绑定**：
     - `play` / `pause` 事件：同步 `isPlaying` 变量并更新 `MediaSession.playbackState`。
-    - `timeupdate` / `durationchange` 事件：实时更新 `currentTime` 及 `duration`，并同步系统的媒体会话位置。
+    - `timeupdate` / `durationchange` 事件：实时更新 `currentTime` 及 `duration`，并同步系统的媒体会话位置。当歌曲播放达到 60 秒或进度过半（50%）时，自动触发向后端上报播放历史操作，并确保传入参数符合非空安全类型约束。
     - `ended` 事件：自动触发切歌 `next()` 方法。
 
 ### 1.2 歌曲控制与待播插播队列逻辑

@@ -30,12 +30,13 @@ def get_play_history(limit: int = 100) -> list:
     """获取播放历史，包含歌曲元数据，按播放时间由新到旧排序"""
     with get_db() as conn:
         try:
-            # 关联 songs 表，过滤掉已经被物理删除的曲目 (INNER JOIN)
+            # 关联 songs 表，过滤掉已经被物理删除的曲目，按歌曲 GROUP BY 聚合最后播放时间
             rows = conn.execute("""
-                SELECT ph.play_time, s.*
+                SELECT MAX(ph.play_time) as play_time, s.*
                 FROM play_history ph
                 JOIN songs s ON ph.song_id = s.id
-                ORDER BY ph.play_time DESC
+                GROUP BY ph.song_id
+                ORDER BY play_time DESC
                 LIMIT ?
             """, (limit,)).fetchall()
             
@@ -77,17 +78,15 @@ def clear_play_history():
             raise e
 
 def remove_from_history(song_id: str, play_time_ms: float):
-    """从播放历史中移除特定时间点的一条记录"""
-    play_time_sec = play_time_ms / 1000.0
+    """从播放历史中移除特定歌曲的所有播放记录（支持合并后的完整移除）"""
     with get_db() as conn:
         try:
-            # REAL 类型浮点数在 SQLite 中的精度匹配（保留 0.1s 偏差误差内）
             conn.execute(
-                "DELETE FROM play_history WHERE song_id = ? AND ABS(play_time - ?) < 0.1",
-                (song_id, play_time_sec)
+                "DELETE FROM play_history WHERE song_id = ?",
+                (song_id,)
             )
             conn.commit()
         except Exception as e:
             conn.rollback()
-            logger.exception(f"删除单条播放历史失败 (song_id: {song_id}, play_time: {play_time_sec}): {e}")
+            logger.exception(f"删除播放历史记录失败 (song_id: {song_id}): {e}")
             raise e
