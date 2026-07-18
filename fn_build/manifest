@@ -7,8 +7,7 @@ desc                  = """
 - <strong>沉浸式播放器</strong>: 响应式 UI、歌词滚动显示、封面主题色提取、快捷键控制
 - <strong>目录管理</strong>: 添加服务器任意文件夹到音乐库，无需移动文件
 - <strong>网易云集成</strong>: 搜索、高品质下载、链接解析、扫码登录同步歌单
-- <strong>精致界面</strong>: 暗色/
-- <strong>Android端</strong>: <a href="https://github.com/yuexps/2FMusic-Android">Releases 下载 2FMusic.APK</a>
+- <strong>Android端</strong>: <a href="https://github.com/yuexps/2FMusic-Android">Releases 2FMusic.APK</a>
 - <strong>集成Folia</strong>: Folia是一个以全屏沉浸式歌词播放为核心的在线音乐播放器，支持网易云
  """
 platform              = all
