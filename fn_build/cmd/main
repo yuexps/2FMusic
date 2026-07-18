@@ -28,7 +28,7 @@ RUN_MODE="${wizard_run_mode:-both}"
 PORT_ARG=""
 SOCKET_ARG=""
 
-if [ "${RUN_MODE}" = "both" ] || [ "${RUN_MODE}" = "port" ]; then
+if [ "${RUN_MODE}" = "both" ]; then
     PORT_ARG="--port ${wizard_port:-23237}"
 fi
 

@@ -7,7 +7,7 @@
     3.  **端口+Socket 并发模式**：在单独 the 守护线程里运行自定义的 `UnixWSGIServer` 监听 UNIX socket，主线程阻塞运行 Werkzeug TCP 端口开发服务。
 *   **FNAS 部署脚本端口与运行方式规范**：
     - 在 `fn_build/cmd/main` 中，应用启动的端口参数必须引用 `fn_build/wizard/install` 及 `fn_build/wizard/config` 中定义的动态服务端口变量 `${wizard_port}`（可设置默认备用值 `23237`，即 `${wizard_port:-23237}`），严禁使用硬编码端口，以保障多实例或自定义端口部署时的端口一致性。
-    - 脚本支持由 `wizard_run_mode` 变量控制的自定义运行方式（支持 `both`：并发模式；`port`：纯端口模式；`socket`：纯 Socket 模式），并在启动命令行中按需动态构建 `--port` 和 `--unix-socket` 参数。
+    - 脚本支持由 `wizard_run_mode` 变量控制的自定义运行方式（支持 `both`：并发模式；`socket`：统一网关），并在启动命令行中按需动态构建 `--port` 和 `--unix-socket` 参数。
     - 脚本支持由 `wizard_music_library_type` 变量控制音乐库的物理路径，支持 `share`（默认，指向 `/var/apps/yuexps.2fmusic/shares/2FMusic/Music`）和 `data`（指向 `${TRIM_PKGVAR}/Music`），启动时依据配置动态设置。
 
 ## 2. 基准子路径与鉴权拦截

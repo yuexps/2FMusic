@@ -29,11 +29,7 @@
             "value": "both"
           },
           {
-            "label": "纯端口模式 (Port)",
-            "value": "port"
-          },
-          {
-            "label": "纯 Socket 模式 (Socket)",
+            "label": "统一网关 (Socket)",
             "value": "socket"
           }
         ],
@@ -43,6 +39,10 @@
             "message": "请选择运行方式"
           }
         ]
+      },
+      {
+        "type": "tips",
+        "helpText": "<strong>提示：</strong> 如需使用Android客户端，请选择『并发模式』，并确保端口允许外部网络访问"
       },
       {
         "type": "radio",
