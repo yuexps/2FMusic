@@ -1,4 +1,4 @@
-package websocket
+package api
 
 import (
 	"encoding/json"
@@ -6,10 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"2fmusic/backend/config"
-	"2fmusic/backend/logger"
-	"2fmusic/backend/middleware"
-	"2fmusic/backend/model"
+	"2fmusic/backend/core"
+	"2fmusic/backend/db"
+	"2fmusic/backend/static"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -22,9 +21,11 @@ var upgrader = websocket.Upgrader{
 }
 
 type Client struct {
-	hub  *Hub
-	conn *websocket.Conn
-	send chan []byte
+	hub    *Hub
+	conn   *websocket.Conn
+	send   chan []byte
+	mu     sync.Mutex
+	closed bool
 }
 
 type Hub struct {
@@ -37,8 +38,8 @@ type Hub struct {
 
 var GlobalHub = &Hub{
 	broadcast:  make(chan []byte, 256),
-	register:   make(chan *Client),
-	unregister: make(chan *Client),
+	register:   make(chan *Client, 64),
+	unregister: make(chan *Client, 64),
 	clients:    make(map[*Client]bool),
 }
 
@@ -49,37 +50,39 @@ func (h *Hub) Run() {
 			h.mu.Lock()
 			h.clients[client] = true
 			h.mu.Unlock()
-			logger.Debug("WebSocket 客户端已建立连接")
+			core.Debug("WebSocket 客户端已建立连接")
 
 		case client := <-h.unregister:
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
-				close(client.send)
-				logger.Debug("WebSocket 客户端已断开")
+				client.safeClose()
+				core.Debug("WebSocket 客户端已断开")
 			}
 			h.mu.Unlock()
 
 		case message := <-h.broadcast:
-			h.mu.RLock()
+			h.mu.Lock()
 			for client := range h.clients {
-				select {
-				case client.send <- message:
-				default:
-					close(client.send)
+				if !client.safeSend(message) {
+					client.safeClose()
 					delete(h.clients, client)
 				}
 			}
-			h.mu.RUnlock()
+			h.mu.Unlock()
 		}
 	}
 }
 
-// BroadcastJSON 广播 JSON 结构
+// BroadcastJSON 广播 JSON 结构 (非阻塞防卡死)
 func BroadcastJSON(v interface{}) {
 	data, err := json.Marshal(v)
 	if err == nil {
-		GlobalHub.broadcast <- data
+		select {
+		case GlobalHub.broadcast <- data:
+		default:
+			core.Warn("WebSocket 广播通道满载，自动弃帧防止阻塞业务协程")
+		}
 	}
 }
 
@@ -88,18 +91,41 @@ func NotifyLibraryChanged() {
 	BroadcastJSON(map[string]interface{}{
 		"type":   "broadcast",
 		"action": "library_changed",
-		"data":   map[string]interface{}{"status": "updated"},
+		"data":   map[string]interface{}{"status": "updated", "library_version": float64(time.Now().UnixNano()) / 1e9},
+	})
+}
+
+// BroadcastScanStatus 广播扫描与在线刮削实时进度数据
+func BroadcastScanStatus(scanning, isScraping bool, total, processed, failed int, currentFile, currentPath string) {
+	musicCnt, _ := db.GetSongCount()
+	plCnt, _ := db.GetFavoritePlaylistCount()
+
+	BroadcastJSON(map[string]interface{}{
+		"type":   "broadcast",
+		"action": "scan_status",
+		"data": map[string]interface{}{
+			"scanning":        scanning,
+			"is_scraping":     isScraping,
+			"total":           total,
+			"processed":       processed,
+			"failed":          failed,
+			"current_file":    currentFile,
+			"current_path":    currentPath,
+			"music_count":     musicCnt,
+			"playlist_count":  plCnt,
+			"library_version": float64(time.Now().UnixNano()) / 1e9,
+		},
 	})
 }
 
 // ServeWS 处理 HTTP 升级为 WebSocket
 func ServeWS(c *gin.Context) {
-	if config.GlobalConfig.Password != "" {
+	if core.GlobalConfig.Password != "" {
 		pass := c.Query("auth")
 		if pass == "" {
 			pass = c.GetHeader("X-Password")
 		}
-		if !middleware.ValidatePassword(pass) {
+		if !static.ValidatePassword(pass) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			return
 		}
@@ -107,7 +133,7 @@ func ServeWS(c *gin.Context) {
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		logger.Error("WS 升级失败: %v", err)
+		core.Error("WS 升级失败: %v", err)
 		return
 	}
 
@@ -124,7 +150,7 @@ func (c *Client) readPump() {
 		c.conn.Close()
 	}()
 
-	c.conn.SetReadLimit(10 * 1024 * 1024)
+	c.conn.SetReadLimit(1024 * 1024)
 	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
@@ -139,7 +165,7 @@ func (c *Client) readPump() {
 
 		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 
-		var req model.WSClientRequest
+		var req core.WSClientRequest
 		if err := json.Unmarshal(message, &req); err != nil {
 			continue
 		}
@@ -185,15 +211,38 @@ func (c *Client) writePump() {
 	}
 }
 
+func (c *Client) safeClose() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.closed {
+		c.closed = true
+		close(c.send)
+	}
+}
+
+func (c *Client) safeSend(data []byte) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return false
+	}
+	select {
+	case c.send <- data:
+		return true
+	default:
+		return false
+	}
+}
+
 func (c *Client) sendJSON(v interface{}) {
 	data, err := json.Marshal(v)
 	if err == nil {
-		c.send <- data
+		c.safeSend(data)
 	}
 }
 
 func SendSuccessResponse(c *Client, seq interface{}, action string, data interface{}) {
-	c.sendJSON(model.WSResponseFrame{
+	c.sendJSON(core.WSResponseFrame{
 		Seq:     seq,
 		Type:    "response",
 		Action:  action,
@@ -203,7 +252,7 @@ func SendSuccessResponse(c *Client, seq interface{}, action string, data interfa
 }
 
 func SendErrorResponse(c *Client, seq interface{}, action string, errMsg string) {
-	c.sendJSON(model.WSResponseFrame{
+	c.sendJSON(core.WSResponseFrame{
 		Seq:     seq,
 		Type:    "response",
 		Action:  action,

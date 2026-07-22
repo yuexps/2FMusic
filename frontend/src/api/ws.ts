@@ -119,9 +119,10 @@ class WSClient {
             return
           }
 
-          // 广播消息
-          if (payload.type) {
-            this.dispatch(payload.type, payload.data)
+          // 广播消息派发：优先按 action 派发，无 action 时按 type 派发
+          const eventKey = payload.action || payload.type
+          if (eventKey) {
+            this.dispatch(eventKey, payload.data)
           }
         } catch (e) {
           console.error('解析 WebSocket 消息失败：', e)

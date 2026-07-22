@@ -1,22 +1,22 @@
-package websocket
+package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"2fmusic/backend/config"
+	"2fmusic/backend/core"
 	"2fmusic/backend/db"
 	"2fmusic/backend/downloader"
-	"2fmusic/backend/model"
 	"2fmusic/backend/scanner"
-	"2fmusic/backend/searcher"
 )
 
 // HandleWSAction 分发并响应所有 WebSocket 请求动作
-func HandleWSAction(c *Client, req model.WSClientRequest) {
+func HandleWSAction(c *Client, req core.WSClientRequest) {
 	seq := req.Seq
 	action := req.Action
 	data := req.Data
@@ -39,16 +39,12 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 		song, err := db.GetSongByID(songID)
 		if err == nil && song != nil {
 			targetPath := song.Path
-			ext := strings.ToLower(filepath.Ext(targetPath))
-			validAudioExts := map[string]bool{".mp3": true, ".wav": true, ".ogg": true, ".flac": true, ".aac": true, ".m4a": true}
-
-			// 安全性约束：仅允许物理删除 6 种标准音频后缀的文件
-			if !validAudioExts[ext] {
+			if !core.IsAudioFile(targetPath) {
+				ext := filepath.Ext(targetPath)
 				SendErrorResponse(c, seq, action, fmt.Sprintf("安全性约束：禁止物理删除 %s 类型的文件", ext))
 				return
 			}
 
-			// 重载重试机制应对 Windows 文件锁定占用 (最多重试 10 次，每次间隔 200ms)
 			deletedSuccess := false
 			for i := 0; i < 10; i++ {
 				if err := os.Remove(targetPath); err == nil || os.IsNotExist(err) {
@@ -63,15 +59,15 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 				return
 			}
 
-			// 清理同级关联附属文件
+			core.Info("物理删除单曲: %s (ID=%s, Path=%s)", song.Title, songID, targetPath)
+
 			basePath := strings.TrimSuffix(targetPath, filepath.Ext(targetPath))
-			for _, subExt := range []string{".lrc", ".yrc", ".jpg", ".webp"} {
+			for _, subExt := range core.MISC_EXTS {
 				_ = os.Remove(basePath + subExt)
 			}
-			// 清理集中缓存 covers/lyrics
-			_ = os.Remove(filepath.Join(config.GlobalConfig.CoversDir, songID+".webp"))
-			_ = os.Remove(filepath.Join(config.GlobalConfig.LyricsDir, songID+".lrc"))
-			_ = os.Remove(filepath.Join(config.GlobalConfig.LyricsDir, songID+".yrc"))
+			_ = os.Remove(filepath.Join(core.GlobalConfig.CoversDir, songID+".webp"))
+			_ = os.Remove(filepath.Join(core.GlobalConfig.LyricsDir, songID+".lrc"))
+			_ = os.Remove(filepath.Join(core.GlobalConfig.LyricsDir, songID+".yrc"))
 			_ = db.DeleteSong(songID)
 			NotifyLibraryChanged()
 		}
@@ -81,7 +77,7 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 		songID, _ := data["song_id"].(string)
 		songPath, _ := data["path"].(string)
 
-		var song *model.Song
+		var song *core.Song
 		if songID != "" {
 			song, _ = db.GetSongByID(songID)
 		} else if songPath != "" {
@@ -89,9 +85,9 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 		}
 
 		if song != nil {
-			_ = os.Remove(filepath.Join(config.GlobalConfig.CoversDir, song.ID+".webp"))
-			_ = os.Remove(filepath.Join(config.GlobalConfig.LyricsDir, song.ID+".lrc"))
-			_ = os.Remove(filepath.Join(config.GlobalConfig.LyricsDir, song.ID+".yrc"))
+			_ = os.Remove(filepath.Join(core.GlobalConfig.CoversDir, song.ID+".webp"))
+			_ = os.Remove(filepath.Join(core.GlobalConfig.LyricsDir, song.ID+".lrc"))
+			_ = os.Remove(filepath.Join(core.GlobalConfig.LyricsDir, song.ID+".yrc"))
 			db.UpdateSongMediaStatus(song.ID, false, false)
 			NotifyLibraryChanged()
 		}
@@ -129,34 +125,37 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 		artist, _ := data["artist"].(string)
 		album, _ := data["album"].(string)
 
-		best := searcher.SearchSongBest(title, artist, album)
+		best := scanner.SearchSongBest(title, artist, album)
 		if best == nil {
 			SendErrorResponse(c, seq, action, "No matching result found")
 			return
 		}
 		SendSuccessResponse(c, seq, action, best)
 
-	case "favorites/list", "favorite/list_playlists":
+	case "favorite/list_playlists":
 		playlists, err := db.GetFavoritePlaylists()
 		if err != nil {
 			SendErrorResponse(c, seq, action, err.Error())
 			return
 		}
-		type PLWithSongs struct {
-			model.FavoritePlaylist
-			SongIDs []string `json:"song_ids"`
-		}
-		var result []PLWithSongs
+		var result []core.FavoritePlaylistResponse
 		for _, pl := range playlists {
 			ids, _ := db.GetFavoritesByPlaylist(pl.ID)
-			result = append(result, PLWithSongs{
-				FavoritePlaylist: pl,
-				SongIDs:          ids,
+			isDef := 0
+			if pl.IsDefault {
+				isDef = 1
+			}
+			result = append(result, core.FavoritePlaylistResponse{
+				ID:        pl.ID,
+				Name:      pl.Name,
+				IsDefault: isDef,
+				CreatedAt: pl.CreatedAt,
+				SongCount: len(ids),
 			})
 		}
 		SendSuccessResponse(c, seq, action, result)
 
-	case "favorite/playlist_songs", "favorites/playlist_songs":
+	case "favorite/playlist_songs":
 		playlistID, _ := data["playlist_id"].(string)
 		if playlistID == "" {
 			playlistID = "default"
@@ -168,35 +167,80 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 		}
 		SendSuccessResponse(c, seq, action, songIDs)
 
-	case "favorites/add", "favorite/add":
-		songID, _ := data["song_id"].(string)
-		playlistID, _ := data["playlist_id"].(string)
-		if playlistID == "" {
-			playlistID = "default"
+	case "favorite/add":
+		var songIDs []string
+		if sID, ok := data["song_id"].(string); ok && sID != "" {
+			songIDs = append(songIDs, sID)
 		}
+		if sIDsRaw, ok := data["song_ids"].([]interface{}); ok {
+			for _, id := range sIDsRaw {
+				if sID, ok := id.(string); ok && sID != "" {
+					songIDs = append(songIDs, sID)
+				}
+			}
+		}
+
+		var playlistIDs []string
+		if pID, ok := data["playlist_id"].(string); ok && pID != "" {
+			playlistIDs = append(playlistIDs, pID)
+		}
+		if pIDsRaw, ok := data["playlist_ids"].([]interface{}); ok {
+			for _, id := range pIDsRaw {
+				if pID, ok := id.(string); ok && pID != "" {
+					playlistIDs = append(playlistIDs, pID)
+				}
+			}
+		}
+		if len(playlistIDs) == 0 {
+			playlistIDs = []string{"default"}
+		}
+
 		title, _ := data["title"].(string)
 		artist, _ := data["artist"].(string)
-		err := db.AddFavorite(songID, playlistID, title, artist)
-		if err != nil {
-			SendErrorResponse(c, seq, action, err.Error())
-			return
+
+		for _, pID := range playlistIDs {
+			for _, sID := range songIDs {
+				_ = db.AddFavorite(sID, pID, title, artist)
+			}
 		}
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
-	case "favorites/remove", "favorite/delete":
-		songID, _ := data["song_id"].(string)
-		playlistID, _ := data["playlist_id"].(string)
-		if playlistID == "" {
-			playlistID = "default"
+	case "favorite/delete":
+		var songIDs []string
+		if sID, ok := data["song_id"].(string); ok && sID != "" {
+			songIDs = append(songIDs, sID)
 		}
-		err := db.RemoveFavorite(songID, playlistID)
-		if err != nil {
-			SendErrorResponse(c, seq, action, err.Error())
-			return
+		if sIDsRaw, ok := data["song_ids"].([]interface{}); ok {
+			for _, id := range sIDsRaw {
+				if sID, ok := id.(string); ok && sID != "" {
+					songIDs = append(songIDs, sID)
+				}
+			}
+		}
+
+		var playlistIDs []string
+		if pID, ok := data["playlist_id"].(string); ok && pID != "" {
+			playlistIDs = append(playlistIDs, pID)
+		}
+		if pIDsRaw, ok := data["playlist_ids"].([]interface{}); ok {
+			for _, id := range pIDsRaw {
+				if pID, ok := id.(string); ok && pID != "" {
+					playlistIDs = append(playlistIDs, pID)
+				}
+			}
+		}
+		if len(playlistIDs) == 0 {
+			playlistIDs = []string{"default"}
+		}
+
+		for _, pID := range playlistIDs {
+			for _, sID := range songIDs {
+				_ = db.RemoveFavorite(sID, pID)
+			}
 		}
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
-	case "favorite/batch_move", "favorites/batch_move":
+	case "favorite/batch_move":
 		songIDsRaw, _ := data["song_ids"].([]interface{})
 		fromPL, _ := data["from_playlist_id"].(string)
 		toPL, _ := data["to_playlist_id"].(string)
@@ -212,7 +256,7 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 		}
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
-	case "favorites/create_playlist", "favorite/create_playlist":
+	case "favorite/create_playlist":
 		id, _ := data["id"].(string)
 		name, _ := data["name"].(string)
 		if name == "" {
@@ -229,8 +273,11 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 		}
 		SendSuccessResponse(c, seq, action, map[string]string{"id": id, "name": name})
 
-	case "favorites/delete_playlist", "favorite/delete_playlist":
-		id, _ := data["id"].(string)
+	case "favorite/delete_playlist":
+		id, _ := data["playlist_id"].(string)
+		if id == "" {
+			id, _ = data["id"].(string)
+		}
 		err := db.DeleteFavoritePlaylist(id)
 		if err != nil {
 			SendErrorResponse(c, seq, action, err.Error())
@@ -238,7 +285,7 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 		}
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
-	case "history/list", "history/get":
+	case "history/get":
 		limit := 100
 		if l, ok := data["limit"].(float64); ok {
 			limit = int(l)
@@ -248,7 +295,15 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 			SendErrorResponse(c, seq, action, err.Error())
 			return
 		}
-		SendSuccessResponse(c, seq, action, history)
+		res := make([]core.PlayHistoryResponse, 0, len(history))
+		for _, h := range history {
+			msTime := int64(h.PlayTime * 1000)
+			res = append(res, core.PlayHistoryResponse{
+				Time: msTime,
+				Song: h.Song,
+			})
+		}
+		SendSuccessResponse(c, seq, action, res)
 
 	case "history/add":
 		songID, _ := data["song_id"].(string)
@@ -259,8 +314,9 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 
 	case "history/remove":
 		songID, _ := data["song_id"].(string)
+		playTime, _ := data["play_time"].(float64)
 		if songID != "" {
-			_ = db.DeletePlayHistoryItem(songID)
+			_ = db.DeletePlayHistoryItemWithTime(songID, playTime)
 		}
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
@@ -268,7 +324,7 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 		_ = db.ClearPlayHistory()
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
-	case "mounts/list", "mount/list":
+	case "mount/list":
 		pts, err := db.GetMountPoints()
 		if err != nil {
 			SendErrorResponse(c, seq, action, err.Error())
@@ -282,9 +338,9 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 		}
 		SendSuccessResponse(c, seq, action, paths)
 
-	case "mounts/add", "mount/add":
+	case "mount/add":
 		rawPath, _ := data["path"].(string)
-		path := config.NormalizePath(rawPath)
+		path := core.NormalizePath(rawPath)
 		if path == "" {
 			SendErrorResponse(c, seq, action, "Path required")
 			return
@@ -294,37 +350,37 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 			SendErrorResponse(c, seq, action, err.Error())
 			return
 		}
+		core.Info("新增挂载点目录: %s", path)
 		scanner.RefreshWatchPaths()
 		scanner.TriggerScan()
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
-	case "mounts/delete", "mount/delete":
+	case "mount/delete":
 		rawPath, _ := data["path"].(string)
-		path := config.NormalizePath(rawPath)
+		path := core.NormalizePath(rawPath)
 		if path == "" {
 			SendErrorResponse(c, seq, action, "Path required")
 			return
 		}
-		// 1. 物理删除 songs 表中该挂载目录下的歌曲关联记录
-		_, _ = db.DeleteSongsByPathPrefix(path)
-		// 2. 从 mount_points 表中移除挂载点
+		affected, _ := db.DeleteSongsByPathPrefix(path)
 		err := db.DeleteMountPoint(path)
 		if err != nil {
 			SendErrorResponse(c, seq, action, err.Error())
 			return
 		}
+		core.Info("移除挂载点目录: %s (关联物理数据表已清理 %d 条)", path, affected)
 		NotifyLibraryChanged()
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
 	case "mount/scan":
 		rawPath, _ := data["path"].(string)
-		path := config.NormalizePath(rawPath)
+		path := core.NormalizePath(rawPath)
 		go scanner.ScanDirectorySingle(path)
 		SendSuccessResponse(c, seq, action, map[string]string{"status": "scanning_started"})
 
 	case "mount/retry_scrape":
 		rawPath, _ := data["path"].(string)
-		path := config.NormalizePath(rawPath)
+		path := core.NormalizePath(rawPath)
 		go scanner.AutoScrapeMissingMetadata(path)
 		SendSuccessResponse(c, seq, action, map[string]string{"status": "rescrape_started"})
 
@@ -346,21 +402,21 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 
 	case "system/get_lyrics_preference":
 		SendSuccessResponse(c, seq, action, map[string]string{
-			"value": config.GlobalConfig.LyricsPreference,
+			"value": core.GlobalConfig.LyricsPreference,
 		})
 
 	case "system/save_lyrics_preference":
 		val, _ := data["value"].(string)
 		_ = db.SaveSystemSetting("lyrics_source_preference", val)
-		config.GlobalConfig.LyricsPreference = val
+		core.GlobalConfig.LyricsPreference = val
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
 	case "system/get_settings":
 		SendSuccessResponse(c, seq, action, map[string]string{
-			"netease_cookie":           config.GlobalConfig.NeteaseCookie,
-			"netease_download_dir":     config.GlobalConfig.NeteaseDownloadDir,
-			"netease_api_base":         config.GlobalConfig.NeteaseAPIBase,
-			"lyrics_source_preference": config.GlobalConfig.LyricsPreference,
+			"netease_cookie":           core.GlobalConfig.NeteaseCookie,
+			"netease_download_dir":     core.GlobalConfig.NeteaseDownloadDir,
+			"netease_api_base":         core.GlobalConfig.NeteaseAPIBase,
+			"lyrics_source_preference": core.GlobalConfig.LyricsPreference,
 		})
 
 	case "system/set_settings":
@@ -377,57 +433,139 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 
 	case "netease/get_config":
 		SendSuccessResponse(c, seq, action, map[string]interface{}{
-			"download_dir": config.GlobalConfig.NeteaseDownloadDir,
-			"api_base":     config.GlobalConfig.NeteaseAPIBase,
+			"download_dir": core.GlobalConfig.NeteaseDownloadDir,
+			"api_base":     core.GlobalConfig.NeteaseAPIBase,
 		})
 
 	case "netease/save_config":
 		dir, _ := data["download_dir"].(string)
-		api, _ := data["api_base"].(string)
+		api, hasAPI := data["api_base"].(string)
+
 		if dir != "" {
 			_ = db.SaveSystemSetting("netease_download_dir", dir)
-			config.GlobalConfig.NeteaseDownloadDir = dir
+			core.GlobalConfig.NeteaseDownloadDir = dir
+			_ = os.MkdirAll(dir, 0755)
+			scanner.RefreshWatchPaths() // 刷新 [Watcher] 监听，覆盖新下载目录
 		}
-		if api != "" {
-			_ = db.SaveSystemSetting("netease_api_base", api)
-			config.GlobalConfig.NeteaseAPIBase = api
-		}
-		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
-	case "netease/check_container", "netease/install_status":
+		if hasAPI {
+			api = strings.TrimRight(strings.TrimSpace(api), "/")
+			if api != "" {
+				testURL := fmt.Sprintf("%s/login/status", api)
+				client := &http.Client{Timeout: 3 * time.Second}
+				resp, err := client.Get(testURL)
+				if err != nil {
+					core.Warn("网易云 API 连通性测试失败 (url: %s): %v", api, err)
+					SendErrorResponse(c, seq, action, "API 连接测试失败：请检查服务是否已启动且地址正确")
+					return
+				}
+				defer resp.Body.Close()
+
+				if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+					SendErrorResponse(c, seq, action, "API 连接测试失败：服务响应状态异常")
+					return
+				}
+
+				var testData map[string]interface{}
+				if err := json.NewDecoder(resp.Body).Decode(&testData); err != nil {
+					SendErrorResponse(c, seq, action, "API 校验失败：该地址未返回合法的 JSON 数据")
+					return
+				}
+
+				_, hasCode := testData["code"]
+				_, hasData := testData["data"]
+				if !hasCode && !hasData {
+					SendErrorResponse(c, seq, action, "API 校验失败：该地址未返回符合网易云 API 特征的数据")
+					return
+				}
+			}
+
+			_ = db.SaveSystemSetting("netease_api_base", api)
+			core.GlobalConfig.NeteaseAPIBase = api
+		}
+
 		SendSuccessResponse(c, seq, action, map[string]interface{}{
-			"running": true,
-			"status":  "success",
+			"download_dir": core.GlobalConfig.NeteaseDownloadDir,
+			"api_base":     core.GlobalConfig.NeteaseAPIBase,
 		})
 
+	case "netease/check_container":
+		res := downloader.CheckDockerContainer()
+		SendSuccessResponse(c, seq, action, res)
+
 	case "netease/install_service":
+		ok, errMsg := downloader.InstallNeteaseDockerService()
+		if !ok {
+			SendErrorResponse(c, seq, action, errMsg)
+			return
+		}
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
+
+	case "netease/install_status":
+		res := downloader.GetDockerInstallStatus()
+		SendSuccessResponse(c, seq, action, res)
 
 	case "netease/clear_task":
 		taskID, _ := data["task_id"].(string)
 		downloader.ClearTask(taskID)
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
+	case "netease/clear_all_tasks":
+		downloader.ClearAllTasks()
+		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
+
+	case "netease/resolve":
+		inputStr, _ := data["input"].(string)
+		res, err := downloader.ResolveNeteaseInput(inputStr)
+		if err != nil {
+			SendErrorResponse(c, seq, action, err.Error())
+			return
+		}
+		SendSuccessResponse(c, seq, action, res)
+
+	case "netease/recommend":
+		recData, err := downloader.GetNeteaseRecommendSongs()
+		if err != nil {
+			SendErrorResponse(c, seq, action, err.Error())
+			return
+		}
+		SendSuccessResponse(c, seq, action, recData)
+
 	case "netease/search":
 		keywords, _ := data["keywords"].(string)
-		best := searcher.SearchSongBest(keywords, "", "")
-		if best != nil {
-			SendSuccessResponse(c, seq, action, []interface{}{best})
-		} else {
-			SendSuccessResponse(c, seq, action, []interface{}{})
+		limit := 30
+		if lFloat, ok := data["limit"].(float64); ok && lFloat > 0 {
+			limit = int(lFloat)
 		}
+		songs, err := downloader.SearchNeteaseCloud(keywords, limit)
+		if err != nil {
+			SendErrorResponse(c, seq, action, err.Error())
+			return
+		}
+		SendSuccessResponse(c, seq, action, songs)
 
 	case "netease/download":
-		songID, _ := data["song_id"].(string)
-		if songID == "" {
-			if idFloat, ok := data["id"].(float64); ok {
-				songID = fmt.Sprintf("%.0f", idFloat)
+		extractString := func(v interface{}) string {
+			if v == nil {
+				return ""
 			}
+			if s, ok := v.(string); ok {
+				return s
+			}
+			if f, ok := v.(float64); ok {
+				return fmt.Sprintf("%.0f", f)
+			}
+			return fmt.Sprintf("%v", v)
 		}
-		title, _ := data["title"].(string)
-		artist, _ := data["artist"].(string)
-		album, _ := data["album"].(string)
-		level, _ := data["level"].(string)
+
+		songID := extractString(data["song_id"])
+		if songID == "" {
+			songID = extractString(data["id"])
+		}
+		title := extractString(data["title"])
+		artist := extractString(data["artist"])
+		album := extractString(data["album"])
+		level := extractString(data["level"])
 
 		taskID := downloader.StartNeteaseDownload(songID, title, artist, album, level)
 		SendSuccessResponse(c, seq, action, map[string]string{"task_id": taskID, "status": "pending"})
@@ -436,7 +574,7 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 		tasks := downloader.GetTasks()
 		SendSuccessResponse(c, seq, action, tasks)
 
-	case "netease/qr_key", "netease/login_qrcode":
+	case "netease/login_qrcode":
 		unikey, qrimg, err := downloader.GetNeteaseQRKeyAndImage()
 		if err != nil {
 			SendErrorResponse(c, seq, action, err.Error())
@@ -469,6 +607,7 @@ func HandleWSAction(c *Client, req model.WSClientRequest) {
 	case "netease/logout":
 		_, _ = downloader.CallNeteaseAPI("/logout", nil)
 		_ = db.SaveSystemSetting("netease_cookie", "")
+		core.GlobalConfig.NeteaseCookie = ""
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
 	default:

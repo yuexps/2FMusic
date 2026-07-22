@@ -8,13 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
-	"2fmusic/backend/config"
+	"2fmusic/backend/core"
 	"2fmusic/backend/db"
-	"2fmusic/backend/middleware"
 	"2fmusic/backend/scanner"
 	"2fmusic/backend/static"
-	"2fmusic/backend/websocket"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,7 +28,7 @@ func RegisterRoutes(r *gin.Engine) {
 	apiGroup.GET("/music/covers/:name", handleGetCoverImage)
 	apiGroup.POST("/music/upload", handleUploadMusic)
 	apiGroup.Any("/netease/*path", handleNeteaseProxy)
-	apiGroup.GET("/ws", websocket.ServeWS)
+	apiGroup.GET("/ws", ServeWS)
 
 	r.NoRoute(handleStaticSPA)
 }
@@ -37,7 +36,7 @@ func RegisterRoutes(r *gin.Engine) {
 func handleLogin(c *gin.Context) {
 	clientIP := c.ClientIP()
 
-	if middleware.CheckIPBlocked(clientIP) {
+	if static.CheckIPBlocked(clientIP) {
 		c.JSON(http.StatusTooManyRequests, gin.H{"error": "尝试次数过多，请一小时后再试"})
 		return
 	}
@@ -52,12 +51,12 @@ func handleLogin(c *gin.Context) {
 		pass = c.Query("password")
 	}
 
-	if middleware.ValidatePassword(pass) {
-		middleware.RecordIPSuccess(clientIP)
-		token := middleware.SHA256String(pass)
+	if static.ValidatePassword(pass) {
+		static.RecordIPSuccess(clientIP)
+		token := static.SHA256String(pass)
 		c.JSON(http.StatusOK, gin.H{"success": true, "message": "登录成功", "token": token})
 	} else {
-		middleware.RecordIPFailure(clientIP)
+		static.RecordIPFailure(clientIP)
 		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "密码错误"})
 	}
 }
@@ -81,6 +80,13 @@ func handlePlayExternalMusic(c *gin.Context) {
 	}
 
 	filePath, _ = url.QueryUnescape(filePath)
+	filePath = core.NormalizePath(filePath)
+
+	if !core.IsAudioFile(filePath) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: Non-audio file access prohibited"})
+		return
+	}
+
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
 		return
@@ -91,7 +97,7 @@ func handlePlayExternalMusic(c *gin.Context) {
 
 func handleGetCoverImage(c *gin.Context) {
 	coverName := c.Param("name")
-	coverPath := filepath.Join(config.GlobalConfig.CoversDir, coverName)
+	coverPath := filepath.Join(core.GlobalConfig.CoversDir, coverName)
 
 	if _, err := os.Stat(coverPath); os.IsNotExist(err) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Cover not found"})
@@ -111,24 +117,35 @@ func handleUploadMusic(c *gin.Context) {
 
 	targetDir := c.PostForm("target_dir")
 	if targetDir == "" {
-		targetDir = config.GlobalConfig.MusicLibraryPath
+		targetDir = core.GlobalConfig.MusicLibraryPath
 	}
 
 	destPath := filepath.Join(targetDir, file.Filename)
 
-	// 忽略 Watchdog 防抖
+	cacheDir := core.GlobalConfig.CacheDir
+	if cacheDir == "" {
+		cacheDir = targetDir
+	}
+	tmpPath := filepath.Join(cacheDir, fmt.Sprintf("upload_%d_%s.part", time.Now().UnixNano(), file.Filename))
+
 	scanner.AddWatchdogIgnorePath(destPath)
 
-	if err := c.SaveUploadedFile(file, destPath); err != nil {
+	if err := c.SaveUploadedFile(file, tmpPath); err != nil {
+		_ = os.Remove(tmpPath)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
-	// 异步索引与自动刮削
+	if err := os.Rename(tmpPath, destPath); err != nil {
+		_ = os.Remove(tmpPath)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("上传落盘失败: %v", err)})
+		return
+	}
+
 	go func() {
 		s := scanner.IndexSingleFile(destPath)
 		if s != nil {
-			websocket.NotifyLibraryChanged()
+			NotifyLibraryChanged()
 		}
 	}()
 
@@ -137,7 +154,7 @@ func handleUploadMusic(c *gin.Context) {
 
 func handleNeteaseProxy(c *gin.Context) {
 	proxyPath := c.Param("path")
-	targetURL := fmt.Sprintf("%s%s", config.GlobalConfig.NeteaseAPIBase, proxyPath)
+	targetURL := fmt.Sprintf("%s%s", core.GlobalConfig.NeteaseAPIBase, proxyPath)
 	if c.Request.URL.RawQuery != "" {
 		targetURL += "?" + c.Request.URL.RawQuery
 	}
@@ -149,8 +166,8 @@ func handleNeteaseProxy(c *gin.Context) {
 	}
 
 	req.Header = c.Request.Header.Clone()
-	if config.GlobalConfig.NeteaseCookie != "" {
-		req.Header.Set("Cookie", config.GlobalConfig.NeteaseCookie)
+	if core.GlobalConfig.NeteaseCookie != "" {
+		req.Header.Set("Cookie", core.GlobalConfig.NeteaseCookie)
 	}
 
 	client := &http.Client{}

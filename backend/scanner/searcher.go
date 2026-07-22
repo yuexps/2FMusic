@@ -1,17 +1,19 @@
-package searcher
+package scanner
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"2fmusic/backend/logger"
+	"2fmusic/backend/core"
 )
 
 var httpClient = &http.Client{
@@ -49,7 +51,59 @@ func DownloadImageBytes(imgURL string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-// StringSimilarity 相似度计算 (0.0 ~ 1.0)
+// LongestCommonSubstring 最长公共子串
+func LongestCommonSubstring(str1, str2 string) int {
+	r1, r2 := []rune(str1), []rune(str2)
+	m, n := len(r1), len(r2)
+	if m == 0 || n == 0 {
+		return 0
+	}
+	dp := make([][]int, m+1)
+	for i := range dp {
+		dp[i] = make([]int, n+1)
+	}
+	maxLen := 0
+	for i := 1; i <= m; i++ {
+		for j := 1; j <= n; j++ {
+			if r1[i-1] == r2[j-1] {
+				dp[i][j] = dp[i-1][j-1] + 1
+				if dp[i][j] > maxLen {
+					maxLen = dp[i][j]
+				}
+			}
+		}
+	}
+	return maxLen
+}
+
+// CharDuplicateRate 字符交并比
+func CharDuplicateRate(str1, str2 string) float64 {
+	set1 := make(map[rune]bool)
+	set2 := make(map[rune]bool)
+	for _, r := range []rune(str1) {
+		set1[r] = true
+	}
+	for _, r := range []rune(str2) {
+		set2[r] = true
+	}
+	if len(set1) == 0 || len(set2) == 0 {
+		return 0.0
+	}
+	intersection := 0
+	unionMap := make(map[rune]bool)
+	for r := range set1 {
+		unionMap[r] = true
+		if set2[r] {
+			intersection++
+		}
+	}
+	for r := range set2 {
+		unionMap[r] = true
+	}
+	return float64(intersection) / float64(len(unionMap))
+}
+
+// StringSimilarity 文本相似度计算
 func StringSimilarity(s1, s2 string) float64 {
 	s1 = strings.ToLower(strings.TrimSpace(s1))
 	s2 = strings.ToLower(strings.TrimSpace(s2))
@@ -60,50 +114,139 @@ func StringSimilarity(s1, s2 string) float64 {
 		return 0.0
 	}
 
-	// 包含关系的基础打分
-	if strings.Contains(s1, s2) || strings.Contains(s2, s1) {
-		return 0.85
+	r1Len := float64(len([]rune(s1)))
+	lcs := float64(LongestCommonSubstring(s1, s2))
+	commonRatio := lcs / r1Len
+	if commonRatio > 1.0 {
+		commonRatio = 1.0
 	}
 
-	r1, r2 := []rune(s1), []rune(s2)
-	len1, len2 := len(r1), len(r2)
+	dupRate := CharDuplicateRate(s1, s2)
+	similarRatio := commonRatio * math.Pow(math.Sqrt(dupRate), 1.0/1.5)
+	return similarRatio
+}
 
-	matrix := make([][]int, len1+1)
-	for i := range matrix {
-		matrix[i] = make([]int, len2+1)
+var suffixBracketRegex = regexp.MustCompile(`(\([^)]+\)|（[^）]+）|\[[^\]]+\])`)
+
+// cleanSearchText 清理非开头括号后缀
+func cleanSearchText(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > 0 && !strings.HasPrefix(s, "(") && !strings.HasPrefix(s, "（") && !strings.HasPrefix(s, "[") {
+		s = suffixBracketRegex.ReplaceAllString(s, "")
+	}
+	return strings.ToLower(strings.TrimSpace(s))
+}
+
+// isExactMatch 规范化完全匹配
+func isExactMatch(title, artist, searchTitle, searchArtist string) bool {
+	cTitle := cleanSearchText(title)
+	cSearchTitle := cleanSearchText(searchTitle)
+	if cTitle == "" || cTitle != cSearchTitle {
+		return false
 	}
 
-	for i := 0; i <= len1; i++ {
-		matrix[i][0] = i
-	}
-	for j := 0; j <= len2; j++ {
-		matrix[0][j] = j
+	if artist == "" {
+		return true
 	}
 
-	for i := 1; i <= len1; i++ {
-		for j := 1; j <= len2; j++ {
-			cost := 1
-			if r1[i-1] == r2[j-1] {
-				cost = 0
+	cArtist := cleanSearchText(artist)
+	cSearchArtist := cleanSearchText(searchArtist)
+	if cSearchArtist == "" {
+		return true
+	}
+
+	return strings.Contains(cSearchArtist, cArtist) || strings.Contains(cArtist, cSearchArtist)
+}
+
+// SearchSongFastSequential 批量顺序刮削 (网易云 -> QQ -> 酷狗)
+
+func SearchSongFastSequential(title, artist, album string) map[string]interface{} {
+	if title == "" {
+		return nil
+	}
+
+	sources := []string{"netease", "qq", "kugou"}
+	var bestResult *searchResult
+	bestScore := 0.0
+
+	for _, source := range sources {
+		var list []searchResult
+		switch source {
+		case "netease":
+			list = searchNetease(title, artist)
+		case "qq":
+			list = searchQQ(title, artist)
+		case "kugou":
+			list = searchKugou(title, artist)
+		}
+
+		if len(list) == 0 {
+			continue
+		}
+
+		var currentBest *searchResult
+		currentBestScore := 0.0
+
+		for _, item := range list {
+			if isExactMatch(title, artist, item.title, item.artist) && (item.cover != "" || len(item.lyrics) > 20) {
+				return map[string]interface{}{
+					"title":  item.title,
+					"artist": item.artist,
+					"album":  item.album,
+					"lyrics": item.lyrics,
+					"cover":  item.cover,
+					"source": item.source,
+				}
 			}
-			minVal := matrix[i-1][j] + 1
-			if matrix[i][j-1]+1 < minVal {
-				minVal = matrix[i][j-1] + 1
+
+			titleScore := StringSimilarity(title, item.title)
+			artistScore := 1.0
+			if artist != "" {
+				artistScore = StringSimilarity(artist, item.artist)
 			}
-			if matrix[i-1][j-1]+cost < minVal {
-				minVal = matrix[i-1][j-1] + cost
+			albumScore := 1.0
+			if album != "" {
+				albumScore = StringSimilarity(album, item.album)
 			}
-			matrix[i][j] = minVal
+
+			score := 0.5*titleScore + 0.35*artistScore + 0.15*albumScore
+			if album != "" && strings.EqualFold(strings.TrimSpace(item.album), strings.TrimSpace(album)) {
+				score += 0.2
+			}
+			switch item.platformRank {
+			case 0:
+				score += 0.05
+			case 1:
+				score += 0.03
+			case 2:
+				score += 0.01
+			}
+
+			if score > currentBestScore {
+				currentBestScore = score
+				itemCopy := item
+				currentBest = &itemCopy
+			}
+		}
+
+		if currentBestScore > bestScore && currentBest != nil {
+			bestScore = currentBestScore
+			bestResult = currentBest
 		}
 	}
 
-	dist := matrix[len1][len2]
-	maxLen := len1
-	if len2 > maxLen {
-		maxLen = len2
+	if bestResult == nil {
+		return nil
 	}
 
-	return 1.0 - (float64(dist) / float64(maxLen))
+	return map[string]interface{}{
+		"title":  bestResult.title,
+		"artist": bestResult.artist,
+		"album":  bestResult.album,
+		"lyrics": bestResult.lyrics,
+		"cover":  bestResult.cover,
+		"source": bestResult.source,
+	}
 }
 
 // SearchSongBest 并发检索 QQ/网易云/酷狗 返回最佳匹配
@@ -139,7 +282,6 @@ func SearchSongBest(title, artist, album string) map[string]interface{} {
 		}(src)
 	}
 
-	// 限制并发等待最长 6.0 秒
 	c := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -149,7 +291,7 @@ func SearchSongBest(title, artist, album string) map[string]interface{} {
 	select {
 	case <-c:
 	case <-time.After(6 * time.Second):
-		logger.Info("刮削搜索超时 (6s)，基于已返回的结果打分排序")
+		core.Info("刮削搜索超时 (6s)，基于已返回的结果打分排序")
 	}
 
 	if len(results) == 0 {
@@ -199,7 +341,6 @@ func SearchSongBest(title, artist, album string) map[string]interface{} {
 		return scored[i].score > scored[j].score
 	})
 
-	// 选出最佳结果 (卡口 0.55)
 	var best *searchResult
 	for _, sc := range scored {
 		if sc.score > 0.55 && sc.item.cover != "" && len(sc.item.lyrics) > 50 {
@@ -263,8 +404,21 @@ func searchNetease(title, artist string) []searchResult {
 
 	var list []searchResult
 	for idx, s := range songsArr {
-		sMap, _ := s.(map[string]interface{})
-		sID := fmt.Sprintf("%.0f", sMap["id"].(float64))
+		sMap, ok := s.(map[string]interface{})
+		if !ok || sMap == nil {
+			continue
+		}
+
+		sID := ""
+		if idFloat, ok := sMap["id"].(float64); ok {
+			sID = fmt.Sprintf("%.0f", idFloat)
+		} else if idStr, ok := sMap["id"].(string); ok {
+			sID = idStr
+		}
+		if sID == "" {
+			continue
+		}
+
 		sTitle, _ := sMap["name"].(string)
 
 		sArtist := ""
@@ -281,7 +435,6 @@ func searchNetease(title, artist string) []searchResult {
 			sCover, _ = alMap["picUrl"].(string)
 		}
 
-		// 异步拉取歌词
 		lyrics := getNeteaseLyric(sID)
 
 		list = append(list, searchResult{

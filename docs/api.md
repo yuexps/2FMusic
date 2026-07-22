@@ -13,9 +13,9 @@
 - **WebSocket 握手路径**：`ws://<host>:<port>${BASE_URL}/api/ws`。
 
 ### 1.2 密码鉴权机制
-在配置了 `APP_AUTH_PASSWORD` 时，所有非白名单接口强制校验凭证。凭证支持**明文密码**或**密码 SHA-256 哈希值**。
-- **方式 A (HTTP Header)**：在 HTTP 请求头携带 `X-Password: <password_or_sha256>`。
-- **方式 B (URL Query Param)**：在 URL 查询参数中追加 `?auth=<password_or_sha256>`（常用于 HTML5 `<audio>`/播放器及 WebSocket 握手）。
+在配置了 `APP_AUTH_PASSWORD` 时，所有非白名单接口强制校验凭证。为保障传输安全，**网络中禁止传输明文密码，客户端必须统一传输密码的 SHA-256 哈希值**。
+- **方式 A (HTTP Header)**：在 HTTP 请求头携带 `X-Password: <password_sha256>`。
+- **方式 B (URL Query Param)**：在 URL 查询参数中追加 `?auth=<password_sha256>`（常用于 HTML5 `<audio>`/播放器及 WebSocket 握手）。
 
 ---
 
@@ -128,18 +128,18 @@
 - **`system/scan_library`**：触发全库增量扫描。
 
 ### 3.6 网易云音乐工具箱动作
-- **`netease/search`**：网易云在线搜歌。
+- **`netease/search`**：网易云在线搜歌，返回经过 `FormatNeteaseSongs` 归一化的 `List[NeteaseSong]`。
   - **请求 `data`**：`{"keywords": "...", "limit": 30}`
-- **`netease/resolve`**：解析网易云链接/歌单 ID/单曲 ID。
+- **`netease/resolve`**：解析网易云链接/歌单 ID/单曲 ID。返回 `{"type": "song"|"playlist", "id": "...", "name": "歌单名", "data": List[NeteaseSong]}`，曲目列表统一经 `FormatNeteaseSongs` 归一化。
   - **请求 `data`**：`{"input": "..."}`
-- **`netease/recommend`**：获取网易云每日推荐歌曲。
+- **`netease/recommend`**：获取网易云每日推荐歌曲，返回 `List[NeteaseSong]`。
   - **请求 `data`**：`{}`
 - **`netease/download`**：创建网易云下载任务 (`payload: dict`)。
 - **`netease/download_status`** / **`netease/task_status`**：获取下载任务列表。
 - **`netease/login_qrcode`** / **`netease/qr_key`**：获取登录二维码 (`unikey` & `qrimg`)。
-- **`netease/login_status`**：查询当前 Cookie 登录态与 VIP 信息。
+- **`netease/login_status`**：查询当前 Cookie 登录态与 VIP 信息。未配置 API 时返回 `{"logged_in": false, "error": "网易云 API 未配置"}`。
 - **`netease/logout`**：注销网易云账号。
-- **`netease/get_config`** / **`netease/save_config`**：读写网易云 API 根路径与下载目录配置。
+- **`netease/get_config`** / **`netease/save_config`**：读写网易云 API 根路径与下载目录配置。`api_base` 默认初始为空字符串 `""`；`save_config` 提交非空 `api_base` 时服务端将对 `${api_base}/login/status` 进行 3 秒超时连通性及 JSON 数据包特征（必须包含 `code` 或 `data` 键）校验，校验失败时拦截并返回具体错误说明；传入空串可清空配置。
 - **`netease/clear_task`** / **`netease/clear_all_tasks`**：清理已完成下载任务。
 - **`netease/check_container`** / **`netease/install_service`** / **`netease/install_status`**：Docker 容器检测与自动部署。
 

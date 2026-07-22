@@ -39,7 +39,7 @@ const loading = ref(false)
 const showError = ref(false)
 const errorMessage = ref('')
 
-// Naive UI 主题（完全还原旧版）
+// Naive UI 主题
 const themeOverrides = computed<GlobalThemeOverrides>(() => ({
   common: {
     primaryColor: '#0066cc',
@@ -58,8 +58,16 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => ({
   }
 }))
 
+// 校验当前浏览器是否支持 Web Crypto SHA-256
+function isCryptoSupported(): boolean {
+  return typeof window !== 'undefined' && !!(window.crypto && window.crypto.subtle && typeof window.crypto.subtle.digest === 'function')
+}
+
 // 异步计算 SHA-256 密码哈希
 async function sha256(message: string): Promise<string> {
+  if (!isCryptoSupported()) {
+    throw new Error('当前浏览器不支持 SHA-256 ，请升级或更换现代浏览器！')
+  }
   const msgBuffer = new TextEncoder().encode(message)
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
   const hashArray = Array.from(new Uint8Array(hashBuffer))
@@ -68,6 +76,11 @@ async function sha256(message: string): Promise<string> {
 
 const handleLogin = async (e: Event) => {
   e.preventDefault()
+  if (!isCryptoSupported()) {
+    showError.value = true
+    errorMessage.value = '当前浏览器不支持 SHA-256 ，请升级或更换现代浏览器！'
+    return
+  }
   if (!password.value) return
   loading.value = true
   showError.value = false
@@ -75,12 +88,7 @@ const handleLogin = async (e: Event) => {
 
   try {
     const hashedPassword = await sha256(password.value)
-    let res
-    try {
-      res = await client.post('/api/login', { password: hashedPassword })
-    } catch {
-      res = await client.post('/api/login', { password: password.value })
-    }
+    const res = await client.post('/api/login', { password: hashedPassword })
 
     if (res.data && res.data.success) {
       localStorage.setItem('2fmusic_password', hashedPassword)
@@ -91,7 +99,7 @@ const handleLogin = async (e: Event) => {
     }
   } catch (err: any) {
     showError.value = true
-    errorMessage.value = err?.response?.data?.error || err?.response?.data?.message || '密码不正确'
+    errorMessage.value = err?.message || err?.response?.data?.error || err?.response?.data?.message || '密码不正确'
   } finally {
     loading.value = false
   }
@@ -100,31 +108,29 @@ const handleLogin = async (e: Event) => {
 watch(() => props.show, (newVal) => {
   if (newVal) {
     password.value = ''
-    showError.value = false
-    errorMessage.value = ''
+    if (!isCryptoSupported()) {
+      showError.value = true
+      errorMessage.value = '当前浏览器不支持 SHA-256 ，请升级或更换现代浏览器！'
+    } else {
+      showError.value = false
+      errorMessage.value = ''
+    }
   }
 })
 </script>
 
 <template>
   <Transition name="fade">
-    <div
-      v-if="show"
-      class="fixed inset-0 z-99999 flex items-center justify-center p-4 bg-black/45 select-none box-border"
-    >
+    <div v-if="show"
+      class="fixed inset-0 z-99999 flex items-center justify-center p-4 bg-black/45 select-none box-border">
       <n-config-provider :theme="theme" :theme-overrides="themeOverrides">
         <div
-          class="w-[min(390px,90vw)] p-[42px_36px] rounded-xl bg-surface-glass backdrop-saturate-180 backdrop-blur-sidebar border border-border-main box-border text-ink flex flex-col gap-6 product-cover-shadow"
-        >
+          class="w-[min(390px,90vw)] p-[42px_36px] rounded-xl bg-surface-glass backdrop-saturate-180 backdrop-blur-sidebar border border-border-main box-border text-ink flex flex-col gap-6 product-cover-shadow">
           <header class="flex flex-col items-center text-center gap-2">
             <div class="flex items-center justify-center mb-2">
-              <img
-                :src="getApiUrl('/ICON.PNG')"
-                class="rounded-[14px] object-cover drop-shadow-[0_4px_12px_rgba(0,102,204,0.25)]"
-                width="60"
-                height="60"
-                alt="Logo"
-              />
+              <img :src="getApiUrl('/ICON.PNG')"
+                class="rounded-[14px] object-cover drop-shadow-[0_4px_12px_rgba(0,102,204,0.25)]" width="60" height="60"
+                alt="Logo" />
             </div>
             <h1 class="m-0 font-display text-[26px] font-bold tracking-[-0.5px]">2FMusic</h1>
             <p class="m-0 text-[13px] text-body-muted">请输入访问密码以解锁音乐库</p>
@@ -132,14 +138,8 @@ watch(() => props.show, (newVal) => {
 
           <form class="flex flex-col gap-5" @submit="handleLogin">
             <div class="form-group">
-              <n-input
-                v-model:value="password"
-                type="password"
-                show-password-on="click"
-                placeholder="请输入密码"
-                size="large"
-                autofocus
-              />
+              <n-input v-model:value="password" type="password" show-password-on="click" placeholder="请输入密码"
+                size="large" autofocus />
             </div>
 
             <div class="flex justify-start">
@@ -149,27 +149,14 @@ watch(() => props.show, (newVal) => {
             </div>
 
             <div class="mt-1">
-              <n-button
-                type="primary"
-                size="large"
-                block
-                attr-type="submit"
-                :loading="loading"
-              >
+              <n-button type="primary" size="large" block attr-type="submit" :loading="loading">
                 登录
               </n-button>
             </div>
 
-            <transition
-              enter-active-class="transition-opacity duration-200 ease"
-              enter-from-class="opacity-0"
-              leave-active-class="transition-opacity duration-200 ease"
-              leave-to-class="opacity-0"
-            >
-              <div
-                v-if="showError"
-                class="text-danger text-[13px] text-center font-medium"
-              >
+            <transition enter-active-class="transition-opacity duration-200 ease" enter-from-class="opacity-0"
+              leave-active-class="transition-opacity duration-200 ease" leave-to-class="opacity-0">
+              <div v-if="showError" class="text-danger text-[13px] text-center font-medium">
                 <span>{{ errorMessage }}</span>
               </div>
             </transition>

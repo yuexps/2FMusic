@@ -11,7 +11,7 @@
     </div>
 
     <!-- 收藏夹画廊列表 -->
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-x-4 gap-y-6">
+    <div v-auto-animate class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 gap-x-4 gap-y-6">
       <div 
         v-for="playlist in favoritesStore.playlists" 
         :key="playlist.id" 
@@ -79,6 +79,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { vAutoAnimate } from '@formkit/auto-animate/vue'
 import { useRouter } from 'vue-router'
 import { useFavoritesStore } from '../stores/favorites'
 import { NModal, NButton, NInput, NSpace, useMessage } from 'naive-ui'

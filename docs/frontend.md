@@ -20,6 +20,7 @@
 - **客户端文件**：`frontend/src/api/ws.ts`。
 - **Promise-seq 映射**：`sendRequest(action, data)` 生成自增 `seq`，转存入 `pendingRequests` Map 容器中，带 15000ms 超时控制。
 - **离线排队队列 (`offlineQueue`)**：网络断开或建连中发起的请求推入排队队列；连接就绪后自动冲刷队列 (`flush`)；阻断或注销时静默清空队列。
+- **广播路由唯一派发**：接收无 `seq` 消息时，优先取 `payload.action`（如 `scan_status`、`library_changed`），若无 `action` 则取 `payload.type`（如 `download_status`），执行唯一单次事件派发，无任何冗余分发。
 - **广播订阅与解绑红线 (Anti-Leak)**：
   > [!WARNING]
   > 在组件中通过 `wsClient.subscribe(type, callback)` 注册广播监听时，**必须在 `onUnmounted` 生命钩子中执行返回的解绑函数**，严禁内存泄露。
@@ -54,3 +55,11 @@
 
 - **主界面架构**：单一 Vue 页面主框架，配合浮层全屏播放器 overlay (`FullPlayerOverlay.vue`) 与设置弹窗 (`Settings.vue`)。
 - **路由防缓存 (ETag & Cache-Control)**：后端 HTML 页面强制写入 `Cache-Control: no-cache, no-store, must-revalidate`，确保前端改动构建后浏览器能 100% 刷入最新资源包。
+
+---
+
+## 5. UI 动效与微交互规范 (Animation & Micro-interactions)
+
+- **页面路由切替动画**：主工作区 `<router-view>` 必须使用 Vue 3 原生 `<Transition name="page-fade" mode="out-in">` 包裹，确保切页流畅、不发僵。
+- **列表/网格自动重排 (`v-auto-animate`)**：所有自定义渲染的 `v-for` 容器（如曲库卡片网格、收藏歌单列表、下载任务及挂载点列表）统一挂载 `@formkit/auto-animate` 指令，实现重排、增删时的平滑物理动画。
+- **侧边栏折叠动画**：进度条等动态增隐元素必须使用 Naive UI `<n-collapse-transition>` 包裹，提供平滑的高度收展过渡。

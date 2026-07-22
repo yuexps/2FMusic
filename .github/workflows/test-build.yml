@@ -53,10 +53,12 @@ jobs:
       - name: Build Go binaries
         run: |
           cd backend
-          echo "Building Go x86_64..."
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o 2fmusic-x86 main.go
-          echo "Building Go ARM64..."
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o 2fmusic-arm main.go
+          echo "Building Go Linux x86_64..."
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o 2fmusic-linux-x86 main.go
+          echo "Building Go Linux ARM64..."
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o 2fmusic-linux-arm main.go
+          echo "Building Go Windows x86_64..."
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o 2fmusic-windows-x86.exe main.go
 
       - name: Extract Version from Manifest
         id: version
@@ -74,8 +76,7 @@ jobs:
       - name: Build Go x86 FPK Package
         run: |
           sed -i 's/^platform.*/platform              = x86/' fn_build_x86/manifest
-          rm -rf fn_build_x86/app/*
-          cp backend/2fmusic-x86 fn_build_x86/app/2fmusic
+          cp backend/2fmusic-linux-x86 fn_build_x86/app/2fmusic
           chmod +x fn_build_x86/app/2fmusic fn_build_x86/fnpack-1.2.1-linux-amd64
           cd fn_build_x86
           ./fnpack-1.2.1-linux-amd64 build
@@ -86,8 +87,7 @@ jobs:
       - name: Build Go ARM FPK Package
         run: |
           sed -i 's/^platform.*/platform              = arm/' fn_build_arm/manifest
-          rm -rf fn_build_arm/app/*
-          cp backend/2fmusic-arm fn_build_arm/app/2fmusic
+          cp backend/2fmusic-linux-arm fn_build_arm/app/2fmusic
           chmod +x fn_build_arm/app/2fmusic fn_build_arm/fnpack-1.2.1-linux-amd64
           cd fn_build_arm
           ./fnpack-1.2.1-linux-amd64 build
@@ -95,11 +95,37 @@ jobs:
           [ -f "yuexps.2fmusic.fpk" ] && mv yuexps.2fmusic.fpk "$PKG_NAME" || { echo "Error: fpk not found!"; exit 1; }
           echo "Built: $PKG_NAME"
 
-      - name: Upload FPK Artifacts
+      - name: Upload FPK Artifact (x86)
         uses: actions/upload-artifact@v4
         with:
-          name: 2fmusic-fpk-packages
-          path: |
-            fn_build_x86/*.fpk
-            fn_build_arm/*.fpk
+          name: 2fmusic-fpk-x86
+          path: fn_build_x86/*.fpk
+          if-no-files-found: error
+
+      - name: Upload FPK Artifact (arm)
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2fmusic-fpk-arm
+          path: fn_build_arm/*.fpk
+          if-no-files-found: error
+
+      - name: Upload Binary (Linux x86)
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2fmusic-linux-x86
+          path: backend/2fmusic-linux-x86
+          if-no-files-found: error
+
+      - name: Upload Binary (Linux ARM)
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2fmusic-linux-arm
+          path: backend/2fmusic-linux-arm
+          if-no-files-found: error
+
+      - name: Upload Binary (Windows x86)
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2fmusic-win-x86
+          path: backend/2fmusic-windows-x86.exe
           if-no-files-found: error

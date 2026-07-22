@@ -187,7 +187,7 @@
             <SvgIcon name="tasks" class="text-[32px]" />
             <p class="m-0 text-[13px]">没有正在下载的任务</p>
           </div>
-          <div v-else class="flex flex-col gap-4">
+          <div v-else v-auto-animate class="flex flex-col gap-4">
             <div v-for="task in sortedTasks" :key="task.task_id"
               class="glass-card p-3 rounded-lg flex flex-col gap-2 box-border border border-border-card"
               :class="task.status">
@@ -257,6 +257,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { vAutoAnimate } from '@formkit/auto-animate/vue'
 import { useRouter } from 'vue-router'
 import { useSystemStore } from '../stores/system'
 import { NDropdown, NCheckbox, NModal, NButton, NInput, NDrawer, NDrawerContent, NProgress, NSpin, NTag, NVirtualList, NBadge, useMessage } from 'naive-ui'
@@ -580,6 +581,7 @@ let unsubscribeLoginStatus: (() => void) | null = null
 onMounted(() => {
   systemStore.fetchNeteaseConfig()
   systemStore.fetchNeteaseUserStatus()
+  systemStore.fetchSongs() // 确保本地库数据最新，isSongDownloaded 判断才准确
 
   // 初始化 WebSocket 连接
   systemStore.initWebSocket()
@@ -588,7 +590,7 @@ onMounted(() => {
   unsubscribeLoginStatus = wsClient.subscribe('netease_login_status', (data) => {
     if (!data || data.key !== qrKey.value) return
     
-    const stat = data.status // authorized, scanned, expired, waiting
+    const stat = data.status
     if (stat === 'authorized') {
       qrStatus.value = 'success'
       qrStatusText.value = '授权登录成功！'

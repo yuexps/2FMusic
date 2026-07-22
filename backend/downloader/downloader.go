@@ -1,27 +1,24 @@
 package downloader
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
-	"2fmusic/backend/config"
-	"2fmusic/backend/db"
-	"2fmusic/backend/logger"
-	"2fmusic/backend/model"
+	"2fmusic/backend/core"
 	"2fmusic/backend/scanner"
+	"2fmusic/backend/utils"
 )
 
 var (
 	BroadcastJSON        func(v interface{})
 	NotifyLibraryChanged func()
-	downloadTasks        = make(map[string]*model.DownloadTask)
+	downloadTasks        = make(map[string]*core.DownloadTask)
 	downloadTasksMu      sync.RWMutex
 )
 
@@ -32,173 +29,40 @@ func ClearTask(taskID string) {
 	delete(downloadTasks, taskID)
 }
 
-// ClearAllTasks 清理所有任务
+// ClearAllTasks 清理所有已完成与失败的任务
 func ClearAllTasks() {
 	downloadTasksMu.Lock()
 	defer downloadTasksMu.Unlock()
-	downloadTasks = make(map[string]*model.DownloadTask)
+	for id, t := range downloadTasks {
+		if t.Status == "success" || t.Status == "error" {
+			delete(downloadTasks, id)
+		}
+	}
 }
 
-// GetTasks 获取所有下载任务
-func GetTasks() []model.DownloadTask {
+// GetTasks 获取所有下载任务状态
+func GetTasks() []core.DownloadTask {
 	downloadTasksMu.RLock()
 	defer downloadTasksMu.RUnlock()
 
-	var list []model.DownloadTask
+	list := make([]core.DownloadTask, 0, len(downloadTasks))
 	for _, t := range downloadTasks {
 		list = append(list, *t)
 	}
 	return list
 }
 
-// CallNeteaseAPI 核心透传请求 NCM API 服务
-func CallNeteaseAPI(apiPath string, params map[string]string) (map[string]interface{}, error) {
-	apiBase := config.GlobalConfig.NeteaseAPIBase
-	if apiBase == "" {
-		apiBase = "http://localhost:23236"
-	}
-
-	u, err := url.Parse(apiBase + apiPath)
-	if err != nil {
-		return nil, err
-	}
-
-	q := u.Query()
-	for k, v := range params {
-		q.Set(k, v)
-	}
-	u.RawQuery = q.Encode()
-
-	req, err := http.NewRequest("GET", u.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if config.GlobalConfig.NeteaseCookie != "" {
-		req.Header.Set("Cookie", config.GlobalConfig.NeteaseCookie)
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0")
-
-	client := &http.Client{Timeout: 8 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-// GetNeteaseQRKeyAndImage 申请真正的网易云扫码 unikey 和 二维码 base64
-func GetNeteaseQRKeyAndImage() (string, string, error) {
-	timestamp := fmt.Sprintf("%d", time.Now().UnixNano()/1e6)
-	keyRes, err := CallNeteaseAPI("/login/qr/key", map[string]string{"timestamp": timestamp})
-	if err != nil {
-		return "", "", err
-	}
-
-	dataMap, _ := keyRes["data"].(map[string]interface{})
-	unikey, _ := dataMap["unikey"].(string)
-	if unikey == "" {
-		return "", "", fmt.Errorf("failed to get unikey from netease api")
-	}
-
-	imgRes, err := CallNeteaseAPI("/login/qr/create", map[string]string{"key": unikey, "qrimg": "1", "timestamp": timestamp})
-	if err != nil {
-		return "", "", err
-	}
-
-	imgDataMap, _ := imgRes["data"].(map[string]interface{})
-	qrimg, _ := imgDataMap["qrimg"].(string)
-
-	// 启动协程后台轮询检测
-	go PollNeteaseQRStatus(unikey)
-
-	return unikey, qrimg, nil
-}
-
-// PollNeteaseQRStatus 轮询检查扫码登录结果并持久化 Cookie
-func PollNeteaseQRStatus(unikey string) {
-	logger.Info("启动网易云扫码轮询协程: unikey=%s", unikey)
-	maxDuration := 300 * time.Second
-	startTime := time.Now()
-
-	for time.Since(startTime) < maxDuration {
-		timestamp := fmt.Sprintf("%d", time.Now().UnixNano()/1e6)
-		res, err := CallNeteaseAPI("/login/qr/check", map[string]string{"key": unikey, "timestamp": timestamp})
-		if err == nil {
-			codeFloat, _ := res["code"].(float64)
-			code := int(codeFloat)
-			cookieStr, _ := res["cookie"].(string)
-
-			if BroadcastJSON != nil {
-				BroadcastJSON(map[string]interface{}{
-					"type":   "broadcast",
-					"action": "netease_login_status",
-					"data": map[string]interface{}{
-						"key":     unikey,
-						"code":    code,
-						"message": res["message"],
-					},
-				})
-			}
-
-			if code == 803 && cookieStr != "" {
-				_ = db.SaveSystemSetting("netease_cookie", cookieStr)
-				logger.Info("网易云扫码授权成功, Cookie 已保存 (unikey=%s)", unikey)
-				break
-			}
-			if code == 800 {
-				logger.Info("网易云二维码已过期 (unikey=%s)", unikey)
-				break
-			}
-		}
-
-		time.Sleep(2 * time.Second)
-	}
-}
-
-// GetNeteaseLoginStatus 真实验证登录状态
-func GetNeteaseLoginStatus() (map[string]interface{}, error) {
-	if config.GlobalConfig.NeteaseCookie == "" {
-		return map[string]interface{}{"logged_in": false, "error": "未登录"}, nil
-	}
-
-	timestamp := fmt.Sprintf("%d", time.Now().UnixNano()/1e6)
-	res, err := CallNeteaseAPI("/login/status", map[string]string{"timestamp": timestamp})
-	if err != nil {
-		return nil, err
-	}
-
-	dataMap, _ := res["data"].(map[string]interface{})
-	profile, _ := dataMap["profile"].(map[string]interface{})
-	if profile != nil {
-		return map[string]interface{}{
-			"logged_in": true,
-			"nickname":  profile["nickname"],
-			"user_id":   profile["userId"],
-			"avatar":    profile["avatarUrl"],
-		}, nil
-	}
-
-	return map[string]interface{}{"logged_in": false, "error": "未登录"}, nil
-}
-
 // StartNeteaseDownload 发起网易云在线下载任务
 func StartNeteaseDownload(songID, title, artist, album, level string) string {
 	taskID := fmt.Sprintf("dl_%s_%d", songID, time.Now().UnixNano())
 
-	task := &model.DownloadTask{
+	task := &core.DownloadTask{
 		TaskID:    taskID,
 		SongID:    songID,
 		Title:     title,
 		Artist:    artist,
 		Album:     album,
+		Level:     level,
 		Progress:  0,
 		Status:    "pending",
 		CreatedAt: float64(time.Now().UnixNano()) / 1e9,
@@ -208,22 +72,59 @@ func StartNeteaseDownload(songID, title, artist, album, level string) string {
 	downloadTasks[taskID] = task
 	downloadTasksMu.Unlock()
 
+	core.Info("创建网易云下载任务: %s - %s (Level=%s, TaskID=%s)", title, artist, level, taskID)
+
 	go executeDownload(task, level)
 	return taskID
 }
 
 // executeDownload 执行下载状态机流转
-func executeDownload(task *model.DownloadTask, level string) {
+func executeDownload(task *core.DownloadTask, level string) {
 	updateTaskStatus(task.TaskID, "preparing", 0, "")
 
-	if level == "" {
-		level = "lossless"
+	if task.Title == "" || level == "" {
+		metaResp, err := CallNeteaseAPI("/song/detail", map[string]string{"ids": task.SongID})
+		if err == nil {
+			if songs, ok := metaResp["songs"].([]interface{}); ok && len(songs) > 0 {
+				if info, ok := songs[0].(map[string]interface{}); ok {
+					if task.Title == "" {
+						if n, ok := info["name"].(string); ok {
+							task.Title = n
+						}
+					}
+					if task.Artist == "" || task.Artist == "未知艺术家" {
+						if arList, ok := info["ar"].([]interface{}); ok && len(arList) > 0 {
+							names := []string{}
+							for _, ar := range arList {
+								if arMap, ok := ar.(map[string]interface{}); ok {
+									if n, ok := arMap["name"].(string); ok && n != "" {
+										names = append(names, n)
+									}
+								}
+							}
+							if len(names) > 0 {
+								task.Artist = strings.Join(names, " / ")
+							}
+						}
+					}
+					if level == "" {
+						if priv, ok := info["privilege"].(map[string]interface{}); ok {
+							_, maxL := extractSongLevel(priv)
+							level = maxL
+						}
+					}
+				}
+			}
+		}
 	}
 
-	// 获取在线音频地址
+	if level == "" {
+		level = "exhigh"
+	}
+
 	playURL := fetchNeteaseSongURL(task.SongID, level)
 	if playURL == "" && level != "standard" {
-		logger.Info("音质 %s 获取失败，自动回退到 standard 音质重试", level)
+		core.Info("音质 %s 获取失败，自动回退到 standard 音质重试", level)
 		playURL = fetchNeteaseSongURL(task.SongID, "standard")
 	}
 
@@ -232,7 +133,6 @@ func executeDownload(task *model.DownloadTask, level string) {
 		return
 	}
 
-	// 流式下载临时文件
 	updateTaskStatus(task.TaskID, "downloading", 5, "")
 
 	ext := ".mp3"
@@ -245,17 +145,20 @@ func executeDownload(task *model.DownloadTask, level string) {
 		fileName = fmt.Sprintf("%s%s", task.Title, ext)
 	}
 
-	targetDir := config.GlobalConfig.NeteaseDownloadDir
+	targetDir := core.GlobalConfig.NeteaseDownloadDir
 	if targetDir == "" {
-		targetDir = config.GlobalConfig.MusicLibraryPath
+		targetDir = core.GlobalConfig.MusicLibraryPath
 	}
 
-	partPath := filepath.Join(targetDir, fileName+".part")
+	cacheDir := core.GlobalConfig.CacheDir
+	if cacheDir == "" {
+		cacheDir = targetDir
+	}
+
+	partPath := filepath.Join(cacheDir, fmt.Sprintf("dl_%s%s.part", task.TaskID, ext))
 	finalPath := filepath.Join(targetDir, fileName)
 
-	// 标记物理 Watchdog/fsnotify 忽略 (包含 .part 临时文件与最终目标路径)
-	scanner.AddWatchdogIgnorePath(partPath)
-	scanner.AddWatchdogIgnorePath(finalPath)
+	// 移除 Watchdog Ignore 限制，以便物理文件移入 NetEase 目录后触发自动感应入库
 
 	req, err := http.NewRequest("GET", playURL, nil)
 	if err != nil {
@@ -284,14 +187,30 @@ func executeDownload(task *model.DownloadTask, level string) {
 		return
 	}
 
+	buf := make([]byte, 128*1024)
 	var downloaded int64
+	lastProg := -1
+	lastBroadcast := time.Now()
 
 	for {
-		n, err := out.ReadFrom(io.LimitReader(resp.Body, 8192))
-		downloaded += n
-		if totalSize > 0 {
-			prog := int(float64(downloaded) / float64(totalSize) * 90)
-			updateTaskStatus(task.TaskID, "downloading", 5+prog, "")
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			_, wErr := out.Write(buf[:n])
+			if wErr != nil {
+				out.Close()
+				_ = os.Remove(partPath)
+				updateTaskStatus(task.TaskID, "error", 0, fmt.Sprintf("写入文件失败: %v", wErr))
+				return
+			}
+			downloaded += int64(n)
+			if totalSize > 0 {
+				prog := int(float64(downloaded) / float64(totalSize) * 85)
+				if prog != lastProg && time.Since(lastBroadcast) >= 100*time.Millisecond {
+					lastProg = prog
+					lastBroadcast = time.Now()
+					updateTaskStatus(task.TaskID, "downloading", 5+prog, "")
+				}
+			}
 		}
 
 		if err != nil {
@@ -306,18 +225,34 @@ func executeDownload(task *model.DownloadTask, level string) {
 	}
 	out.Close()
 
-	// 物理移除 .part
-	if err := os.Rename(partPath, finalPath); err != nil {
-		updateTaskStatus(task.TaskID, "error", 0, err.Error())
+	// 闭合下载流后，将 .part 临时文件重命名为带有真实后缀 (.mp3/.flac) 的缓存临时文件
+	tempAudioPath := strings.TrimSuffix(partPath, ".part")
+	if err := os.Rename(partPath, tempAudioPath); err != nil {
+		tempAudioPath = partPath
+	}
+
+	// 拉取网易云歌词 (优先 YRC 逐字歌词) 与封面图片
+	updateTaskStatus(task.TaskID, "downloading", 92, "")
+	lyrics := fetchNeteaseLyric(task.SongID)
+	var coverBytes []byte
+	if coverURL := fetchNeteaseCoverURL(task.SongID); coverURL != "" {
+		if cBytes, err := scanner.DownloadImageBytes(coverURL); err == nil {
+			coverBytes = cBytes
+		}
+	}
+
+	// 在 .cache 临时目录下将元数据、封面及歌词直接内嵌写入音频文件
+	updateTaskStatus(task.TaskID, "downloading", 96, "")
+	if err := utils.EmbedAudioMetadata(tempAudioPath, task.Title, task.Artist, task.Album, task.Artist, coverBytes, lyrics); err != nil {
+		core.Warn("内嵌音频元数据失败: %v", err)
+	}
+
+	// 将完成内嵌的物理音频文件移动至最终 NetEase 存储路径
+	if err := os.Rename(tempAudioPath, finalPath); err != nil {
+		_ = os.Remove(tempAudioPath)
+		updateTaskStatus(task.TaskID, "error", 0, fmt.Sprintf("文件落盘失败: %v", err))
 		return
 	}
-
-	// 物理单文件入库
-	s := scanner.IndexSingleFile(finalPath)
-	if s != nil && NotifyLibraryChanged != nil {
-		NotifyLibraryChanged()
-	}
-
 	updateTaskStatus(task.TaskID, "success", 100, "")
 }
 
@@ -329,35 +264,25 @@ func updateTaskStatus(taskID, status string, progress int, errMsg string) {
 		t.Status = status
 		t.Progress = progress
 		t.Error = errMsg
+
+		switch status {
+		case "success":
+			core.Info("网易云下载任务成功落盘: %s - %s", t.Title, t.Artist)
+		case "error":
+			core.Error("网易云下载任务异常终止: %s - %s (原因: %s)", t.Title, t.Artist, errMsg)
+		}
 	}
 	downloadTasksMu.Unlock()
 
 	if exists && BroadcastJSON != nil {
 		BroadcastJSON(map[string]interface{}{
 			"type":   "broadcast",
-			"action": "download_progress",
+			"action": "download_status",
 			"data":   t,
 		})
+		// 下载成功后通知库变更，触发前端刷新歌曲列表
+		if status == "success" && NotifyLibraryChanged != nil {
+			NotifyLibraryChanged()
+		}
 	}
-}
-
-// fetchNeteaseSongURL 从本地/外置 NCM API 拉取在线音频链接
-func fetchNeteaseSongURL(songID, level string) string {
-	res, err := CallNeteaseAPI("/song/url/v1", map[string]string{"id": songID, "level": level})
-	if err != nil {
-		return ""
-	}
-
-	dataArr, ok := res["data"].([]interface{})
-	if !ok || len(dataArr) == 0 {
-		return ""
-	}
-
-	firstItem, ok := dataArr[0].(map[string]interface{})
-	if !ok {
-		return ""
-	}
-
-	playURL, _ := firstItem["url"].(string)
-	return playURL
 }

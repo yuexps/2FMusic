@@ -426,7 +426,11 @@ onUnmounted(() => {
             </header>
 
             <div class="flex-1 min-h-0 box-border main-scroll overflow-y-auto p-[24px_28px] max-md:p-[16px_12px]">
-              <router-view />
+              <router-view v-slot="{ Component }">
+                <transition name="page-fade" mode="out-in">
+                  <component :is="Component" />
+                </transition>
+              </router-view>
             </div>
 
             <PlayerBar @open-lyrics="showLyricsOverlay = true" />

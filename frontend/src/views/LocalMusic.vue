@@ -212,7 +212,7 @@
         <!-- 2. 歌手网格视图 -->
         <template v-else-if="viewMode === 'artist'">
           <div class="flex-1 overflow-y-auto min-h-0 p-1">
-            <div class="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6 max-md:grid-cols-[repeat(auto-fill,minmax(100px,1fr))] max-md:gap-4">
+            <div v-auto-animate class="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6 max-md:grid-cols-[repeat(auto-fill,minmax(100px,1fr))] max-md:gap-4">
               <div v-for="artist in artistsGroup" :key="artist.name"
                 class="group flex flex-col items-center text-center cursor-pointer select-none transition-all duration-300"
                 @click="openGroupDetail(artist.name, '歌手', artist.songs, artist.cover)">
@@ -238,7 +238,7 @@
         <!-- 3. 专辑网格视图 -->
         <template v-else-if="viewMode === 'album'">
           <div class="flex-1 overflow-y-auto min-h-0 p-1">
-            <div class="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-6 max-md:grid-cols-[repeat(auto-fill,minmax(110px,1fr))] max-md:gap-4">
+            <div v-auto-animate class="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-6 max-md:grid-cols-[repeat(auto-fill,minmax(110px,1fr))] max-md:gap-4">
               <div v-for="album in albumsGroup" :key="album.albumName"
                 class="group flex flex-col cursor-pointer select-none transition-all duration-300"
                 @click="openGroupDetail(album.albumName, album.artist, album.songs, album.cover)">
@@ -489,6 +489,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { vAutoAnimate } from '@formkit/auto-animate/vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSystemStore } from '../stores/system'
 import { usePlayerStore } from '../stores/player'

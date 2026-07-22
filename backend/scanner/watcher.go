@@ -7,9 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"2fmusic/backend/config"
+	"2fmusic/backend/core"
 	"2fmusic/backend/db"
-	"2fmusic/backend/logger"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -60,12 +59,16 @@ func RefreshWatchPaths() {
 		return
 	}
 
-	pathsToWatch := []string{config.GlobalConfig.MusicLibraryPath}
+	pathsToWatch := []string{core.GlobalConfig.MusicLibraryPath}
 	mounts, err := db.GetMountPoints()
 	if err == nil {
 		for _, m := range mounts {
 			pathsToWatch = append(pathsToWatch, m.Path)
 		}
+	}
+	// 自定义下载单独加入监听
+	if d := core.GlobalConfig.NeteaseDownloadDir; d != "" {
+		pathsToWatch = append(pathsToWatch, d)
 	}
 
 	for _, p := range pathsToWatch {
@@ -78,14 +81,10 @@ func RefreshWatchPaths() {
 	}
 }
 
-// watchLoop 处理物理事件并执行 2.0s 防抖 + 1.0s 文件稳定判定
+// watchLoop 处理文件事件
 func watchLoop() {
-	timers := make(map[string]*time.Timer)
-	lastSizes := make(map[string]int64)
-	var mu sync.Mutex
-
-	audioExts := map[string]bool{".mp3": true, ".wav": true, ".ogg": true, ".flac": true, ".aac": true, ".m4a": true}
-	miscExts := map[string]bool{".lrc": true, ".yrc": true, ".jpg": true, ".jpeg": true, ".png": true, ".webp": true}
+	audioExts := core.AudioExtsMap
+	miscExts := core.MiscExtsMap
 
 	for {
 		select {
@@ -112,82 +111,35 @@ func watchLoop() {
 				continue
 			}
 
-			targetFile := event.Name
-
-			mu.Lock()
-			if t, exists := timers[targetFile]; exists {
-				t.Stop()
-			}
-
-			// 单文件防抖消费处理 (完全对齐 Python 原版 _execute_watchdog_event)
-			executeWatchdogSync := func(path string) {
-				fExt := strings.ToLower(filepath.Ext(path))
-				if audioExts[fExt] {
-					fi, err := os.Stat(path)
-					if err == nil && !fi.IsDir() {
-						logger.Info("Watchdog 物理更新单曲: %s", filepath.Base(path))
-						IndexSingleFile(path)
-					} else {
-						logger.Info("Watchdog 物理移除单曲: %s", filepath.Base(path))
-						_ = db.DeleteSongByPath(path)
-					}
-				} else if miscExts[fExt] {
-					basePath := strings.TrimSuffix(path, filepath.Ext(path))
-					for audExt := range audioExts {
-						audPath := basePath + audExt
-						if fi, err := os.Stat(audPath); err == nil && !fi.IsDir() {
-							IndexSingleFile(audPath)
-						}
+			path := event.Name
+			fExt := strings.ToLower(filepath.Ext(path))
+			if audioExts[fExt] {
+				fi, err := os.Stat(path)
+				if err == nil && !fi.IsDir() {
+					core.Info("[Watcher] 文件变动 新增: %s", filepath.Base(path))
+					IndexSingleFile(path)
+				} else {
+					core.Info("[Watcher] 文件变动 删除: %s", filepath.Base(path))
+					_ = db.DeleteSongByPath(path)
+				}
+			} else if miscExts[fExt] {
+				basePath := strings.TrimSuffix(path, filepath.Ext(path))
+				for audExt := range audioExts {
+					audPath := basePath + audExt
+					if fi, err := os.Stat(audPath); err == nil && !fi.IsDir() {
+						IndexSingleFile(audPath)
 					}
 				}
-				if NotifyLibraryChanged != nil {
-					NotifyLibraryChanged()
-				}
 			}
-
-			timers[targetFile] = time.AfterFunc(2000*time.Millisecond, func() {
-				// 判定文件稳定度
-				fi, err := os.Stat(targetFile)
-				if err != nil {
-					// 物理删除事件
-					executeWatchdogSync(targetFile)
-					mu.Lock()
-					delete(timers, targetFile)
-					delete(lastSizes, targetFile)
-					mu.Unlock()
-					return
-				}
-
-				currentSize := fi.Size()
-				mu.Lock()
-				prevSize, exists := lastSizes[targetFile]
-				if exists && currentSize != prevSize {
-					// 大小还在物理写入中，追加 1.0 秒自适应延迟
-					lastSizes[targetFile] = currentSize
-					timers[targetFile] = time.AfterFunc(1000*time.Millisecond, func() {
-						executeWatchdogSync(targetFile)
-					})
-					mu.Unlock()
-					return
-				}
-
-				lastSizes[targetFile] = currentSize
-				mu.Unlock()
-
-				executeWatchdogSync(targetFile)
-
-				mu.Lock()
-				delete(timers, targetFile)
-				delete(lastSizes, targetFile)
-				mu.Unlock()
-			})
-			mu.Unlock()
+			if NotifyLibraryChanged != nil {
+				NotifyLibraryChanged()
+			}
 
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				return
 			}
-			logger.Error("Watcher 错误: %v", err)
+			core.Error("Watcher 错误: %v", err)
 		}
 	}
 }

@@ -2,22 +2,19 @@ package scanner
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	"2fmusic/backend/config"
+	"2fmusic/backend/core"
 	"2fmusic/backend/db"
-	"2fmusic/backend/logger"
-	"2fmusic/backend/model"
-	"2fmusic/backend/searcher"
 )
 
 var (
 	NotifyLibraryChanged func()
+	BroadcastScanStatus  func(scanning, isScraping bool, total, processed, failed int, currentFile, currentPath string)
 	scanExecutionLock    sync.Mutex
 	isScanningVal        bool
 	isScrapingVal        bool
@@ -27,7 +24,36 @@ var (
 	currentFileVal       string
 	currentPathVal       string
 	statusMu             sync.RWMutex
+	lastBroadcastTime    time.Time
+	lastBroadcastMu      sync.Mutex
 )
+
+func triggerStatusBroadcast() {
+	if BroadcastScanStatus == nil {
+		return
+	}
+
+	lastBroadcastMu.Lock()
+	now := time.Now()
+	if now.Sub(lastBroadcastTime) < 200*time.Millisecond {
+		lastBroadcastMu.Unlock()
+		return
+	}
+	lastBroadcastTime = now
+	lastBroadcastMu.Unlock()
+
+	statusMu.RLock()
+	scanning := isScanningVal
+	isScraping := isScrapingVal
+	total := totalFilesVal
+	processed := processedFilesVal
+	failed := failedFilesVal
+	currentFile := currentFileVal
+	currentPath := currentPathVal
+	statusMu.RUnlock()
+
+	BroadcastScanStatus(scanning, isScraping, total, processed, failed, currentFile, currentPath)
+}
 
 // IsScanning 是否处于物理扫描中
 func IsScanning() bool {
@@ -78,11 +104,14 @@ func GetCurrentPath() string {
 	return currentPathVal
 }
 
-// CleanTempPartFiles 启动级残留临时 .part 文件物理清理
+// CleanTempPartFiles 清理残留的 .part 与 .tmp 临时文件
 func CleanTempPartFiles() {
-	dirs := []string{config.GlobalConfig.MusicLibraryPath}
-	if config.GlobalConfig.NeteaseDownloadDir != "" {
-		dirs = append(dirs, config.GlobalConfig.NeteaseDownloadDir)
+	dirs := []string{core.GlobalConfig.MusicLibraryPath}
+	if core.GlobalConfig.CacheDir != "" {
+		dirs = append(dirs, core.GlobalConfig.CacheDir)
+	}
+	if core.GlobalConfig.NeteaseDownloadDir != "" {
+		dirs = append(dirs, core.GlobalConfig.NeteaseDownloadDir)
 	}
 	mounts, err := db.GetMountPoints()
 	if err == nil {
@@ -91,19 +120,24 @@ func CleanTempPartFiles() {
 		}
 	}
 
+	oldLock := filepath.Join(core.GlobalConfig.MusicLibraryPath, ".scan_lock")
+	_ = os.Remove(oldLock)
+
 	cleanedCount := 0
 	for _, dir := range dirs {
 		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-			if err == nil && !info.IsDir() && strings.HasSuffix(path, ".part") {
-				if os.Remove(path) == nil {
-					cleanedCount++
+			if err == nil && !info.IsDir() {
+				if strings.HasSuffix(path, ".part") || strings.HasSuffix(path, ".tmp") {
+					if os.Remove(path) == nil {
+						cleanedCount++
+					}
 				}
 			}
 			return nil
 		})
 	}
 	if cleanedCount > 0 {
-		logger.Info("启动清理: 物理清除 %d 个 .part 临时下载碎片文件", cleanedCount)
+		core.Info("启动清理: 物理清除 %d 个 .part/.tmp 临时碎片文件", cleanedCount)
 	}
 }
 
@@ -112,33 +146,36 @@ func TriggerScan() {
 	go ScanLibraryIncremental()
 }
 
-// ScanLibraryIncremental 全量/增量物理扫描引擎
+// ScanLibraryIncremental 全量/增量扫描
 func ScanLibraryIncremental() {
 	ScanDirectoryInternal("")
 }
 
-// ScanDirectorySingle 针对单个挂载目录的增量物理扫描引擎
+// ScanDirectorySingle 针对单个挂载目录的扫描
 func ScanDirectorySingle(targetDir string) {
 	ScanDirectoryInternal(targetDir)
 }
 
-// ScanDirectoryInternal 通用物理扫描核心逻辑
+// ScanDirectoryInternal 通用扫描逻辑
 func ScanDirectoryInternal(targetDir string) {
 	if !scanExecutionLock.TryLock() {
-		logger.Info("另一次物理扫描正在运行中，跳过本次扫描")
+		core.Info("另一次物理扫描正在运行中，跳过本次扫描")
 		return
 	}
 	defer scanExecutionLock.Unlock()
 
-	// 物理锁校验
-	lockFile := filepath.Join(config.GlobalConfig.MusicLibraryPath, ".scan_lock")
+	cacheDir := core.GlobalConfig.CacheDir
+	if cacheDir == "" {
+		cacheDir = core.GlobalConfig.MusicLibraryPath
+	}
+	lockFile := filepath.Join(cacheDir, ".scan_lock")
 	fi, err := os.Stat(lockFile)
 	if err == nil {
 		if time.Since(fi.ModTime()) > 5*time.Minute {
-			logger.Info("发现超过 5 分钟的过期 .scan_lock，自动清除自愈")
+			core.Info("发现超过 5 分钟的过期 .scan_lock，自动清除自愈")
 			_ = os.Remove(lockFile)
 		} else {
-			logger.Info("存在活跃的 .scan_lock，取消本次扫描")
+			core.Info("存在活跃的 .scan_lock，取消本次扫描")
 			return
 		}
 	}
@@ -153,6 +190,7 @@ func ScanDirectoryInternal(targetDir string) {
 	processedFilesVal = 0
 	totalFilesVal = 0
 	statusMu.Unlock()
+	triggerStatusBroadcast()
 
 	defer func() {
 		statusMu.Lock()
@@ -160,15 +198,20 @@ func ScanDirectoryInternal(targetDir string) {
 		currentFileVal = ""
 		currentPathVal = ""
 		statusMu.Unlock()
+		triggerStatusBroadcast()
 	}()
 
-	logger.Info("开始物理扫描曲库 (targetDir=%s)", targetDir)
+	if targetDir != "" {
+		core.Info("开始物理扫描曲库 (targetDir=%s)", targetDir)
+	} else {
+		core.Info("开始物理扫描曲库 (全量扫描)")
+	}
 
 	scanDirs := []string{}
 	if targetDir != "" {
 		scanDirs = append(scanDirs, targetDir)
 	} else {
-		scanDirs = append(scanDirs, config.GlobalConfig.MusicLibraryPath)
+		scanDirs = append(scanDirs, core.GlobalConfig.MusicLibraryPath)
 		mounts, err := db.GetMountPoints()
 		if err == nil {
 			for _, m := range mounts {
@@ -179,10 +222,6 @@ func ScanDirectoryInternal(targetDir string) {
 		}
 	}
 
-	// 严谨恢复为 Python 原版 AUDIO_EXTS 标准 6 种音频格式
-	validExts := map[string]bool{
-		".mp3": true, ".wav": true, ".ogg": true, ".flac": true, ".aac": true, ".m4a": true,
-	}
 	diskPaths := make(map[string]bool)
 
 	for _, dir := range scanDirs {
@@ -202,8 +241,7 @@ func ScanDirectoryInternal(targetDir string) {
 				}
 				return nil
 			}
-			ext := strings.ToLower(filepath.Ext(path))
-			if validExts[ext] {
+			if core.IsAudioFile(path) {
 				diskPaths[path] = true
 				statusMu.Lock()
 				processedFilesVal++
@@ -212,6 +250,7 @@ func ScanDirectoryInternal(targetDir string) {
 				currentPathVal = path
 				statusMu.Unlock()
 
+				triggerStatusBroadcast()
 				IndexSingleFile(path)
 			}
 			return nil
@@ -219,7 +258,7 @@ func ScanDirectoryInternal(targetDir string) {
 	}
 
 	cleanedCount := db.CleanStaleSongs(diskPaths)
-	logger.Info("物理扫描完成: 共扫描 %d 首有效曲目，物理清理 %d 条失效记录", len(diskPaths), cleanedCount)
+	core.Info("物理扫描完成: 共扫描 %d 首有效曲目，物理清理 %d 条失效记录", len(diskPaths), cleanedCount)
 
 	// 主动通知 WebSocket 客户端曲库已更新
 	if NotifyLibraryChanged != nil {
@@ -234,7 +273,7 @@ func ScanDirectoryInternal(targetDir string) {
 func AutoScrapeMissingMetadata(targetDir ...string) {
 	filterDir := ""
 	if len(targetDir) > 0 && targetDir[0] != "" {
-		filterDir = config.NormalizePath(targetDir[0])
+		filterDir = core.NormalizePath(targetDir[0])
 	}
 
 	statusMu.Lock()
@@ -243,6 +282,7 @@ func AutoScrapeMissingMetadata(targetDir ...string) {
 	totalFilesVal = 0
 	failedFilesVal = 0
 	statusMu.Unlock()
+	triggerStatusBroadcast()
 
 	defer func() {
 		statusMu.Lock()
@@ -250,6 +290,7 @@ func AutoScrapeMissingMetadata(targetDir ...string) {
 		currentFileVal = ""
 		currentPathVal = ""
 		statusMu.Unlock()
+		triggerStatusBroadcast()
 
 		if NotifyLibraryChanged != nil {
 			NotifyLibraryChanged()
@@ -264,8 +305,8 @@ func AutoScrapeMissingMetadata(targetDir ...string) {
 	if filterDir != "" {
 		// 若指定了目标目录，重置该目录下所有歌曲的重试次数
 		for _, s := range songs {
-			if strings.HasPrefix(config.NormalizePath(s.Path), filterDir) {
-				_ = db.SaveSong(&model.Song{
+			if strings.HasPrefix(core.NormalizePath(s.Path), filterDir) {
+				_ = db.SaveSong(&core.Song{
 					ID:                s.ID,
 					Path:              s.Path,
 					Filename:          s.Filename,
@@ -284,12 +325,16 @@ func AutoScrapeMissingMetadata(targetDir ...string) {
 		songs, _ = db.GetAllSongs()
 	}
 
-	var songsToScrape []model.Song
+	var songsToScrape []core.Song
 	for _, s := range songs {
-		if filterDir != "" && !strings.HasPrefix(config.NormalizePath(s.Path), filterDir) {
+		if filterDir != "" && !strings.HasPrefix(core.NormalizePath(s.Path), filterDir) {
 			continue
 		}
 		if s.ScrapeRetryCount >= 3 {
+			continue
+		}
+		if IsNeteaseDownloadFile(s.Path) {
+			// 网易云下载目录隔离刮削
 			continue
 		}
 		if s.HasCover && s.HasLyrics {
@@ -303,19 +348,21 @@ func AutoScrapeMissingMetadata(targetDir ...string) {
 	processedFilesVal = 0
 	failedFilesVal = 0
 	statusMu.Unlock()
+	triggerStatusBroadcast()
 
-	logger.Info("发现 %d 首曲目需要刮削封面与歌词，开始并发拉取...", len(songsToScrape))
+	core.Info("发现 %d 首曲目需要刮削封面与歌词，开始并发拉取...", len(songsToScrape))
 
 	semaphore := make(chan struct{}, 5)
 	var wg sync.WaitGroup
 	for _, s := range songsToScrape {
 		semaphore <- struct{}{}
 		wg.Add(1)
-		go func(song model.Song) {
+		go func(song core.Song) {
 			defer func() {
 				statusMu.Lock()
 				processedFilesVal++
 				statusMu.Unlock()
+				triggerStatusBroadcast()
 				<-semaphore
 				wg.Done()
 			}()
@@ -324,14 +371,15 @@ func AutoScrapeMissingMetadata(targetDir ...string) {
 			currentFileVal = filepath.Base(song.Path)
 			currentPathVal = song.Path
 			statusMu.Unlock()
+			triggerStatusBroadcast()
 
-			logger.Info("正在在线刮削元数据: %s - %s", song.Artist, song.Title)
-			best := searcher.SearchSongBest(song.Title, song.Artist, song.Album)
+			core.Info("正在在线刮削元数据: %s - %s", song.Artist, song.Title)
+			best := SearchSongFastSequential(song.Title, song.Artist, song.Album)
 			if best != nil {
 				updated := false
 				if !song.HasCover {
 					if coverURL, ok := best["cover"].(string); ok && coverURL != "" {
-						imgData, err := searcher.DownloadImageBytes(coverURL)
+						imgData, err := DownloadImageBytes(coverURL)
 						if err == nil && SaveCoverWebP(imgData, song.ID) {
 							song.HasCover = true
 							updated = true
@@ -339,15 +387,38 @@ func AutoScrapeMissingMetadata(targetDir ...string) {
 					}
 				}
 				if !song.HasLyrics {
-					if lyrics, ok := best["lyrics"].(string); ok && lyrics != "" {
-						_ = os.WriteFile(filepath.Join(config.GlobalConfig.LyricsDir, song.ID+".lrc"), []byte(lyrics), 0644)
-						song.HasLyrics = true
-						updated = true
+					lyricsPref := strings.ToLower(core.GlobalConfig.LyricsPreference)
+					embeddedHandled := false
+					if lyricsPref != "network" { // 优先内嵌或默认
+						if _, _, embeddedLyrics, err := ExtractAudioMetadata(song.Path); err == nil && embeddedLyrics != "" {
+							lrcPath := filepath.Join(core.GlobalConfig.LyricsDir, song.ID+".lrc")
+							if saveLyricsFile(lrcPath, []byte(embeddedLyrics)) {
+								song.HasLyrics = true
+								updated = true
+								embeddedHandled = true
+							}
+						}
+					}
+					if !embeddedHandled {
+						if lyrics, ok := best["lyrics"].(string); ok && lyrics != "" {
+							_ = os.WriteFile(filepath.Join(core.GlobalConfig.LyricsDir, song.ID+".lrc"), []byte(lyrics), 0644)
+							song.HasLyrics = true
+							updated = true
+						} else if lyricsPref == "network" {
+							// 优先网络但网络源无歌词时，退避解出内嵌歌词
+							if _, _, embeddedLyrics, err := ExtractAudioMetadata(song.Path); err == nil && embeddedLyrics != "" {
+								lrcPath := filepath.Join(core.GlobalConfig.LyricsDir, song.ID+".lrc")
+								if saveLyricsFile(lrcPath, []byte(embeddedLyrics)) {
+									song.HasLyrics = true
+									updated = true
+								}
+							}
+						}
 					}
 				}
 
 				if updated {
-					logger.Info("元数据刮削成功并同步落盘: %s", song.Title)
+					core.Info("元数据刮削成功并同步落盘: %s", song.Title)
 					db.UpdateSongMediaStatus(song.ID, song.HasCover, song.HasLyrics)
 					if NotifyLibraryChanged != nil {
 						NotifyLibraryChanged()
@@ -364,16 +435,23 @@ func AutoScrapeMissingMetadata(targetDir ...string) {
 		}(s)
 	}
 	wg.Wait()
-	logger.Info("元数据并发刮削任务全部完成")
+	core.Info("元数据并发刮削任务全部完成")
+}
+
+// IsNeteaseDownloadFile 判断物理文件是否处于数据库配置的网易云下载存储目录中
+func IsNeteaseDownloadFile(filePath string) bool {
+	downloadDir := core.GlobalConfig.NeteaseDownloadDir
+	if downloadDir == "" {
+		downloadDir = filepath.Join(core.GlobalConfig.MusicLibraryPath, "NetEase")
+	}
+	normPath := core.NormalizePath(filePath)
+	normDir := core.NormalizePath(downloadDir)
+	return strings.HasPrefix(normPath, normDir)
 }
 
 // IndexSingleFile 单文件物理入库
-func IndexSingleFile(filePath string) *model.Song {
-	ext := strings.ToLower(filepath.Ext(filePath))
-	validExts := map[string]bool{
-		".mp3": true, ".wav": true, ".ogg": true, ".flac": true, ".aac": true, ".m4a": true,
-	}
-	if !validExts[ext] {
+func IndexSingleFile(filePath string) *core.Song {
+	if !core.IsAudioFile(filePath) {
 		return nil
 	}
 
@@ -397,7 +475,7 @@ func IndexSingleFile(filePath string) *model.Song {
 		songID = calcID
 	}
 
-	song, picData, _, err := ExtractAudioMetadata(filePath)
+	song, picData, embeddedLyrics, err := ExtractAudioMetadata(filePath)
 	if err != nil || song == nil {
 		return nil
 	}
@@ -405,7 +483,7 @@ func IndexSingleFile(filePath string) *model.Song {
 	song.ID = songID
 
 	// 检查封面
-	coverPath := filepath.Join(config.GlobalConfig.CoversDir, songID+".webp")
+	coverPath := filepath.Join(core.GlobalConfig.CoversDir, songID+".webp")
 	if _, err := os.Stat(coverPath); err == nil {
 		song.HasCover = true
 	} else if len(picData) > 0 {
@@ -414,37 +492,41 @@ func IndexSingleFile(filePath string) *model.Song {
 		}
 	}
 
-	// 检查同级物理图片
+	// 检查同级物理封面 (.webp)
 	if !song.HasCover {
 		dir := filepath.Dir(filePath)
-		exts := []string{".jpg", ".jpeg", ".png"}
 		baseName := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
-		for _, e := range exts {
-			sameImg := filepath.Join(dir, baseName+e)
-			if b, err := os.ReadFile(sameImg); err == nil {
-				if SaveCoverWebP(b, songID) {
-					song.HasCover = true
-					break
-				}
+		sameImg := filepath.Join(dir, baseName+".webp")
+		if b, err := os.ReadFile(sameImg); err == nil {
+			if SaveCoverWebP(b, songID) {
+				song.HasCover = true
 			}
 		}
 	}
 
 	// 检查歌词
-	lrcPath := filepath.Join(config.GlobalConfig.LyricsDir, songID+".lrc")
-	yrcPath := filepath.Join(config.GlobalConfig.LyricsDir, songID+".yrc")
-	if _, err := os.Stat(lrcPath); err == nil || os.IsExist(err) {
+	lrcPath := filepath.Join(core.GlobalConfig.LyricsDir, songID+".lrc")
+	yrcPath := filepath.Join(core.GlobalConfig.LyricsDir, songID+".yrc")
+	if _, err := os.Stat(lrcPath); err == nil {
 		song.HasLyrics = true
 	} else if _, err := os.Stat(yrcPath); err == nil {
 		song.HasLyrics = true
+	} else if embeddedLyrics != "" {
+		// 校验网易云下载目录与刮削偏好策略
+		if saveLyricsFile(lrcPath, []byte(embeddedLyrics)) {
+			if IsNeteaseDownloadFile(filePath) || strings.ToLower(core.GlobalConfig.LyricsPreference) != "network" {
+				song.HasLyrics = true
+			}
+		}
 	} else {
 		// 同级外部歌词
 		dir := filepath.Dir(filePath)
 		baseName := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
 		sameLrc := filepath.Join(dir, baseName+".lrc")
 		if b, err := os.ReadFile(sameLrc); err == nil {
-			_ = os.WriteFile(lrcPath, b, 0644)
-			song.HasLyrics = true
+			if saveLyricsFile(lrcPath, b) {
+				song.HasLyrics = true
+			}
 		}
 	}
 
@@ -452,18 +534,39 @@ func IndexSingleFile(filePath string) *model.Song {
 	return song
 }
 
+// saveLyricsFile 写入歌词文件
+func saveLyricsFile(lrcPath string, content []byte) bool {
+	cacheDir := core.GlobalConfig.CacheDir
+	if cacheDir == "" {
+		cacheDir = core.GlobalConfig.LyricsDir
+	}
+	tmpPath := filepath.Join(cacheDir, fmt.Sprintf("lrc_%d.tmp", time.Now().UnixNano()))
+	if err := os.WriteFile(tmpPath, content, 0644); err != nil {
+		return false
+	}
+	if err := os.Rename(tmpPath, lrcPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return false
+	}
+	return true
+}
+
 // GetOrScrapeLyrics 获取或刮削歌词
 func GetOrScrapeLyrics(songID, title, artist, filename string, yrc bool) (string, error) {
 	if songID != "" {
 		if yrc {
-			yrcPath := filepath.Join(config.GlobalConfig.LyricsDir, songID+".yrc")
+			yrcPath := filepath.Join(core.GlobalConfig.LyricsDir, songID+".yrc")
 			if b, err := os.ReadFile(yrcPath); err == nil {
 				return string(b), nil
 			}
 		}
-		lrcPath := filepath.Join(config.GlobalConfig.LyricsDir, songID+".lrc")
+		lrcPath := filepath.Join(core.GlobalConfig.LyricsDir, songID+".lrc")
 		if b, err := os.ReadFile(lrcPath); err == nil {
 			return string(b), nil
+		}
+		// 若为网易云下载目录下的歌曲且没有本地缓存歌词，避免发起第三方刮削
+		if s, err := db.GetSongByID(songID); err == nil && s != nil && IsNeteaseDownloadFile(s.Path) {
+			return "", fmt.Errorf("lyrics not found for netease download file")
 		}
 	}
 
@@ -472,13 +575,14 @@ func GetOrScrapeLyrics(songID, title, artist, filename string, yrc bool) (string
 		title = strings.TrimSuffix(filename, filepath.Ext(filename))
 	}
 
-	best := searcher.SearchSongBest(title, artist, "")
+	best := SearchSongBest(title, artist, "")
 	if best != nil {
 		lyrics, _ := best["lyrics"].(string)
 		if lyrics != "" && songID != "" {
-			lrcPath := filepath.Join(config.GlobalConfig.LyricsDir, songID+".lrc")
-			_ = os.WriteFile(lrcPath, []byte(lyrics), 0644)
-			db.UpdateSongMediaStatus(songID, true, true)
+			lrcPath := filepath.Join(core.GlobalConfig.LyricsDir, songID+".lrc")
+			if saveLyricsFile(lrcPath, []byte(lyrics)) {
+				db.UpdateSongMediaStatus(songID, true, true)
+			}
 		}
 		return lyrics, nil
 	}
@@ -489,18 +593,22 @@ func GetOrScrapeLyrics(songID, title, artist, filename string, yrc bool) (string
 // GetOrScrapeCover 获取或刮削封面
 func GetOrScrapeCover(songID, title, artist, album string) (string, error) {
 	if songID != "" {
-		coverPath := filepath.Join(config.GlobalConfig.CoversDir, songID+".webp")
+		coverPath := filepath.Join(core.GlobalConfig.CoversDir, songID+".webp")
 		if _, err := os.Stat(coverPath); err == nil {
 			return fmt.Sprintf("/api/music/covers/%s.webp", songID), nil
 		}
+		// 若为网易云下载目录下的歌曲且没有本地缓存封面，避免发起第三方刮削
+		if s, err := db.GetSongByID(songID); err == nil && s != nil && IsNeteaseDownloadFile(s.Path) {
+			return "", fmt.Errorf("cover not found for netease download file")
+		}
 	}
 
-	best := searcher.SearchSongBest(title, artist, album)
+	best := SearchSongBest(title, artist, album)
 	if best != nil {
 		coverURL, _ := best["cover"].(string)
 		if coverURL != "" && songID != "" {
 			// 下载封面并转码落盘
-			imgData, err := searcher.DownloadImageBytes(coverURL)
+			imgData, err := DownloadImageBytes(coverURL)
 			if err == nil && len(imgData) > 0 {
 				if SaveCoverWebP(imgData, songID) {
 					db.UpdateSongMediaStatus(songID, true, true)
@@ -514,19 +622,4 @@ func GetOrScrapeCover(songID, title, artist, album string) (string, error) {
 	return "", fmt.Errorf("cover not found")
 }
 
-func CopyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
 
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, in)
-	return err
-}

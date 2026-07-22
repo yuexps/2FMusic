@@ -1,4 +1,4 @@
-package model
+package core
 
 // Song 歌曲元数据模型
 type Song struct {
@@ -25,6 +25,15 @@ type FavoritePlaylist struct {
 	CreatedAt float64 `json:"created_at"`
 }
 
+// FavoritePlaylistResponse 歌单 API 对齐响应格式
+type FavoritePlaylistResponse struct {
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	IsDefault int     `json:"is_default"`
+	CreatedAt float64 `json:"created_at"`
+	SongCount int     `json:"song_count"`
+}
+
 // Favorite 歌单关联歌曲
 type Favorite struct {
 	SongID     string  `json:"song_id"`
@@ -40,6 +49,12 @@ type PlayHistory struct {
 	SongID   string  `json:"song_id"`
 	PlayTime float64 `json:"play_time"`
 	Song     *Song   `json:"song,omitempty"`
+}
+
+// PlayHistoryResponse 播放历史 API 对齐响应格式
+type PlayHistoryResponse struct {
+	Time int64 `json:"time"`
+	Song *Song `json:"song"`
 }
 
 // MountPoint 挂载点模型
@@ -78,6 +93,7 @@ type DownloadTask struct {
 	Title     string  `json:"title"`
 	Artist    string  `json:"artist"`
 	Album     string  `json:"album"`
+	Level     string  `json:"level"`
 	PicURL    string  `json:"pic_url"`
 	Progress  int     `json:"progress"`
 	Status    string  `json:"status"` // pending, preparing, downloading, success, error

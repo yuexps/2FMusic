@@ -1,7 +1,6 @@
-package middleware
+package static
 
 import (
-	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
@@ -10,12 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"2fmusic/backend/config"
+	"2fmusic/backend/core"
 
 	"github.com/gin-gonic/gin"
 )
 
-// IP 登录失败尝试记录
 type ipAttempt struct {
 	count     int
 	lastTime  time.Time
@@ -27,7 +25,7 @@ var (
 	ipAttemptsMu sync.Mutex
 )
 
-// CheckIPBlocked 检查 IP 是否被封禁
+// CheckIPBlocked 检查 IP 是否处于封禁状态
 func CheckIPBlocked(ip string) bool {
 	ipAttemptsMu.Lock()
 	defer ipAttemptsMu.Unlock()
@@ -40,10 +38,12 @@ func CheckIPBlocked(ip string) bool {
 	if time.Now().Before(att.blockedTo) {
 		return true
 	}
+
+	delete(ipAttempts, ip)
 	return false
 }
 
-// RecordIPFailure 记录 IP 登录失败
+// RecordIPFailure 记录 IP 登录失败尝试
 func RecordIPFailure(ip string) {
 	ipAttemptsMu.Lock()
 	defer ipAttemptsMu.Unlock()
@@ -61,45 +61,47 @@ func RecordIPFailure(ip string) {
 
 	att.count++
 	att.lastTime = now
+	core.Warn("IP [%s] 鉴权失败 (尝试次数: %d/3)", ip, att.count)
 
 	if att.count >= 3 {
 		att.blockedTo = now.Add(time.Hour)
+		core.Warn("IP [%s] 1小时内鉴权失败达到 3 次，已自动封禁 1 小时", ip)
 	}
 }
 
-// RecordIPSuccess 登录成功，重置失败计数
+// RecordIPSuccess 登录成功，清除失败记录
 func RecordIPSuccess(ip string) {
 	ipAttemptsMu.Lock()
 	defer ipAttemptsMu.Unlock()
 	delete(ipAttempts, ip)
 }
 
-// SHA256String 工具
+// SHA256String 计算字符串 SHA256
 func SHA256String(s string) string {
 	h := sha256.New()
 	h.Write([]byte(s))
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// ValidatePassword 校验密码
+// ValidatePassword 校验系统凭证 (仅允许 SHA-256 哈希匹配)
 func ValidatePassword(provided string) bool {
-	expected := config.GlobalConfig.Password
+	expected := core.GlobalConfig.Password
 	if expected == "" {
 		return true
 	}
 	if provided == "" {
 		return false
 	}
-	if provided == expected {
+	if strings.EqualFold(provided, SHA256String(expected)) {
 		return true
 	}
-	if strings.EqualFold(provided, SHA256String(expected)) {
+	if len(expected) == 64 && strings.EqualFold(provided, expected) {
 		return true
 	}
 	return false
 }
 
-// CORSMiddleware 跨域放行
+// CORSMiddleware 跨域放行中间件
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
@@ -114,15 +116,16 @@ func CORSMiddleware() gin.HandlerFunc {
 	}
 }
 
-// AuthMiddleware 密码鉴权拦截
+// AuthMiddleware 身份鉴权拦截中间件
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if config.GlobalConfig.Password == "" {
+		if core.GlobalConfig.Password == "" {
 			c.Next()
 			return
 		}
 
 		path := c.Request.URL.Path
+		pathLower := strings.ToLower(path)
 
 		exemptPaths := map[string]bool{
 			"":                  true,
@@ -130,13 +133,11 @@ func AuthMiddleware() gin.HandlerFunc {
 			"/index.html":       true,
 			"/login":            true,
 			"/api/login":        true,
-			"/favicon.ico":      true,
-			"/icon.svg":         true,
-			"/ICON.PNG":         true,
+			"/icon.png":         true,
 			"/manifest.json":    true,
 			"/site.webmanifest": true,
 		}
-		if exemptPaths[path] {
+		if exemptPaths[pathLower] {
 			c.Next()
 			return
 		}
@@ -178,7 +179,7 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// CacheControlMiddleware HTML 强 ETag 与 No-Cache 控制
+// CacheControlMiddleware 缓存控制中间件
 func CacheControlMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
@@ -190,11 +191,4 @@ func CacheControlMiddleware() gin.HandlerFunc {
 			c.Writer.Header().Set("Expires", "0")
 		}
 	}
-}
-
-// MD5Bytes 工具
-func MD5Bytes(b []byte) string {
-	h := md5.New()
-	h.Write(b)
-	return hex.EncodeToString(h.Sum(nil))
 }

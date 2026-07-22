@@ -9,16 +9,17 @@ import (
 	"path/filepath"
 	"strings"
 
-	"2fmusic/backend/config"
+	"2fmusic/backend/core"
 )
 
 // DistFS 内嵌的前端编译资源
+//
 //go:embed dist/*
 var DistFS embed.FS
 
 // GetFileSystem 获取高可用静态资源 FileSystem (优先外部磁盘 www 目录，后备嵌入式 DistFS)
 func GetFileSystem() http.FileSystem {
-	wwwDir := filepath.Join(config.GlobalConfig.BaseDir, "www")
+	wwwDir := filepath.Join(core.GlobalConfig.BaseDir, "www")
 	if fi, err := os.Stat(wwwDir); err == nil && fi.IsDir() {
 		return http.Dir(wwwDir)
 	}
@@ -32,7 +33,7 @@ func GetFileSystem() http.FileSystem {
 
 // ServeStaticFile 处理 SPA 前端页面路由降级与内嵌资源响应
 func ServeStaticFile(reqPath string) ([]byte, bool) {
-	wwwDir := filepath.Join(config.GlobalConfig.BaseDir, "www")
+	wwwDir := filepath.Join(core.GlobalConfig.BaseDir, "www")
 	targetDiskFile := filepath.Join(wwwDir, filepath.FromSlash(reqPath))
 	if b, err := os.ReadFile(targetDiskFile); err == nil {
 		return b, true

@@ -11,7 +11,7 @@
       </n-button>
     </div>
 
-    <div class="song-list-container">
+    <div v-auto-animate class="song-list-container">
       <div v-if="historyList.length === 0" class="empty-state">
         <SvgIcon name="history" />
         <h3>暂无播放记录</h3>
@@ -110,6 +110,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { vAutoAnimate } from '@formkit/auto-animate/vue'
 import { usePlayerStore } from '../stores/player'
 import { useHistoryStore } from '../stores/history'
 import { NDropdown, NModal, NButton, NSpace, NVirtualList, useMessage } from 'naive-ui'

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@formkit/auto-animate": "^0.10.0",
     "@tailwindcss/vite": "^4.3.0",
     "@vicons/fa": "^0.13.0",
     "@vicons/ionicons5": "^0.13.0",

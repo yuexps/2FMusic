@@ -1,11 +1,15 @@
 module 2fmusic/backend
 
-go 1.22
+go 1.23
 
 require (
+	github.com/bogem/id3v2 v0.0.0-20230209164914-e76f9ab76b55
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/fsnotify/fsnotify v1.7.0
+	github.com/gen2brain/webp v0.6.4
 	github.com/gin-gonic/gin v1.9.1
+	github.com/go-flac/flacpicture v0.0.0-20240802051357-31ea0aa5c085
+	github.com/go-flac/go-flac v1.0.0
 	github.com/gorilla/websocket v1.5.1
 	modernc.org/sqlite v1.29.5
 )
@@ -14,6 +18,7 @@ require (
 	github.com/bytedance/sonic v1.9.1 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/ebitengine/purego v0.10.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect

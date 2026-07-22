@@ -29,26 +29,28 @@
     </nav>
 
     <!-- 扫描进度与状态底栏 -->
-    <div v-if="systemStore.status.scanning || systemStore.status.is_scraping" class="glass-card p-3 rounded-xl box-border mt-auto">
-      <div class="text-xs font-semibold text-primary mb-2">
-        <span>{{ systemStore.status.scanning ? '正在扫描音乐库...' : '正在自动刮削元数据...' }}</span>
+    <n-collapse-transition :show="!!(systemStore.status.scanning || systemStore.status.is_scraping)">
+      <div class="glass-card p-3 rounded-xl box-border mt-auto mb-2">
+        <div class="text-xs font-semibold text-primary mb-2">
+          <span>{{ systemStore.status.scanning ? '正在扫描音乐库...' : '正在自动刮削元数据...' }}</span>
+        </div>
+        <div class="flex justify-between text-[11px] text-body-muted mb-1.5">
+          <span>进度: {{ systemStore.status.processed }} / {{ systemStore.status.total }}</span>
+          <span class="font-semibold text-primary">{{ progressPercent }}%</span>
+        </div>
+        <n-progress
+          type="line"
+          :percentage="progressPercent"
+          :show-indicator="false"
+          processing
+          size="small"
+          class="mb-1.5"
+        />
+        <div class="text-[10px] text-body-muted whitespace-nowrap overflow-hidden text-ellipsis text-left" :title="systemStore.status.current_file" style="direction: rtl;">
+          {{ systemStore.status.current_file || '准备中...' }}
+        </div>
       </div>
-      <div class="flex justify-between text-[11px] text-body-muted mb-1.5">
-        <span>进度: {{ systemStore.status.processed }} / {{ systemStore.status.total }}</span>
-        <span class="font-semibold text-primary">{{ progressPercent }}%</span>
-      </div>
-      <n-progress
-        type="line"
-        :percentage="progressPercent"
-        :show-indicator="false"
-        processing
-        size="small"
-        class="mb-1.5"
-      />
-      <div class="text-[10px] text-body-muted whitespace-nowrap overflow-hidden text-ellipsis text-left" :title="systemStore.status.current_file" style="direction: rtl;">
-        {{ systemStore.status.current_file || '准备中...' }}
-      </div>
-    </div>
+    </n-collapse-transition>
   </div>
 </template>
 
@@ -56,7 +58,7 @@
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useSystemStore } from '../stores/system'
-import { NProgress } from 'naive-ui'
+import { NProgress, NCollapseTransition } from 'naive-ui'
 
 const router = useRouter()
 const route = useRoute()

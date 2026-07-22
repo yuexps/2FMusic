@@ -35,7 +35,7 @@
         <p>暂无外接监控目录，仅使用默认音乐库</p>
       </div>
 
-      <div v-else class="flex flex-col gap-3">
+      <div v-else v-auto-animate class="flex flex-col gap-3">
         <div v-for="path in systemStore.mountPoints" :key="path"
           class="glass-card p-4 rounded-xl flex justify-between items-center flex-wrap gap-4 max-md:p-3 max-md:gap-3 max-md:flex-nowrap">
           <div class="flex items-center gap-3 flex-1 min-w-62.5 overflow-hidden max-md:min-w-0">
@@ -91,6 +91,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { vAutoAnimate } from '@formkit/auto-animate/vue'
 import { useSystemStore } from '../stores/system'
 import { NModal, NButton, NInput, NSpace, useMessage } from 'naive-ui'
 

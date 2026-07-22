@@ -9,7 +9,7 @@
 ### 1.1 音频流与 HTTP Range 适配
 - 推荐使用 Android **Jetpack Media3 / ExoPlayer** 核心。
 - 接口地址：`GET http://<server-host>:<port>/api/music/play/<song_id>`
-- **密码鉴权**：由于原生播放器数据源握手不方便添加 Header，请在 URL 参数中追加 `?auth=<password_or_sha256>`，例如：
+- **密码鉴权**：由于原生播放器数据源握手不方便添加 Header，请在 URL 参数中追加 `?auth=<password_sha256>`，例如：
   `String playUrl = serverBase + "/api/music/play/" + songId + "?auth=" + URLEncoder.encode(sha256Password, "UTF-8");`
 - **拖动 (Seek) 支持**：服务端天然支持 `Byte-Range` 分片，Media3 可直接实现秒级拖动点播。
 

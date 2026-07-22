@@ -1,4 +1,4 @@
-package config
+package core
 
 import (
 	"flag"
@@ -31,11 +31,45 @@ type AppConfig struct {
 	LyricsPreference     string
 }
 
+// AUDIO_EXTS 标准音频后缀
+var AUDIO_EXTS = []string{".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a"}
+
+// AudioExtsMap 音频后缀集合
+var AudioExtsMap = map[string]bool{
+	".mp3":  true,
+	".wav":  true,
+	".ogg":  true,
+	".flac": true,
+	".aac":  true,
+	".m4a":  true,
+}
+
+// IsAudioFile 检查是否为支持的音频格式
+func IsAudioFile(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	return AudioExtsMap[ext]
+}
+
+// MISC_EXTS 附属文件后缀 (.lrc, .yrc, .webp)
+var MISC_EXTS = []string{".lrc", ".yrc", ".webp"}
+
+// MiscExtsMap 附属文件后缀集合
+var MiscExtsMap = map[string]bool{
+	".lrc":  true,
+	".yrc":  true,
+	".webp": true,
+}
+
+// IsMiscFile 检查是否为附属文件格式
+func IsMiscFile(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	return MiscExtsMap[ext]
+}
+
 var GlobalConfig = &AppConfig{}
 
 // NormalizePath 统一进行绝对路径转换与 Clean 规范化，消除跨平台斜杠与路径比较差异
 func NormalizePath(path string) string {
-	// 剥离首尾空格及 Windows 右键“复制为路径”时带入的外层双引号/单引号
 	path = strings.Trim(strings.TrimSpace(path), "\"'")
 	if path == "" {
 		return ""
@@ -58,7 +92,6 @@ func InitFromArgs() {
 
 	GlobalConfig.WWWDir = NormalizePath(filepath.Join(GlobalConfig.BaseDir, "../www"))
 
-	// 默认路径定义
 	defaultMusicLib := os.Getenv("MUSIC_LIBRARY_PATH")
 	if defaultMusicLib == "" {
 		defaultMusicLib = NormalizePath(".")
@@ -91,7 +124,6 @@ func InitFromArgs() {
 		flag.Parse()
 	}
 
-	// 规范化 BaseURL
 	if GlobalConfig.BaseURL != "" && GlobalConfig.BaseURL != "/" {
 		if !strings.HasPrefix(GlobalConfig.BaseURL, "/") {
 			GlobalConfig.BaseURL = "/" + GlobalConfig.BaseURL
@@ -104,7 +136,6 @@ func InitFromArgs() {
 	GlobalConfig.MusicLibraryPath = NormalizePath(GlobalConfig.MusicLibraryPath)
 	_ = os.MkdirAll(GlobalConfig.MusicLibraryPath, 0755)
 
-	// 派生相关缓存与关联目录
 	GlobalConfig.LyricsDir = NormalizePath(filepath.Join(GlobalConfig.MusicLibraryPath, "lyrics"))
 	GlobalConfig.CoversDir = NormalizePath(filepath.Join(GlobalConfig.MusicLibraryPath, "covers"))
 	GlobalConfig.CacheDir = NormalizePath(filepath.Join(GlobalConfig.MusicLibraryPath, ".cache"))
@@ -116,12 +147,8 @@ func InitFromArgs() {
 	_ = os.MkdirAll(GlobalConfig.CacheDir, 0755)
 	_ = os.MkdirAll(GlobalConfig.NeteaseDownloadDir, 0755)
 
-	// 网易云 API 基础地址
 	neteaseAPIBaseEnv := os.Getenv("NETEASE_API_BASE")
-	if neteaseAPIBaseEnv == "" {
-		neteaseAPIBaseEnv = "http://localhost:23236"
-	}
-	GlobalConfig.NeteaseAPIBase = neteaseAPIBaseEnv
+	GlobalConfig.NeteaseAPIBase = strings.TrimSpace(neteaseAPIBaseEnv)
 	GlobalConfig.NeteaseQuality = "exhigh"
 	GlobalConfig.NeteaseMaxConcurrent = 5
 	GlobalConfig.LyricsPreference = "embedded"
