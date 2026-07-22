@@ -154,12 +154,19 @@ export const useSystemStore = defineStore('system', () => {
       playlist_count: 0
     }
     localStorage.removeItem('2fmusic_playlist')
+
+    const playerStore = usePlayerStore()
+    playerStore.stop()
   }
 
   const deleteSong = async (songId: string) => {
     try {
       await wsClient.sendRequest('music/delete', { song_id: songId })
-      songs.value = songs.value.filter(s => s.id !== songId)
+      songs.value = songs.value.filter(s => String(s.id) !== String(songId))
+      
+      const playerStore = usePlayerStore()
+      playerStore.cleanInvalidSongs(songs.value)
+
       return { success: true }
     } catch (e: any) {
       return { success: false, error: e.message || '删除异常' }

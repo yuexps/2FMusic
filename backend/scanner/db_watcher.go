@@ -53,6 +53,9 @@ func processPendingMediaExtraction() {
 	}
 
 	for _, s := range songs {
+		if s.ScrapeRetryCount >= 3 {
+			continue
+		}
 		if !s.HasCover || !s.HasLyrics {
 			songRef := s
 			handleSongInserted(&songRef)
@@ -89,40 +92,44 @@ func handleSongInserted(song *core.Song) {
 	// 1. 尝试从物理文件提取 Tag 内嵌数据
 	_, picData, embeddedLyrics, _ := ExtractAudioMetadata(song.Path)
 
-	// 2. 处理封面
-	if !hasCoverFile {
-		if len(picData) > 0 {
-			// 有内嵌封面 -> 压缩 WebP 保存
-			_ = SaveCoverWebP(picData, song.ID)
-		} else if !IsNeteaseDownloadFile(song.Path) {
-			// 网易云下载目录以外的音源，发起在线网络刮削
-			if best := SearchSongBest(song.Title, song.Artist, song.Album); best != nil {
+	if !hasCoverFile && len(picData) > 0 {
+		_ = SaveCoverWebP(picData, song.ID)
+		hasCoverFile = fileExists(coverPath)
+	}
+
+	lyricsPref := strings.ToLower(core.GlobalConfig.LyricsPreference)
+	isNeteaseDir := IsNeteaseDownloadFile(song.Path)
+
+	if !hasLyricsFile && embeddedLyrics != "" && (isNeteaseDir || lyricsPref != "network") {
+		_ = saveLyricsFile(lrcPath, []byte(embeddedLyrics))
+		hasLyricsFile = fileExists(lrcPath)
+	}
+
+	// 2. 若仍缺失且非网易云目录，发起单次在线全网刮削
+	needScrapeCover := !hasCoverFile
+	needScrapeLyrics := !hasLyricsFile
+
+	if (needScrapeCover || needScrapeLyrics) && !isNeteaseDir && song.ScrapeRetryCount < 3 {
+		best := SearchSongBest(song.Title, song.Artist, song.Album)
+		if best != nil {
+			if needScrapeCover {
 				if coverURL, ok := best["cover"].(string); ok && coverURL != "" {
 					if imgData, err := DownloadImageBytes(coverURL); err == nil && len(imgData) > 0 {
 						_ = SaveCoverWebP(imgData, song.ID)
 					}
 				}
 			}
-		}
-	}
-
-	// 3. 处理歌词
-	if !hasLyricsFile {
-		lyricsPref := strings.ToLower(core.GlobalConfig.LyricsPreference)
-		isNeteaseDir := IsNeteaseDownloadFile(song.Path)
-
-		if embeddedLyrics != "" && (isNeteaseDir || lyricsPref != "network") {
-			_ = saveLyricsFile(lrcPath, []byte(embeddedLyrics))
-		} else if !isNeteaseDir {
-			// 发起在线歌词刮削
-			if best := SearchSongBest(song.Title, song.Artist, song.Album); best != nil {
+			if needScrapeLyrics {
 				if lyrics, ok := best["lyrics"].(string); ok && lyrics != "" {
 					_ = saveLyricsFile(lrcPath, []byte(lyrics))
 				} else if embeddedLyrics != "" {
-					// 网络无歌词时退避使用内嵌歌词
+					// 优先网络但网络无歌词时，退避使用内嵌歌词
 					_ = saveLyricsFile(lrcPath, []byte(embeddedLyrics))
 				}
 			}
+		} else {
+			// 在线刮削无匹配结果，自增重试计数
+			db.IncrementScrapeRetryCount(song.ID)
 		}
 	}
 

@@ -130,8 +130,10 @@
 
       <div class="flex justify-between items-center mb-3 border-b border-hairline pb-2">
         <h3 class="m-0 text-sm font-semibold text-ink">{{ queueTab === 'playlist' ? '当前列表' : '待播队列' }}</h3>
-        <n-button v-if="queueTab === 'queue'" round size="tiny" secondary type="error"
-          @click="playerStore.clearQueue">清空</n-button>
+        <n-button v-if="queueTab === 'playlist' && playerStore.playlist.length > 0" round size="tiny" secondary type="error"
+          @click="playerStore.clearPlaylist">清空列表</n-button>
+        <n-button v-else-if="queueTab === 'queue' && playerStore.queue.length > 0" round size="tiny" secondary type="error"
+          @click="playerStore.clearQueue">清空队列</n-button>
       </div>
 
       <div class="flex-1 flex flex-col min-height-0 overflow-hidden">

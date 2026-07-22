@@ -183,10 +183,10 @@ func DeleteSongsByPathPrefix(prefix string) (int64, error) {
 	dbMu.Lock()
 	defer dbMu.Unlock()
 
-	// 查出将被删除的歌曲 ID 列表以清理关联表
+	// 查出将被删除的歌曲 ID 列表以清理关联表及触发删除通知
+	var ids []string
 	rows, err := DB.Query("SELECT id FROM songs WHERE path LIKE ? || '%'", prefix)
 	if err == nil {
-		var ids []string
 		for rows.Next() {
 			var id string
 			if err := rows.Scan(&id); err == nil {
@@ -206,6 +206,9 @@ func DeleteSongsByPathPrefix(prefix string) (int64, error) {
 		return 0, err
 	}
 	affected, _ := res.RowsAffected()
+	for _, id := range ids {
+		NotifySongDeleted(id)
+	}
 	return affected, nil
 }
 
@@ -304,6 +307,7 @@ func CleanStaleSongs(validPaths map[string]bool) int {
 		_, _ = DB.Exec("DELETE FROM play_history WHERE song_id = ?", id)
 		if _, err := DB.Exec("DELETE FROM songs WHERE id = ?", id); err == nil {
 			deletedCount++
+			NotifySongDeleted(id)
 		}
 	}
 	if deletedCount > 0 {

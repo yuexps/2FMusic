@@ -21,6 +21,16 @@
 - **`backend/scanner/`**：曲库引擎（增量扫描 `scanner.go`、3 Watcher 闭环体系 `watcher.go`, `audio_watcher.go`, `db_watcher.go`, `lc_watcher.go`、Tag 提取 `tag.go` 与在线刮削 `searcher.go`）；
 - **`backend/downloader/`**：网易云下载与容器工具箱（`downloader.go`, `netease_api.go`, `netease_auth.go`, `netease_docker.go`, `parser.go`）。
 
+### 2.4 在线刮削与高精度打分引擎 (`backend/scanner/searcher.go`)
+- **全平台轻量覆盖（与 Python 原版 100% 对齐）**：
+  - **网易云 (`netease`)**：取 `al.picUrl` 高清封面，调用 `/api/song/lyric` 拿 `lrc` 与 `tlyric` 交错融合；
+  - **QQ 音乐 (`qq`)**：取 `albummid` 拼接腾讯 CDN 封面，调用 `fcg_query_lyric_new.fcg` 直接解码 Base64 提取纯文本歌词与翻译（零 3DES 加密）；
+  - **酷狗音乐 (`kugou`)**：取搜歌响应 `Image` 并替换 `{size}` 为 `400` 获得高清封面，调用 `lyrics.kugou.com/download` 参数指定 `fmt=lrc` 直接 Base64 解码纯文本歌词（零 XOR 异或与 Flate 解压）。
+- **融合打分与竞态保护**：
+  - **算法融汇**：结合 2FMusic 经典 `LongestCommonSubstring` (最长公共子串) + `CharDuplicateRate` (字符交并比) 与 `normalizeLyricMatchText` (音乐变体/后缀清洗)、`calculateArtistMatchSimilarity` (多歌手切割与主歌手保护) 及 `calculateDurationMultiplier` (1s/3s/5s/10s 阶梯式时长降权)；
+  - **置信度防护**：设立 0.75 置信度门槛，防范错版 DJ/Live 误匹配；
+  - **并发安全**：以 `mu.Lock()` + `copy(resultsCopy, results)` 浅拷贝锁防护，彻底根治 6 秒超时触发后的 Slice Data Race。
+
 ---
 
 ## 2. 数据库结构与持久化规范 (SQLite 3)
@@ -132,10 +142,11 @@ CREATE TABLE IF NOT EXISTS system_settings (
 
 ### 4.2 曲库扫描与在线刮削
 - **增量扫描**：全库遍历与路径比对，仅对未变更 `mtime`/`size` 的文件复用既有 ID。扫描完成后自动清理 `CleanStaleSongs` 失效记录并广播 `library_changed`。
-- **双重刮削机制**：
+- **双重刮削机制与合并请求**：
   - **批量/挂载扫描刮削 (`SearchSongFastSequential`)**：采取 `网易云` $\rightarrow$ `QQ` $\rightarrow$ `酷狗` 顺序单平台检索，完全匹配时立即短路返回以提升扫描效率。
-  - **单曲重新刮削 (`SearchSongBest`)**：并发向 3 大平台发起请求，基于综合相似度打分选出最优结果。
-  - **文本匹配与双语翻译权重**：包含修饰符清洗（`cleanSearchText`）、最长公共子串与字符交并比计算；网易云等源获取歌词时同步解析 `tlyric` 翻译歌词，采用按时间戳升序交错合并算法生成标准双语 LRC 歌词，并在结果打分中为包含翻译的匹配项给予额外 `+0.02` 权重加分。
+  - **单曲精细刮削 (`SearchSongBest`)**：并发向 3 大平台发起请求，基于综合相似度打分选出最优结果。当曲目同时缺失封面与歌词时，在线刮削收敛为单次 `SearchSongBest` 请求并发拉取，同时提取 `cover` 与 `lyrics`。
+  - **重试防护机制 (`scrape_retry_count`)**：在线刮削无有效匹配时，自动递增 `scrape_retry_count`。在全库扫描与启动兜底扫描中，凡 `scrape_retry_count >= 3` 的曲目自动忽略在线刮削，避免无意义的频繁全网请求。
+  - **歌词与双语翻译解析**：支持网易云等平台原生的标准歌词与双语翻译解析；统一使用交错时间轴拼接并写盘为 `lyrics/<id>.lrc`。对于包含翻译的匹配项给予额外打分加成。
 - **封面图片保存与 WebP 转换 (`SaveCoverWebP`)**：当长边超过 500px 时按最长边等比例平滑缩小，编码为 WebP 格式（`Quality: 80`）落盘；若解码/编码发生异常则退避使用原图字节。
 - **歌词刮削来源偏好 (`LyricsPreference`)**：从 `system_settings` (`key='lyrics_source_preference'`) 动态加载。日常播放优先读取本地缓存，仅在触发刮削/索引时依据 `embedded`（优先内嵌）或 `network`（优先网络）策略生效。
 
@@ -152,4 +163,4 @@ CREATE TABLE IF NOT EXISTS system_settings (
 - **文件移入与 library_changed 主动广播**：元数据内嵌完成后，将音频文件重命名/移动至目标目录。落盘成功后，`updateTaskStatus` 在广播 `download_status` 的同时调用 `NotifyLibraryChanged()` 通知前端刷新歌曲列表。
 - **下载进度广播节流**：在下载流读取循环中，对 `download_status` 消息广播加入进度变动（`prog`）及至少 100ms 时间节流控制，避免高频广播导致连接拥塞。
 - **广播通道非阻塞容错**：`BroadcastJSON` 采用 `select-default` 非阻塞模式，当 Hub 广播队列满载时舍弃中间帧。
-- **网易云下载目录优先级与内嵌解析**：网易云下载存储目录（支持从 `system_settings` 的 `key='netease_download_dir'` 动态装载）优先级高于全局 `LyricsPreference` 偏好设置。处于该目录下的音频文件，索引与刮削时优先解出内嵌封面与内嵌歌词（`embeddedLyrics`），且跳过第三方在线网络刮削，保持元数据一致。
+- **网易云下载目录优先级与内嵌解析**：网易云下载存储目录（支持从 `system_settings` 的 `key='netease_download_dir'` 动态装载）优先级高于全局 `LyricsPreference` 偏好设置。处于该目录下的音频文件，索引与刮削时优先解出内嵌封面与内嵌歌词（`embeddedLyrics`），且跳过第三方在线网络刮削，保持元数据一致。当本地缓存缺失或触发重新刮削时，优先自动从音频物理文件 Tag 中重新解包落盘，保障元数据不丢失。

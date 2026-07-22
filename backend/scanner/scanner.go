@@ -565,8 +565,15 @@ func GetOrScrapeLyrics(songID, title, artist, filename string, yrc bool) (string
 		if b, err := os.ReadFile(lrcPath); err == nil {
 			return string(b), nil
 		}
-		// 若为网易云下载目录下的歌曲且没有本地缓存歌词，避免发起第三方刮削
+
+		// 若为网易云下载目录下的歌曲且没有本地缓存歌词，直接禁止在线刮削，优先提取内嵌歌词
 		if s, err := db.GetSongByID(songID); err == nil && s != nil && IsNeteaseDownloadFile(s.Path) {
+			_, _, embeddedLyrics, _ := ExtractAudioMetadata(s.Path)
+			if embeddedLyrics != "" {
+				_ = saveLyricsFile(lrcPath, []byte(embeddedLyrics))
+				db.UpdateSongMediaStatus(songID, s.HasCover, true)
+				return embeddedLyrics, nil
+			}
 			return "", fmt.Errorf("lyrics not found for netease download file")
 		}
 	}
@@ -596,8 +603,16 @@ func GetOrScrapeCover(songID, title, artist, album string) (string, error) {
 		if _, err := os.Stat(coverPath); err == nil {
 			return fmt.Sprintf("/api/music/covers/%s.webp", songID), nil
 		}
-		// 若为网易云下载目录下的歌曲且没有本地缓存封面，避免发起第三方刮削
+
+		// 若为网易云下载目录下的歌曲且没有本地缓存封面，直接禁止在线刮削，优先提取内嵌封面
 		if s, err := db.GetSongByID(songID); err == nil && s != nil && IsNeteaseDownloadFile(s.Path) {
+			_, picData, _, _ := ExtractAudioMetadata(s.Path)
+			if len(picData) > 0 {
+				if SaveCoverWebP(picData, songID) {
+					db.UpdateSongMediaStatus(songID, true, s.HasLyrics)
+					return fmt.Sprintf("/api/music/covers/%s.webp", songID), nil
+				}
+			}
 			return "", fmt.Errorf("cover not found for netease download file")
 		}
 	}

@@ -98,6 +98,9 @@ export const usePlayerStore = defineStore('player', () => {
         if (state.playlist) {
           playlist.value = state.playlist
         }
+        if (state.queue) {
+          queue.value = state.queue
+        }
         if (state.currentSong) {
           const restored = { ...state.currentSong }
           if (restored.album_art && /^blob:/.test(restored.album_art)) {
@@ -174,6 +177,21 @@ export const usePlayerStore = defineStore('player', () => {
     audio.addEventListener('ended', () => {
       next()
     })
+
+    audio.addEventListener('error', (e) => {
+      console.warn('音频资源加载/播放失败，尝试自动清洗并跳过:', e)
+      const failedSong = currentSong.value
+      if (failedSong && failedSong.id) {
+        playlist.value = playlist.value.filter(s => String(s.id) !== String(failedSong.id))
+        queue.value = queue.value.filter(s => String(s.id) !== String(failedSong.id))
+        saveState()
+      }
+      if (playlist.value.length > 0) {
+        next()
+      } else {
+        stop()
+      }
+    })
   }
 
   const saveState = () => {
@@ -188,11 +206,19 @@ export const usePlayerStore = defineStore('player', () => {
       }
       return cleanSong
     })
+    const cleanQueue = queue.value.map(s => {
+      const cleanSong = { ...s }
+      if (cleanSong.album_art && /^blob:/.test(cleanSong.album_art)) {
+        cleanSong.album_art = ''
+      }
+      return cleanSong
+    })
     const state = {
       volume: volume.value,
       playMode: playMode.value,
       currentSong: song,
-      playlist: cleanPlaylist
+      playlist: cleanPlaylist,
+      queue: cleanQueue
     }
     localStorage.setItem('2fmusic_state', JSON.stringify(state))
   }
@@ -210,6 +236,15 @@ export const usePlayerStore = defineStore('player', () => {
     if (!audio) init()
     if (!audio) return
 
+    if (!currentSong.value) {
+      if (playlist.value.length > 0) {
+        playSong(playlist.value[0])
+      } else {
+        stop()
+      }
+      return
+    }
+
     if (isPlaying.value) {
       audio.pause()
     } else {
@@ -217,7 +252,9 @@ export const usePlayerStore = defineStore('player', () => {
         audio.src = getAudioPlayUrl(currentSong.value.id)
       }
       if (audio.src) {
-        audio.play().catch((err) => console.error('播放音频失败:', err))
+        audio.play().catch((err) => {
+          console.warn('播放音频触发交互限制或暂不可用:', err)
+        })
       }
     }
   }
@@ -327,6 +364,28 @@ export const usePlayerStore = defineStore('player', () => {
 
   const clearQueue = () => {
     queue.value = []
+    saveState()
+  }
+
+  const stop = () => {
+    if (audio) {
+      audio.pause()
+      audio.src = ''
+    }
+    isPlaying.value = false
+    currentSong.value = null
+    currentLyric.value = ''
+    currentTime.value = 0
+    duration.value = 0
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = null
+    }
+    saveState()
+  }
+
+  const clearPlaylist = () => {
+    playlist.value = []
+    stop()
   }
 
   const shufflePlaylist = () => {
@@ -473,30 +532,21 @@ export const usePlayerStore = defineStore('player', () => {
 
   // 清理播放器与播放列表中已从曲库移除的失效歌曲
   const cleanInvalidSongs = (validSongs: Song[]) => {
-    if (!Array.isArray(validSongs) || validSongs.length === 0) return
+    if (!Array.isArray(validSongs)) return
 
-    const validIdSet = new Set(validSongs.map(s => s.id))
+    const validIdSet = new Set(validSongs.map(s => String(s.id)))
 
     // 1. 过滤播放列表与队列，剔除已删除的失效歌曲（保留非 DB 源歌曲）
-    playlist.value = playlist.value.filter(s => !s.id || validIdSet.has(s.id))
-    queue.value = queue.value.filter(s => !s.id || validIdSet.has(s.id))
+    playlist.value = playlist.value.filter(s => !s.id || validIdSet.has(String(s.id)))
+    queue.value = queue.value.filter(s => !s.id || validIdSet.has(String(s.id)))
 
     // 2. 校验当前播放器歌曲
-    if (currentSong.value && currentSong.value.id && !validIdSet.has(currentSong.value.id)) {
-      console.warn(`[PlayerStore] 发现失效歌曲 ${currentSong.value.title} (ID: ${currentSong.value.id})，已自动从播放器清理`)
-      if (audio) {
-        audio.pause()
-        audio.src = ''
-      }
-      isPlaying.value = false
-      currentSong.value = null
-      currentLyric.value = ''
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = null
-      }
+    if (currentSong.value && currentSong.value.id && !validIdSet.has(String(currentSong.value.id))) {
+      console.warn(`[PlayerStore] 发现失效歌曲 ${currentSong.value.title} (ID: ${currentSong.value.id})，已全自动清洗重置`)
+      stop()
+    } else {
+      saveState()
     }
-
-    saveState()
   }
 
   return {
@@ -518,6 +568,8 @@ export const usePlayerStore = defineStore('player', () => {
     addToQueue,
     removeFromQueue,
     clearQueue,
+    clearPlaylist,
+    stop,
     shufflePlaylist,
     fetchAlbumArt,
     currentLyric,

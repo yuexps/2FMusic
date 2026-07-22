@@ -31,8 +31,13 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.25'
           cache-dependency-path: backend/go.sum
+
+      - name: Install Go dependencies
+        run: |
+          cd backend
+          go mod download
 
       - name: Install frontend dependencies
         run: |
@@ -53,6 +58,7 @@ jobs:
       - name: Build Go binaries
         run: |
           cd backend
+          export GOTOOLCHAIN=local
           echo "Building Go Linux x86_64..."
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o 2fmusic-linux-x86 main.go
           echo "Building Go Linux ARM64..."

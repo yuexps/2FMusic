@@ -31,8 +31,16 @@
 ## 2. Pinia 状态管理与组件通信 (`playerStore`)
 
 ### 2.1 播放器状态树恢复
-- 恢复 `currentSong`、`playlist`、`playMode`（顺序/单曲循环/随机）以及 `currentTime`。
+- 自动恢复 `currentSong`、`playlist`（当前播放列表）、`queue`（待播插队队列）、`playMode`（顺序/单曲循环/随机）以及 `currentTime`。
 - 与 `<audio>` 播放器引擎保持单向数据流映射：Store 控制 Source/Play/Pause，`<audio>` 原生事件 (`timeupdate`, `ended`, `error`) 闭环更新 Store 状态。
+- **底栏播放器清空与重置规约 (`clearPlaylist` & `stop`)**：
+  - 在当前播放列表（`playlist`）或待播队列（`queue`）执行清空时，调用 `clearPlaylist()` 与 `clearQueue()`。
+  - 列表为空或手动重置时触发 `stop()`，自动执行 `<audio>` 暂停、`audio.src = ''` 清空、歌词 `currentLyric` 清空、进度与时长归零，并同步将 `currentSong` 置为 `null` 写入 `localStorage` (`saveState`)，实现底栏播放器全状态 100% 干净重置。
+- **失效歌曲自动清洗与重置规约 (`cleanInvalidSongs`)**：
+  - **优先级秩序（校验清理 $\rightarrow$ 网络请求 $\rightarrow$ 异常退避）**：在发起 `togglePlay` 或 `playSong` 时，系统优先校验曲目与清理失效状态，避免盲目向后端发送 404 网络音频请求。
+  - 支持 `validSongs` 为空数组 `[]`（全库清空/全量删歌场景）时的深度清洗，确保有效Set提取与全局 `playlist` / `queue` 的彻底筛选。
+  - 使用 `String(id)` 强制字符串化解决 `string` 与 `number` 类型差异导致的比对遗漏。
+  - **`<audio>` 元素 `error` 事件全自动退避**：当音频资源 404/500 加载失败时，自动从列表中剔除坏歌并切至下一首 `next()`，列表为空时触发 `stop()` 重置底栏。
 
 ### 2.2 多媒体会话 (MediaSession API) 适配
 适配 OS 级原生多媒体控制面板：在播放切换时自动更新 `navigator.mediaSession.metadata`（曲名、歌手、专辑、封面），并绑定原生 Play/Pause/Pre/Next 物理按键与蓝牙耳机交互。
@@ -55,7 +63,7 @@
 
 ## 4. 视图路由与单页面架构 (Views & Routing)
 
-- **主界面架构**：单一 Vue 页面主框架，配合浮层全屏播放器 overlay (`FullPlayerOverlay.vue`) 与设置弹窗 (`Settings.vue`)。
+- **主界面架构**：单一 Vue 页面主框架，配合浮层全屏播放器 overlay (`FullPlayerOverlay.vue`) 与设置弹窗 (`Settings.vue`)。在全屏播放器中，左侧元数据区域收敛为仅展示歌曲标题 (`title`) 与歌手名 (`artist`)，隐藏专辑名展示以保持视效精简与纯粹；同时歌名解耦固定宽度限制，支持长歌名最多 2 行自然折行 (`line-clamp-2`) 并降低一档字号以优化视觉层级。
 - **路由防缓存 (ETag & Cache-Control)**：后端 HTML 页面强制写入 `Cache-Control: no-cache, no-store, must-revalidate`，确保前端改动构建后浏览器能 100% 刷入最新资源包。
 
 ---

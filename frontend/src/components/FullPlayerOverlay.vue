@@ -29,10 +29,9 @@
           <img v-cached-src="{ id: playerStore.currentSong?.id, src: playerStore.currentSong?.album_art }"
             class="w-full h-full object-contain bg-black/5 dark:bg-white/5 rounded-md" alt="Cover" />
         </div>
-        <div class="max-w-90 text-white max-md:flex-1 max-md:min-w-0 max-md:text-left">
-          <h2 class="font-display text-2xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-semibold m-0 mb-2 xl:mb-3 tracking-[-0.3px] whitespace-nowrap overflow-hidden text-ellipsis max-md:text-lg max-md:mb-1 md:max-lg:text-[20px]">{{ playerStore.currentSong?.title || '未知标题' }}</h2>
-          <p class="text-white/60 text-sm lg:text-sm xl:text-base 2xl:text-lg m-0 mb-1 whitespace-nowrap overflow-hidden text-ellipsis max-md:text-xs max-md:mb-0.5 md:max-lg:text-sm">{{ playerStore.currentSong?.artist || '未知艺术家' }}</p>
-          <p class="text-white/40 text-xs lg:text-xs xl:text-sm 2xl:text-base m-0 whitespace-nowrap overflow-hidden text-ellipsis max-md:text-[11px] md:max-lg:text-xs" v-if="playerStore.currentSong?.album">{{ playerStore.currentSong.album }}</p>
+        <div class="w-full max-w-[min(480px,90%)] text-white max-md:flex-1 max-md:min-w-0 max-md:text-left">
+          <h2 class="font-display text-[22px] lg:text-[22px] xl:text-[26px] 2xl:text-[30px] font-semibold m-0 mb-2 xl:mb-3 tracking-[-0.3px] line-clamp-2 wrap-break-word leading-snug py-0.5 max-md:text-base max-md:mb-1 md:max-lg:text-lg" :title="playerStore.currentSong?.title">{{ playerStore.currentSong?.title || '未知标题' }}</h2>
+          <p class="text-white/60 text-sm lg:text-sm xl:text-base 2xl:text-lg m-0 line-clamp-1 wrap-break-word max-md:text-xs md:max-lg:text-sm" :title="playerStore.currentSong?.artist">{{ playerStore.currentSong?.artist || '未知艺术家' }}</p>
         </div>
       </div>
 
