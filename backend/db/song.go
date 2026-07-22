@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"os"
 
 	"2fmusic/backend/core"
@@ -24,6 +25,9 @@ func GetAllSongs() ([]core.Song, error) {
 		if err := rows.Scan(&s.ID, &s.Path, &s.Filename, &s.Title, &s.Artist, &s.Album, &s.AlbumArtist, &s.MTime, &s.Size, &hasCover, &hasLyrics, &s.ScrapeRetryCount); err == nil {
 			s.HasCover = hasCover == 1
 			s.HasLyrics = hasLyrics == 1
+			if s.HasCover {
+				s.AlbumArt = fmt.Sprintf("/api/music/covers/%s.webp", s.ID)
+			}
 			songs = append(songs, s)
 		}
 	}
@@ -48,6 +52,9 @@ func GetSongByID(id string) (*core.Song, error) {
 	}
 	s.HasCover = hasCover == 1
 	s.HasLyrics = hasLyrics == 1
+	if s.HasCover {
+		s.AlbumArt = fmt.Sprintf("/api/music/covers/%s.webp", s.ID)
+	}
 	return &s, nil
 }
 
@@ -67,7 +74,35 @@ func GetSongByPath(path string) (*core.Song, error) {
 	}
 	s.HasCover = hasCover == 1
 	s.HasLyrics = hasLyrics == 1
+	if s.HasCover {
+		s.AlbumArt = fmt.Sprintf("/api/music/covers/%s.webp", s.ID)
+	}
 	return &s, nil
+}
+
+var (
+	SongInsertedChan = make(chan *core.Song, 2000)
+	SongDeletedChan  = make(chan string, 2000)
+)
+
+func NotifySongInserted(s *core.Song) {
+	if s == nil || s.ID == "" {
+		return
+	}
+	select {
+	case SongInsertedChan <- s:
+	default:
+	}
+}
+
+func NotifySongDeleted(id string) {
+	if id == "" {
+		return
+	}
+	select {
+	case SongDeletedChan <- id:
+	default:
+	}
 }
 
 // SaveSong 插入或更新歌曲
@@ -101,6 +136,9 @@ func SaveSong(s *core.Song) error {
 			scrape_retry_count = excluded.scrape_retry_count`
 
 	_, err := DB.Exec(query, s.ID, s.Path, s.Filename, s.Title, s.Artist, s.Album, s.AlbumArtist, s.MTime, s.Size, hasCoverInt, hasLyricsInt, s.ScrapeRetryCount)
+	if err == nil {
+		NotifySongInserted(s)
+	}
 	return err
 }
 
@@ -112,6 +150,9 @@ func DeleteSong(id string) error {
 	_, _ = DB.Exec("DELETE FROM favorites WHERE song_id = ?", id)
 	_, _ = DB.Exec("DELETE FROM play_history WHERE song_id = ?", id)
 	_, err := DB.Exec("DELETE FROM songs WHERE id = ?", id)
+	if err == nil {
+		NotifySongDeleted(id)
+	}
 	return err
 }
 
@@ -127,6 +168,9 @@ func DeleteSongByPath(path string) error {
 		_, _ = DB.Exec("DELETE FROM favorites WHERE song_id = ?", songID)
 		_, _ = DB.Exec("DELETE FROM play_history WHERE song_id = ?", songID)
 		_, err = DB.Exec("DELETE FROM songs WHERE id = ?", songID)
+		if err == nil {
+			NotifySongDeleted(songID)
+		}
 		return err
 	}
 	_, err = DB.Exec("DELETE FROM songs WHERE path = ?", path)
@@ -189,6 +233,30 @@ func UpdateSongMediaStatus(id string, hasCover, hasLyrics bool) {
 	_, _ = DB.Exec("UPDATE songs SET has_cover = ?, has_lyrics = ? WHERE id = ?", cVal, lVal, id)
 }
 
+// UpdateSongHasCover 单独更新封面状态
+func UpdateSongHasCover(id string, hasCover bool) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	cVal := 0
+	if hasCover {
+		cVal = 1
+	}
+	_, _ = DB.Exec("UPDATE songs SET has_cover = ? WHERE id = ?", cVal, id)
+}
+
+// UpdateSongHasLyrics 单独更新歌词状态
+func UpdateSongHasLyrics(id string, hasLyrics bool) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	lVal := 0
+	if hasLyrics {
+		lVal = 1
+	}
+	_, _ = DB.Exec("UPDATE songs SET has_lyrics = ? WHERE id = ?", lVal, id)
+}
+
 // CleanStaleSongs 清理磁盘已不存在的旧数据库记录
 func CleanStaleSongs(validPaths map[string]bool) int {
 	type songRef struct {
@@ -239,7 +307,7 @@ func CleanStaleSongs(validPaths map[string]bool) int {
 		}
 	}
 	if deletedCount > 0 {
-		core.Info("数据库已清理 %d 条失效物理文件记录", deletedCount)
+		core.Info("数据库已清理 %d 条失效记录", deletedCount)
 	}
 	return deletedCount
 }

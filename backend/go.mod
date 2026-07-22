@@ -1,6 +1,6 @@
 module 2fmusic/backend
 
-go 1.23
+go 1.25.0
 
 require (
 	github.com/bogem/id3v2 v0.0.0-20230209164914-e76f9ab76b55
@@ -40,9 +40,10 @@ require (
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	golang.org/x/arch v0.3.0 // indirect
 	golang.org/x/crypto v0.14.0 // indirect
+	golang.org/x/image v0.44.0 // indirect
 	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect
-	golang.org/x/text v0.13.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/gc/v3 v3.0.0-20240107210532-573471604cb6 // indirect

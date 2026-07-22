@@ -7,9 +7,12 @@ import (
 	"image/draw"
 	_ "image/jpeg"
 	_ "image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
+
+	golangdraw "golang.org/x/image/draw"
 
 	"2fmusic/backend/core"
 	"2fmusic/backend/utils"
@@ -58,17 +61,17 @@ func SaveCoverWebP(imgData []byte, songID string) bool {
 
 	bounds := srcImg.Bounds()
 	w, h := bounds.Dx(), bounds.Dy()
-	maxDim := 600
+	maxDim := 500
 
 	targetImg := srcImg
 	if w > maxDim || h > maxDim {
 		var newW, newH int
 		if w >= h {
 			newW = maxDim
-			newH = int(float64(h) * float64(maxDim) / float64(w))
+			newH = int(math.Round(float64(h) * float64(maxDim) / float64(w)))
 		} else {
 			newH = maxDim
-			newW = int(float64(w) * float64(maxDim) / float64(h))
+			newW = int(math.Round(float64(w) * float64(maxDim) / float64(h)))
 		}
 		if newW < 1 {
 			newW = 1
@@ -78,7 +81,7 @@ func SaveCoverWebP(imgData []byte, songID string) bool {
 		}
 
 		dstImg := image.NewRGBA(image.Rect(0, 0, newW, newH))
-		draw.Draw(dstImg, dstImg.Bounds(), srcImg, bounds.Min, draw.Over)
+		golangdraw.CatmullRom.Scale(dstImg, dstImg.Bounds(), srcImg, bounds, draw.Over, nil)
 		targetImg = dstImg
 	}
 

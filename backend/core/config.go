@@ -13,6 +13,7 @@ type AppConfig struct {
 	BaseDir              string
 	WWWDir               string
 	MusicLibraryPath     string
+	AudiosDir            string
 	DataDir              string
 	CoversDir            string
 	LyricsDir            string
@@ -50,13 +51,12 @@ func IsAudioFile(path string) bool {
 	return AudioExtsMap[ext]
 }
 
-// MISC_EXTS 附属文件后缀 (.lrc, .yrc, .webp)
-var MISC_EXTS = []string{".lrc", ".yrc", ".webp"}
+// MISC_EXTS 附属文件后缀 (.lrc, .webp)
+var MISC_EXTS = []string{".lrc", ".webp"}
 
 // MiscExtsMap 附属文件后缀集合
 var MiscExtsMap = map[string]bool{
 	".lrc":  true,
-	".yrc":  true,
 	".webp": true,
 }
 
@@ -136,12 +136,14 @@ func InitFromArgs() {
 	GlobalConfig.MusicLibraryPath = NormalizePath(GlobalConfig.MusicLibraryPath)
 	_ = os.MkdirAll(GlobalConfig.MusicLibraryPath, 0755)
 
+	GlobalConfig.AudiosDir = NormalizePath(filepath.Join(GlobalConfig.MusicLibraryPath, "audios"))
 	GlobalConfig.LyricsDir = NormalizePath(filepath.Join(GlobalConfig.MusicLibraryPath, "lyrics"))
 	GlobalConfig.CoversDir = NormalizePath(filepath.Join(GlobalConfig.MusicLibraryPath, "covers"))
 	GlobalConfig.CacheDir = NormalizePath(filepath.Join(GlobalConfig.MusicLibraryPath, ".cache"))
 	GlobalConfig.DBPath = NormalizePath(filepath.Join(GlobalConfig.MusicLibraryPath, "data.db"))
 	GlobalConfig.NeteaseDownloadDir = NormalizePath(filepath.Join(GlobalConfig.MusicLibraryPath, "NetEase"))
 
+	_ = os.MkdirAll(GlobalConfig.AudiosDir, 0755)
 	_ = os.MkdirAll(GlobalConfig.LyricsDir, 0755)
 	_ = os.MkdirAll(GlobalConfig.CoversDir, 0755)
 	_ = os.MkdirAll(GlobalConfig.CacheDir, 0755)

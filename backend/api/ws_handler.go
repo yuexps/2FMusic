@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,17 +60,8 @@ func HandleWSAction(c *Client, req core.WSClientRequest) {
 				return
 			}
 
-			core.Info("物理删除单曲: %s (ID=%s, Path=%s)", song.Title, songID, targetPath)
-
-			basePath := strings.TrimSuffix(targetPath, filepath.Ext(targetPath))
-			for _, subExt := range core.MISC_EXTS {
-				_ = os.Remove(basePath + subExt)
-			}
-			_ = os.Remove(filepath.Join(core.GlobalConfig.CoversDir, songID+".webp"))
-			_ = os.Remove(filepath.Join(core.GlobalConfig.LyricsDir, songID+".lrc"))
-			_ = os.Remove(filepath.Join(core.GlobalConfig.LyricsDir, songID+".yrc"))
+			core.Info("删除单曲: %s (ID=%s, Path=%s)", song.Title, songID, targetPath)
 			_ = db.DeleteSong(songID)
-			NotifyLibraryChanged()
 		}
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
@@ -368,7 +360,7 @@ func HandleWSAction(c *Client, req core.WSClientRequest) {
 			SendErrorResponse(c, seq, action, err.Error())
 			return
 		}
-		core.Info("移除挂载点目录: %s (关联物理数据表已清理 %d 条)", path, affected)
+		core.Info("移除挂载点目录: %s (已清理 %d 条关联记录)", path, affected)
 		NotifyLibraryChanged()
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
@@ -550,12 +542,24 @@ func HandleWSAction(c *Client, req core.WSClientRequest) {
 				return ""
 			}
 			if s, ok := v.(string); ok {
+				s = strings.TrimSpace(s)
+				if strings.Contains(s, "e") || strings.Contains(s, "E") {
+					if f, err := strconv.ParseFloat(s, 64); err == nil {
+						return fmt.Sprintf("%.0f", f)
+					}
+				}
 				return s
 			}
 			if f, ok := v.(float64); ok {
 				return fmt.Sprintf("%.0f", f)
 			}
-			return fmt.Sprintf("%v", v)
+			s := fmt.Sprintf("%v", v)
+			if strings.Contains(s, "e") || strings.Contains(s, "E") {
+				if f, err := strconv.ParseFloat(s, 64); err == nil {
+					return fmt.Sprintf("%.0f", f)
+				}
+			}
+			return s
 		}
 
 		songID := extractString(data["song_id"])

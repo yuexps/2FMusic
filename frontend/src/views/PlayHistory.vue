@@ -40,7 +40,7 @@
               <div class="col-title max-md:contents!">
                 <div class="cover-box max-md:[grid-area:cover] max-md:row-[span_2] max-md:w-10 max-md:h-10"
                   @click.stop="handlePlayBtnClick(item.song)">
-                  <img class="w-full h-full object-cover" v-cached-src="{ id: item.song.id, src: item.song.album_art }"
+                  <img class="w-full h-full object-contain bg-black/5 dark:bg-white/5" v-cached-src="{ id: item.song.id, src: item.song.album_art }"
                     loading="lazy" alt="Cover" />
                   <div class="play-hover">
                     <SvgIcon

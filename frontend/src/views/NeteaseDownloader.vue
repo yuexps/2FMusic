@@ -634,11 +634,11 @@ const normalizeName = (str: string) => {
     .replace(/[\s\/\,\\，、\-\—]/g, '')
 }
 
-// 缓存本地已下载歌曲的 title+artist 组合 Set，方便 O(1) 匹配
+// 缓存本地已下载歌曲的 title+artist+album 组合 Set
 const downloadedSongsSet = computed(() => {
   const set = new Set<string>()
   systemStore.songs.forEach(s => {
-    const key = `${normalizeName(s.title)}_${normalizeName(s.artist)}`
+    const key = `${normalizeName(s.title)}_${normalizeName(s.artist)}_${normalizeName(s.album)}`
     set.add(key)
   })
   return set
@@ -646,7 +646,7 @@ const downloadedSongsSet = computed(() => {
 
 // 判断单曲是否已被下载入本地音乐库
 const isSongDownloaded = (song: NeteaseSong) => {
-  const key = `${normalizeName(song.title)}_${normalizeName(song.artist)}`
+  const key = `${normalizeName(song.title)}_${normalizeName(song.artist)}_${normalizeName(song.album)}`
   return downloadedSongsSet.value.has(key)
 }
 

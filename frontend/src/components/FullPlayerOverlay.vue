@@ -27,7 +27,7 @@
       <div class="flex-1 flex flex-col justify-center items-center text-center min-w-0 max-md:flex-[0_0_auto] max-md:flex-row max-md:items-center max-md:text-left max-md:gap-4 max-md:w-full">
         <div class="w-[min(360px,45vw,42vh)] lg:w-[min(380px,45vw,42vh)] xl:w-[min(440px,48vw,46vh)] 2xl:w-[min(480px,50vw,50vh)] aspect-square mb-8 flex justify-center items-center max-md:w-18 max-md:h-18 max-md:mb-0 max-md:shrink-0 md:max-lg:w-[min(240px,40vw,35vh)] md:max-lg:mb-4 xl:mb-10 shadow-[0_20px_40px_rgba(0,0,0,0.35)] dark:shadow-[0_20px_40px_rgba(0,0,0,0.55)] max-md:shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
           <img v-cached-src="{ id: playerStore.currentSong?.id, src: playerStore.currentSong?.album_art }"
-            class="w-full h-full object-cover rounded-md" alt="Cover" />
+            class="w-full h-full object-contain bg-black/5 dark:bg-white/5 rounded-md" alt="Cover" />
         </div>
         <div class="max-w-90 text-white max-md:flex-1 max-md:min-w-0 max-md:text-left">
           <h2 class="font-display text-2xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-semibold m-0 mb-2 xl:mb-3 tracking-[-0.3px] whitespace-nowrap overflow-hidden text-ellipsis max-md:text-lg max-md:mb-1 md:max-lg:text-[20px]">{{ playerStore.currentSong?.title || '未知标题' }}</h2>

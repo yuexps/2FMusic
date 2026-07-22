@@ -11,8 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"2fmusic/backend/core"
-
 	"github.com/bogem/id3v2"
 	flac "github.com/go-flac/go-flac"
 	flacpicture "github.com/go-flac/flacpicture"
@@ -35,7 +33,7 @@ func EmbedAudioMetadata(filePath, title, artist, album, albumArtist string, cove
 	}
 }
 
-// embedMP3Metadata 给 MP3 写入 ID3v2 标签
+// embedMP3Metadata 增量写入 MP3 ID3v2 封面与歌词标签
 func embedMP3Metadata(filePath, title, artist, album, albumArtist string, coverBytes []byte, lyrics string) error {
 	tag, err := id3v2.Open(filePath, id3v2.Options{Parse: true})
 	if err != nil {
@@ -43,20 +41,21 @@ func embedMP3Metadata(filePath, title, artist, album, albumArtist string, coverB
 	}
 	defer tag.Close()
 
-	if title != "" {
+	tag.SetDefaultEncoding(id3v2.EncodingUTF8)
+
+	if strings.TrimSpace(tag.Title()) == "" && title != "" {
 		tag.SetTitle(title)
 	}
-	if artist != "" {
+	if strings.TrimSpace(tag.Artist()) == "" && artist != "" {
 		tag.SetArtist(artist)
 	}
-	if album != "" {
+	if strings.TrimSpace(tag.Album()) == "" && album != "" {
 		tag.SetAlbum(album)
 	}
-	if albumArtist != "" {
+	if albumArtist != "" && len(tag.GetFrames("TPE2")) == 0 {
 		tag.AddTextFrame("TPE2", id3v2.EncodingUTF8, albumArtist)
 	}
 
-	// 内嵌歌词 (USLT 帧)
 	if lyrics != "" {
 		tag.AddUnsynchronisedLyricsFrame(id3v2.UnsynchronisedLyricsFrame{
 			Encoding: id3v2.EncodingUTF8,
@@ -65,7 +64,6 @@ func embedMP3Metadata(filePath, title, artist, album, albumArtist string, coverB
 		})
 	}
 
-	// 内嵌封面图片 (APIC 帧)
 	if len(coverBytes) > 0 {
 		mimeType := detectMIMEType(coverBytes)
 		tag.AddAttachedPicture(id3v2.PictureFrame{
@@ -80,14 +78,44 @@ func embedMP3Metadata(filePath, title, artist, album, albumArtist string, coverB
 	return tag.Save()
 }
 
-// embedFLACMetadata 给 FLAC 写入 Vorbis Comment 块及 Picture 块
+// embedFLACMetadata 增量写入 FLAC VorbisComment 及 Picture 块
 func embedFLACMetadata(filePath, title, artist, album, albumArtist string, coverBytes []byte, lyrics string) error {
 	f, err := flac.ParseFile(filePath)
 	if err != nil {
 		return fmt.Errorf("解析 FLAC 文件失败: %w", err)
 	}
 
-	// 1. 过滤已有的 Vorbis Comment 与 Picture 块
+	existingComments := parseVorbisCommentBlock(f.Meta)
+	commentMap := make(map[string]string)
+	for _, c := range existingComments {
+		parts := strings.SplitN(c, "=", 2)
+		if len(parts) == 2 {
+			commentMap[strings.ToUpper(parts[0])] = parts[1]
+		}
+	}
+
+	if _, ok := commentMap["TITLE"]; !ok && title != "" {
+		commentMap["TITLE"] = title
+	}
+	if _, ok := commentMap["ARTIST"]; !ok && artist != "" {
+		commentMap["ARTIST"] = artist
+	}
+	if _, ok := commentMap["ALBUM"]; !ok && album != "" {
+		commentMap["ALBUM"] = album
+	}
+	if _, ok := commentMap["ALBUMARTIST"]; !ok && albumArtist != "" {
+		commentMap["ALBUMARTIST"] = albumArtist
+	}
+	if lyrics != "" {
+		commentMap["LYRICS"] = lyrics
+	}
+
+	comments := make([]string, 0, len(commentMap))
+	for k, v := range commentMap {
+		comments = append(comments, k+"="+v)
+	}
+
+	// 重新排列 FLAC 元数据块（排除旧 VorbisComment 与 Picture，放入全新构造块）
 	var newMeta []*flac.MetaDataBlock
 	for _, block := range f.Meta {
 		if block.Type != flac.VorbisComment && block.Type != flac.Picture {
@@ -95,31 +123,11 @@ func embedFLACMetadata(filePath, title, artist, album, albumArtist string, cover
 		}
 	}
 
-	// 2. 构建 Vorbis Comment (Block Type 4)
-	comments := []string{}
-	if title != "" {
-		comments = append(comments, "TITLE="+title)
-	}
-	if artist != "" {
-		comments = append(comments, "ARTIST="+artist)
-	}
-	if album != "" {
-		comments = append(comments, "ALBUM="+album)
-	}
-	if albumArtist != "" {
-		comments = append(comments, "ALBUMARTIST="+albumArtist)
-		comments = append(comments, "ALBUM ARTIST="+albumArtist)
-	}
-	if lyrics != "" {
-		comments = append(comments, "LYRICS="+lyrics)
-	}
-
 	if len(comments) > 0 {
 		vcBlock := buildVorbisCommentBlock(comments)
 		newMeta = append(newMeta, vcBlock)
 	}
 
-	// 3. 构建 Picture Block (Block Type 6)
 	if len(coverBytes) > 0 {
 		mimeType := detectMIMEType(coverBytes)
 		pic, err := flacpicture.NewFromImageData(
@@ -131,13 +139,44 @@ func embedFLACMetadata(filePath, title, artist, album, albumArtist string, cover
 		if err == nil {
 			picBlock := pic.Marshal()
 			newMeta = append(newMeta, &picBlock)
-		} else {
-			core.Warn("构建 FLAC 封面块失败: %v", err)
 		}
 	}
 
 	f.Meta = newMeta
 	return f.Save(filePath)
+}
+
+// parseVorbisCommentBlock 从 FLAC MetaDataBlock 中解算已有的 Vorbis Comments 键值对数组
+func parseVorbisCommentBlock(blocks []*flac.MetaDataBlock) []string {
+	for _, block := range blocks {
+		if block.Type == flac.VorbisComment && len(block.Data) >= 8 {
+			data := block.Data
+			vendorLen := binary.LittleEndian.Uint32(data[0:4])
+			if uint32(len(data)) < 4+vendorLen+4 {
+				continue
+			}
+			offset := 4 + vendorLen
+			commentCount := binary.LittleEndian.Uint32(data[offset : offset+4])
+			offset += 4
+
+			comments := make([]string, 0, commentCount)
+			for i := uint32(0); i < commentCount; i++ {
+				if uint32(len(data)) < offset+4 {
+					break
+				}
+				cLen := binary.LittleEndian.Uint32(data[offset : offset+4])
+				offset += 4
+				if uint32(len(data)) < offset+cLen {
+					break
+				}
+				cStr := string(data[offset : offset+cLen])
+				offset += cLen
+				comments = append(comments, cStr)
+			}
+			return comments
+		}
+	}
+	return nil
 }
 
 // buildVorbisCommentBlock 构造 Vorbis Comment 二进制 MetaDataBlock

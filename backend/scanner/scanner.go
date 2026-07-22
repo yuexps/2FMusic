@@ -137,13 +137,17 @@ func CleanTempPartFiles() {
 		})
 	}
 	if cleanedCount > 0 {
-		core.Info("启动清理: 物理清除 %d 个 .part/.tmp 临时碎片文件", cleanedCount)
+		core.Info("启动清理: 清理 %d 个 .part/.tmp 临时碎片文件", cleanedCount)
 	}
 }
 
-// TriggerScan 触发物理扫描
-func TriggerScan() {
-	go ScanLibraryIncremental()
+// TriggerScan 触发扫描
+func TriggerScan(targetDir ...string) {
+	dir := ""
+	if len(targetDir) > 0 {
+		dir = targetDir[0]
+	}
+	go ScanDirectoryInternal(dir)
 }
 
 // ScanLibraryIncremental 全量/增量扫描
@@ -159,7 +163,7 @@ func ScanDirectorySingle(targetDir string) {
 // ScanDirectoryInternal 通用扫描逻辑
 func ScanDirectoryInternal(targetDir string) {
 	if !scanExecutionLock.TryLock() {
-		core.Info("另一次物理扫描正在运行中，跳过本次扫描")
+		core.Info("另一次扫描任务正在运行中，跳过本次扫描")
 		return
 	}
 	defer scanExecutionLock.Unlock()
@@ -202,16 +206,19 @@ func ScanDirectoryInternal(targetDir string) {
 	}()
 
 	if targetDir != "" {
-		core.Info("开始物理扫描曲库 (targetDir=%s)", targetDir)
+		core.Info("开始扫描曲库 (targetDir=%s)", targetDir)
 	} else {
-		core.Info("开始物理扫描曲库 (全量扫描)")
+		core.Info("开始扫描曲库 (全量扫描)")
 	}
 
 	scanDirs := []string{}
 	if targetDir != "" {
 		scanDirs = append(scanDirs, targetDir)
 	} else {
-		scanDirs = append(scanDirs, core.GlobalConfig.MusicLibraryPath)
+		scanDirs = append(scanDirs, core.GlobalConfig.AudiosDir)
+		if core.GlobalConfig.NeteaseDownloadDir != "" {
+			scanDirs = append(scanDirs, core.GlobalConfig.NeteaseDownloadDir)
+		}
 		mounts, err := db.GetMountPoints()
 		if err == nil {
 			for _, m := range mounts {
@@ -258,7 +265,7 @@ func ScanDirectoryInternal(targetDir string) {
 	}
 
 	cleanedCount := db.CleanStaleSongs(diskPaths)
-	core.Info("物理扫描完成: 共扫描 %d 首有效曲目，物理清理 %d 条失效记录", len(diskPaths), cleanedCount)
+	core.Info("扫描完成: 共扫描 %d 首有效曲目，清理 %d 条失效记录", len(diskPaths), cleanedCount)
 
 	// 主动通知 WebSocket 客户端曲库已更新
 	if NotifyLibraryChanged != nil {
@@ -554,12 +561,6 @@ func saveLyricsFile(lrcPath string, content []byte) bool {
 // GetOrScrapeLyrics 获取或刮削歌词
 func GetOrScrapeLyrics(songID, title, artist, filename string, yrc bool) (string, error) {
 	if songID != "" {
-		if yrc {
-			yrcPath := filepath.Join(core.GlobalConfig.LyricsDir, songID+".yrc")
-			if b, err := os.ReadFile(yrcPath); err == nil {
-				return string(b), nil
-			}
-		}
 		lrcPath := filepath.Join(core.GlobalConfig.LyricsDir, songID+".lrc")
 		if b, err := os.ReadFile(lrcPath); err == nil {
 			return string(b), nil
@@ -580,9 +581,7 @@ func GetOrScrapeLyrics(songID, title, artist, filename string, yrc bool) (string
 		lyrics, _ := best["lyrics"].(string)
 		if lyrics != "" && songID != "" {
 			lrcPath := filepath.Join(core.GlobalConfig.LyricsDir, songID+".lrc")
-			if saveLyricsFile(lrcPath, []byte(lyrics)) {
-				db.UpdateSongMediaStatus(songID, true, true)
-			}
+			_ = saveLyricsFile(lrcPath, []byte(lyrics))
 		}
 		return lyrics, nil
 	}
@@ -611,7 +610,6 @@ func GetOrScrapeCover(songID, title, artist, album string) (string, error) {
 			imgData, err := DownloadImageBytes(coverURL)
 			if err == nil && len(imgData) > 0 {
 				if SaveCoverWebP(imgData, songID) {
-					db.UpdateSongMediaStatus(songID, true, true)
 					return fmt.Sprintf("/api/music/covers/%s.webp", songID), nil
 				}
 			}

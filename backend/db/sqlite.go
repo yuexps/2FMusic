@@ -175,6 +175,39 @@ func SaveSystemSetting(key, value string) error {
 		case "lyrics_source_preference":
 			core.GlobalConfig.LyricsPreference = value
 		}
+
+		keyName := key
+		logVal := value
+
+		switch key {
+		case "lyrics_source_preference":
+			keyName = "歌词来源偏好"
+			switch value {
+			case "network":
+				logVal = "网络优先 (network)"
+			case "embedded":
+				logVal = "本地内嵌优先 (embedded)"
+			}
+		case "netease_api_base":
+			keyName = "网易云 API 地址"
+			if value == "" {
+				logVal = "[未配置]"
+			}
+		case "netease_download_dir":
+			keyName = "网易云下载目录"
+			if value == "" {
+				logVal = "[未配置]"
+			}
+		case "netease_cookie":
+			keyName = "网易云 Cookie"
+			if value == "" {
+				logVal = "[已清除]"
+			} else if len(value) > 10 {
+				logVal = value[:10] + "..."
+			}
+		}
+
+		core.Info("更新系统配置 [%s]: %s", keyName, logVal)
 	}
 	return err
 }

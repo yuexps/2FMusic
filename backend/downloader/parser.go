@@ -54,6 +54,39 @@ func extractSongLevel(privilege map[string]interface{}) (string, string) {
 	return userLevel, maxLevel
 }
 
+// stringifyID 安全转换网易云曲目/歌单 ID 为纯整数字符串，防范 float64 科学计数法格式化问题
+func stringifyID(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case float64:
+		return fmt.Sprintf("%.0f", val)
+	case float32:
+		return fmt.Sprintf("%.0f", val)
+	case int:
+		return strconv.Itoa(val)
+	case int64:
+		return strconv.FormatInt(val, 10)
+	case string:
+		val = strings.TrimSpace(val)
+		if strings.Contains(val, "e") || strings.Contains(val, "E") {
+			if f, err := strconv.ParseFloat(val, 64); err == nil {
+				return fmt.Sprintf("%.0f", f)
+			}
+		}
+		return val
+	default:
+		s := strings.TrimSpace(fmt.Sprintf("%v", val))
+		if strings.Contains(s, "e") || strings.Contains(s, "E") {
+			if f, err := strconv.ParseFloat(s, 64); err == nil {
+				return fmt.Sprintf("%.0f", f)
+			}
+		}
+		return s
+	}
+}
+
 // FormatNeteaseSongs 将网易云 API 原始曲目数组转换为标准对象格式
 func FormatNeteaseSongs(sourceTracks []interface{}) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(sourceTracks))
@@ -62,7 +95,7 @@ func FormatNeteaseSongs(sourceTracks []interface{}) []map[string]interface{} {
 		if !ok {
 			continue
 		}
-		sid := fmt.Sprintf("%v", item["id"])
+		sid := stringifyID(item["id"])
 		if sid == "" || sid == "<nil>" {
 			continue
 		}

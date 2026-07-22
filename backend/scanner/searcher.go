@@ -21,13 +21,73 @@ var httpClient = &http.Client{
 }
 
 type searchResult struct {
-	title        string
-	artist       string
-	album        string
-	lyrics       string
-	cover        string
-	source       string
-	platformRank int
+	title          string
+	artist         string
+	album          string
+	lyrics         string
+	cover          string
+	source         string
+	platformRank   int
+	hasTranslation bool
+}
+
+type lrcLine struct {
+	ts      string
+	content string
+}
+
+var (
+	lrcTimeRegexp      = regexp.MustCompile(`\[(\d{2}:\d{2}(?:\.\d{2,3})?)\]`)
+	lrcTimeCleanRegexp = regexp.MustCompile(`(\[\d{2}:\d{2}(?:\.\d{2,3})?\])+`)
+)
+
+func parseLrcLines(lrcText string) []lrcLine {
+	var result []lrcLine
+	lines := strings.Split(lrcText, "\n")
+	for _, line := range lines {
+		matches := lrcTimeRegexp.FindAllStringSubmatch(line, -1)
+		content := strings.TrimSpace(lrcTimeCleanRegexp.ReplaceAllString(line, ""))
+		if len(matches) > 0 && content != "" {
+			for _, m := range matches {
+				if len(m) >= 2 {
+					result = append(result, lrcLine{ts: m[1], content: content})
+				}
+			}
+		}
+	}
+	return result
+}
+
+func mergeLyricsWithTranslation(originLyric, transLyric string) (string, bool) {
+	originLyric = strings.TrimSpace(originLyric)
+	transLyric = strings.TrimSpace(transLyric)
+	if transLyric == "" {
+		return originLyric, false
+	}
+	if originLyric == "" {
+		return "", false
+	}
+
+	originList := parseLrcLines(originLyric)
+	transList := parseLrcLines(transLyric)
+
+	if len(transList) == 0 {
+		return originLyric, false
+	}
+
+	var merged []string
+	i, j := 0, 0
+	for i < len(originList) || j < len(transList) {
+		if i < len(originList) && (j >= len(transList) || originList[i].ts <= transList[j].ts) {
+			merged = append(merged, fmt.Sprintf("[%s]%s", originList[i].ts, originList[i].content))
+			i++
+		} else if j < len(transList) {
+			merged = append(merged, fmt.Sprintf("[%s]%s", transList[j].ts, transList[j].content))
+			j++
+		}
+	}
+
+	return strings.Join(merged, "\n"), true
 }
 
 // DownloadImageBytes 通用下载图片字节流
@@ -213,6 +273,9 @@ func SearchSongFastSequential(title, artist, album string) map[string]interface{
 			if album != "" && strings.EqualFold(strings.TrimSpace(item.album), strings.TrimSpace(album)) {
 				score += 0.2
 			}
+			if item.hasTranslation {
+				score += 0.02
+			}
 			switch item.platformRank {
 			case 0:
 				score += 0.05
@@ -240,12 +303,13 @@ func SearchSongFastSequential(title, artist, album string) map[string]interface{
 	}
 
 	return map[string]interface{}{
-		"title":  bestResult.title,
-		"artist": bestResult.artist,
-		"album":  bestResult.album,
-		"lyrics": bestResult.lyrics,
-		"cover":  bestResult.cover,
-		"source": bestResult.source,
+		"title":           bestResult.title,
+		"artist":          bestResult.artist,
+		"album":           bestResult.album,
+		"lyrics":          bestResult.lyrics,
+		"cover":           bestResult.cover,
+		"source":          bestResult.source,
+		"has_translation": bestResult.hasTranslation,
 	}
 }
 
@@ -325,6 +389,10 @@ func SearchSongBest(title, artist, album string) map[string]interface{} {
 
 		score += apiBonus[item.source]
 
+		if item.hasTranslation {
+			score += 0.02
+		}
+
 		switch item.platformRank {
 		case 0:
 			score += 0.05
@@ -367,12 +435,13 @@ func SearchSongBest(title, artist, album string) map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"title":  best.title,
-		"artist": best.artist,
-		"album":  best.album,
-		"lyrics": best.lyrics,
-		"cover":  best.cover,
-		"source": best.source,
+		"title":           best.title,
+		"artist":          best.artist,
+		"album":           best.album,
+		"lyrics":          best.lyrics,
+		"cover":           best.cover,
+		"source":          best.source,
+		"has_translation": best.hasTranslation,
 	}
 }
 
@@ -435,41 +504,46 @@ func searchNetease(title, artist string) []searchResult {
 			sCover, _ = alMap["picUrl"].(string)
 		}
 
-		lyrics := getNeteaseLyric(sID)
+		lyrics, hasTrans := getNeteaseLyric(sID)
 
 		list = append(list, searchResult{
-			title:        sTitle,
-			artist:       sArtist,
-			album:        sAlbum,
-			lyrics:       lyrics,
-			cover:        sCover,
-			source:       "netease",
-			platformRank: idx,
+			title:          sTitle,
+			artist:         sArtist,
+			album:          sAlbum,
+			lyrics:         lyrics,
+			cover:          sCover,
+			source:         "netease",
+			platformRank:   idx,
+			hasTranslation: hasTrans,
 		})
 	}
 
 	return list
 }
 
-func getNeteaseLyric(songID string) string {
+func getNeteaseLyric(songID string) (string, bool) {
 	u := fmt.Sprintf("https://music.163.com/api/song/lyric?id=%s&lv=1&tv=1", songID)
 	req, _ := http.NewRequest("GET", u, nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return ""
+		return "", false
 	}
 	defer resp.Body.Close()
 
 	var body map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return ""
+		return "", false
 	}
 
 	lrcMap, _ := body["lrc"].(map[string]interface{})
-	lyric, _ := lrcMap["lyric"].(string)
-	return lyric
+	originLyric, _ := lrcMap["lyric"].(string)
+
+	tlyricMap, _ := body["tlyric"].(map[string]interface{})
+	transLyric, _ := tlyricMap["lyric"].(string)
+
+	return mergeLyricsWithTranslation(originLyric, transLyric)
 }
 
 // searchQQ QQ 音乐刮削接口

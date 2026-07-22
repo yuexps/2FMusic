@@ -145,12 +145,14 @@ func fetchNeteaseLyric(songID string) string {
 		res, err = CallNeteaseAPI("/lyric", map[string]string{"id": songID})
 	}
 	if err != nil || res == nil {
+		core.Warn("获取网易云歌词接口响应失败 (SongID=%s): %v", songID, err)
 		return ""
 	}
 
 	// 1. 优先校验 yrc.lyric (网易云逐字歌词)
 	if yrcMap, ok := res["yrc"].(map[string]interface{}); ok && yrcMap != nil {
 		if yrcStr, ok := yrcMap["lyric"].(string); ok && strings.TrimSpace(yrcStr) != "" {
+			core.Info("拉取网易云 YRC 逐字歌词成功 (SongID=%s)", songID)
 			return strings.TrimSpace(yrcStr)
 		}
 	}
@@ -158,10 +160,12 @@ func fetchNeteaseLyric(songID string) string {
 	// 2. 退避校验 lrc.lyric (标准 Lrc 歌词)
 	if lrcMap, ok := res["lrc"].(map[string]interface{}); ok && lrcMap != nil {
 		if lrcStr, ok := lrcMap["lyric"].(string); ok && strings.TrimSpace(lrcStr) != "" {
+			core.Info("拉取网易云 LRC 标准歌词成功 (SongID=%s)", songID)
 			return strings.TrimSpace(lrcStr)
 		}
 	}
 
+	core.Warn("网易云 API 未返回有效歌词内容 (SongID=%s)", songID)
 	return ""
 }
 
@@ -169,6 +173,7 @@ func fetchNeteaseLyric(songID string) string {
 func fetchNeteaseCoverURL(songID string) string {
 	res, err := CallNeteaseAPI("/song/detail", map[string]string{"ids": songID})
 	if err != nil || res == nil {
+		core.Warn("获取网易云歌曲详情接口失败 (SongID=%s): %v", songID, err)
 		return ""
 	}
 
@@ -176,11 +181,13 @@ func fetchNeteaseCoverURL(songID string) string {
 		if info, ok := songs[0].(map[string]interface{}); ok {
 			if al, ok := info["al"].(map[string]interface{}); ok {
 				if picURL, ok := al["picUrl"].(string); ok && picURL != "" {
+					core.Info("拉取网易云封面 URL 成功: %s (SongID=%s)", picURL, songID)
 					return picURL
 				}
 			}
 		}
 	}
+	core.Warn("网易云 API 未找到歌曲封面图片 (SongID=%s)", songID)
 	return ""
 }
 

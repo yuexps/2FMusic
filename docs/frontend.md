@@ -41,9 +41,11 @@
 
 ## 3. 本地缓存与性能优化 (IndexedDB Cache)
 
-### 3.1 封面大图与 Blob URL 物理引用计数
+### 3.1 封面大图、Blob URL 物理引用计数与 UI 展示规范
 - 采用 **IndexedDB** 在本地离线持久化存储音频 WebP 封面。
 - **Blob URL 生命周期控制**：在创建 `URL.createObjectURL(blob)` 时记录引用计数；在 DOM 销毁或封面切替时，严格执行 `URL.revokeObjectURL(url)` 释放内存，防止内存泄露。
+- **封面 UI 展示规范 (`object-contain`)**：为确保任意长宽比例的音乐封面能够完整无损展示，列表卡片与播放控制栏封面统一使用 `object-contain` 配合底相衬底进行适应性渲染，防止边缘图像裁切。
+- **网易云已下载判定规约 (`isSongDownloaded`)**：在网易云下载界面中，判断歌曲是否已在本地曲库存在时，必须同时比对歌名、歌手与专辑名（组合为 `${title}_${artist}_${album}`），确保判定准确。
 
 ### 3.2 子路径与 Web 资源匹配 (`getApiUrl`)
 - **部署适配**：应用支持子路径反向代理部署（如 `/app/yuexps-2fmusic/`）。

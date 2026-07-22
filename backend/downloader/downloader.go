@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -54,6 +55,12 @@ func GetTasks() []core.DownloadTask {
 
 // StartNeteaseDownload 发起网易云在线下载任务
 func StartNeteaseDownload(songID, title, artist, album, level string) string {
+	songID = strings.TrimSpace(songID)
+	if strings.Contains(songID, "e") || strings.Contains(songID, "E") {
+		if f, err := strconv.ParseFloat(songID, 64); err == nil {
+			songID = fmt.Sprintf("%.0f", f)
+		}
+	}
 	taskID := fmt.Sprintf("dl_%s_%d", songID, time.Now().UnixNano())
 
 	task := &core.DownloadTask{
@@ -82,7 +89,7 @@ func StartNeteaseDownload(songID, title, artist, album, level string) string {
 func executeDownload(task *core.DownloadTask, level string) {
 	updateTaskStatus(task.TaskID, "preparing", 0, "")
 
-	if task.Title == "" || level == "" {
+	if task.Title == "" || task.Artist == "" || task.Album == "" || level == "" {
 		metaResp, err := CallNeteaseAPI("/song/detail", map[string]string{"ids": task.SongID})
 		if err == nil {
 			if songs, ok := metaResp["songs"].([]interface{}); ok && len(songs) > 0 {
@@ -104,6 +111,13 @@ func executeDownload(task *core.DownloadTask, level string) {
 							}
 							if len(names) > 0 {
 								task.Artist = strings.Join(names, " / ")
+							}
+						}
+					}
+					if task.Album == "" {
+						if alMap, ok := info["al"].(map[string]interface{}); ok {
+							if alName, ok := alMap["name"].(string); ok {
+								task.Album = alName
 							}
 						}
 					}
@@ -140,20 +154,25 @@ func executeDownload(task *core.DownloadTask, level string) {
 		ext = ".flac"
 	}
 
-	fileName := fmt.Sprintf("%s - %s%s", task.Artist, task.Title, ext)
+	cleanTitle := utils.SanitizeFilename(task.Title)
+	cleanArtist := utils.SanitizeFilename(task.Artist)
+
+	fileName := fmt.Sprintf("%s - %s%s", cleanTitle, cleanArtist, ext)
 	if task.Artist == "" {
-		fileName = fmt.Sprintf("%s%s", task.Title, ext)
+		fileName = fmt.Sprintf("%s%s", cleanTitle, ext)
 	}
 
 	targetDir := core.GlobalConfig.NeteaseDownloadDir
 	if targetDir == "" {
-		targetDir = core.GlobalConfig.MusicLibraryPath
+		targetDir = core.GlobalConfig.AudiosDir
 	}
+	_ = os.MkdirAll(targetDir, 0755)
 
 	cacheDir := core.GlobalConfig.CacheDir
 	if cacheDir == "" {
 		cacheDir = targetDir
 	}
+	_ = os.MkdirAll(cacheDir, 0755)
 
 	partPath := filepath.Join(cacheDir, fmt.Sprintf("dl_%s%s.part", task.TaskID, ext))
 	finalPath := filepath.Join(targetDir, fileName)
@@ -236,8 +255,11 @@ func executeDownload(task *core.DownloadTask, level string) {
 	lyrics := fetchNeteaseLyric(task.SongID)
 	var coverBytes []byte
 	if coverURL := fetchNeteaseCoverURL(task.SongID); coverURL != "" {
-		if cBytes, err := scanner.DownloadImageBytes(coverURL); err == nil {
+		if cBytes, err := scanner.DownloadImageBytes(coverURL); err == nil && len(cBytes) > 0 {
 			coverBytes = cBytes
+			core.Info("下载网易云封面图片成功 (%d 字节)", len(cBytes))
+		} else {
+			core.Warn("下载网易云封面图片失败 (URL=%s): %v", coverURL, err)
 		}
 	}
 
@@ -248,7 +270,7 @@ func executeDownload(task *core.DownloadTask, level string) {
 	}
 
 	// 将完成内嵌的物理音频文件移动至最终 NetEase 存储路径
-	if err := os.Rename(tempAudioPath, finalPath); err != nil {
+	if err := utils.SafeMoveFile(tempAudioPath, finalPath); err != nil {
 		_ = os.Remove(tempAudioPath)
 		updateTaskStatus(task.TaskID, "error", 0, fmt.Sprintf("文件落盘失败: %v", err))
 		return

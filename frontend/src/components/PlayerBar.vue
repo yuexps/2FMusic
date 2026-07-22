@@ -13,7 +13,7 @@
       class="flex items-center gap-3 w-1/4 min-w-45 cursor-pointer overflow-hidden max-md:min-w-0 max-md:w-auto max-md:flex-1 max-md:pr-4"
       @click="emit('open-lyrics')" title="点击查看歌词">
       <img v-cached-src="{ id: playerStore.currentSong?.id, src: playerStore.currentSong?.album_art }"
-        class="w-12 h-12 object-cover shrink-0 rounded-md" alt="Cover" />
+        class="w-12 h-12 object-contain bg-black/5 dark:bg-white/5 shrink-0 rounded-md" alt="Cover" />
       <div class="overflow-hidden">
         <div class="text-sm font-semibold text-ink truncate mb-0.5" :title="playerStore.currentSong?.title || '等待播放'">
           {{ playerStore.currentSong?.title || '等待播放' }}

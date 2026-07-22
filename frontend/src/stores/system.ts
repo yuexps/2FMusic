@@ -4,6 +4,7 @@ import type { Song, SystemStatus, DownloadTask, NeteaseSong } from '../types'
 import { wsClient } from '../api/ws'
 import { musicDB } from '../utils/indexedDB'
 import { coverCacheManager } from '../utils/coverCache'
+import { usePlayerStore } from './player'
 
 export const useSystemStore = defineStore('system', () => {
   let parsedPlaylist: Song[] = []
@@ -129,6 +130,10 @@ export const useSystemStore = defineStore('system', () => {
       songs.value = Array.isArray(data) ? data : []
       // 同步缓存
       localStorage.setItem('2fmusic_playlist', JSON.stringify(songs.value))
+
+      // 触发播放器与播放列表的失效歌曲清洗
+      const playerStore = usePlayerStore()
+      playerStore.cleanInvalidSongs(songs.value)
     } catch (e: any) {
       if (!e?.isWSClosed) {
         console.error('通过 WebSocket 获取歌曲列表失败:', e)

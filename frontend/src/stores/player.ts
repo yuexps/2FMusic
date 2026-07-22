@@ -471,6 +471,34 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  // 清理播放器与播放列表中已从曲库移除的失效歌曲
+  const cleanInvalidSongs = (validSongs: Song[]) => {
+    if (!Array.isArray(validSongs) || validSongs.length === 0) return
+
+    const validIdSet = new Set(validSongs.map(s => s.id))
+
+    // 1. 过滤播放列表与队列，剔除已删除的失效歌曲（保留非 DB 源歌曲）
+    playlist.value = playlist.value.filter(s => !s.id || validIdSet.has(s.id))
+    queue.value = queue.value.filter(s => !s.id || validIdSet.has(s.id))
+
+    // 2. 校验当前播放器歌曲
+    if (currentSong.value && currentSong.value.id && !validIdSet.has(currentSong.value.id)) {
+      console.warn(`[PlayerStore] 发现失效歌曲 ${currentSong.value.title} (ID: ${currentSong.value.id})，已自动从播放器清理`)
+      if (audio) {
+        audio.pause()
+        audio.src = ''
+      }
+      isPlaying.value = false
+      currentSong.value = null
+      currentLyric.value = ''
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = null
+      }
+    }
+
+    saveState()
+  }
+
   return {
     playlist,
     queue,
@@ -493,6 +521,7 @@ export const usePlayerStore = defineStore('player', () => {
     shufflePlaylist,
     fetchAlbumArt,
     currentLyric,
-    updateLyric
+    updateLyric,
+    cleanInvalidSongs
   }
 })

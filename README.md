@@ -1,6 +1,6 @@
 # 2FMusic
 
-> 轻量级本地音乐播放器 Web 应用，基于 Flask + Vue 3 + Vite + Pinia + Naive UI + Tailwind CSS 构建。
+> 轻量级本地音乐播放器 Web 应用，基于 Go (Gin) + Vue 3 + Vite + Pinia + Naive UI + Tailwind CSS 构建。
 
 可部署在服务器或 NAS 上，通过浏览器提供在线音乐播放。
 
@@ -16,7 +16,7 @@
 ## 直接启动
 
 ```bash
-python server/app.py --music-library-path ./Music --port 23237
+./2fmusic --music-library-path ./Music --port 23237
 ```
 
 命令行参数:

@@ -12,7 +12,6 @@ import (
 
 	"2fmusic/backend/core"
 	"2fmusic/backend/db"
-	"2fmusic/backend/scanner"
 	"2fmusic/backend/static"
 
 	"github.com/gin-gonic/gin"
@@ -117,7 +116,7 @@ func handleUploadMusic(c *gin.Context) {
 
 	targetDir := c.PostForm("target_dir")
 	if targetDir == "" {
-		targetDir = core.GlobalConfig.MusicLibraryPath
+		targetDir = core.GlobalConfig.AudiosDir
 	}
 
 	destPath := filepath.Join(targetDir, file.Filename)
@@ -127,8 +126,6 @@ func handleUploadMusic(c *gin.Context) {
 		cacheDir = targetDir
 	}
 	tmpPath := filepath.Join(cacheDir, fmt.Sprintf("upload_%d_%s.part", time.Now().UnixNano(), file.Filename))
-
-	scanner.AddWatchdogIgnorePath(destPath)
 
 	if err := c.SaveUploadedFile(file, tmpPath); err != nil {
 		_ = os.Remove(tmpPath)
@@ -142,13 +139,7 @@ func handleUploadMusic(c *gin.Context) {
 		return
 	}
 
-	go func() {
-		s := scanner.IndexSingleFile(destPath)
-		if s != nil {
-			NotifyLibraryChanged()
-		}
-	}()
-
+	// 移入 AudiosDir 后由 Audio_Watcher 自动感应落盘入库
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 

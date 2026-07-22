@@ -156,7 +156,7 @@
                   <div
                     class="w-10 h-10 rounded-md overflow-hidden relative shrink-0 max-md:[grid-area:cover] max-md:row-[span_2] max-md:w-10 max-md:h-10"
                     @click.stop="handlePlayBtnClick(song)">
-                    <img class="w-full h-full object-cover" v-cached-src="{ id: song.id, src: song.album_art }"
+                    <img class="w-full h-full object-contain bg-black/5 dark:bg-white/5" v-cached-src="{ id: song.id, src: song.album_art }"
                       loading="lazy" alt="Cover" />
                     <div
                       class="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 text-xs transition-opacity duration-200 group-hover:opacity-100">
@@ -244,7 +244,7 @@
                 @click="openGroupDetail(album.albumName, album.artist, album.songs, album.cover)">
                 <!-- 1:1 专辑封套 -->
                 <div class="relative aspect-square w-full rounded-xl overflow-hidden shadow-md border border-hairline/10 transition-all duration-300 group-hover:scale-103 group-hover:shadow-xl group-hover:border-primary/20">
-                  <img v-if="album.cover" :src="getApiUrl(album.cover)" class="w-full h-full object-cover" loading="lazy" />
+                  <img v-if="album.cover" :src="getApiUrl(album.cover)" class="w-full h-full object-contain bg-black/5 dark:bg-white/5" loading="lazy" />
                   <div v-else class="w-full h-full bg-sidebar flex items-center justify-center text-body-muted">
                     <SvgIcon name="music" class="text-3xl max-md:text-xl" />
                   </div>
@@ -330,7 +330,7 @@
                       <div
                         class="w-10 h-10 rounded-md overflow-hidden relative shrink-0 max-md:[grid-area:cover] max-md:row-[span_2] max-md:w-10 max-md:h-10"
                         @click.stop="handlePlayBtnClick(song, currentFolderContent.songs)">
-                        <img class="w-full h-full object-cover" v-cached-src="{ id: song.id, src: song.album_art }"
+                        <img class="w-full h-full object-contain bg-black/5 dark:bg-white/5" v-cached-src="{ id: song.id, src: song.album_art }"
                           loading="lazy" alt="Cover" />
                         <div
                           class="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 text-xs transition-opacity duration-200 group-hover:opacity-100">
@@ -400,7 +400,7 @@
         <template #header>
           <div class="flex items-center gap-4 py-1 select-none">
             <div class="w-14 h-14 rounded-lg overflow-hidden shadow-md shrink-0 border border-hairline/10">
-              <img v-if="detailDrawerGroup.cover" :src="getApiUrl(detailDrawerGroup.cover)" class="w-full h-full object-cover" />
+              <img v-if="detailDrawerGroup.cover" :src="getApiUrl(detailDrawerGroup.cover)" class="w-full h-full object-contain bg-black/5 dark:bg-white/5" />
               <div v-else class="w-full h-full bg-sidebar flex items-center justify-center text-body-muted">
                 <SvgIcon :name="detailDrawerGroup.subtitle === '歌手' ? 'user' : 'music'" class="text-2xl" />
               </div>
