@@ -8,7 +8,6 @@ from core.config import app_config
 from core.routes.auth import auth_bp
 from core.routes.music import music_bp
 from core.routes.netease import netease_bp
-from core.routes.folia import folia_bp
 from core.routes.ws import register_ws
 
 
@@ -34,24 +33,19 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(music_bp)
     app.register_blueprint(netease_bp)
-    app.register_blueprint(folia_bp)
 
     # 2. 初始化并注册 WebSocket 服务
     register_ws(app)
 
-
-
     # 4. 后置钩子：缓存控制与 CORS 头自动补全
     @app.after_request
     def add_cache_control_and_cors(response):
-        # 对 HTML 页面禁用强缓存，确保每次都能拉取到最新的静态资源 Hash 指针
         if response.content_type.startswith('text/html'):
             response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
             if not response.headers.get('ETag'):
                 etag = hashlib_md5_data(response.data)
                 response.headers['ETag'] = f'"{etag}"'
                 
-        # 允许全域 CORS 请求
         response.headers['Access-Control-Allow-Origin'] = '*'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Password'
         response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
@@ -63,17 +57,9 @@ def create_app() -> Flask:
         h.update(data)
         return h.hexdigest()
 
-    # 5. 主页与子应用路由
+    # 5. 主页路由
     @app.route('/')
     def index():
         return send_file(os.path.join(app_config.WWW_DIR, 'index.html'))
-
-    @app.route('/folia')
-    def folia_redirect():
-        return redirect('/folia/')
-
-    @app.route('/folia/')
-    def folia_index():
-        return send_file(os.path.join(app_config.WWW_DIR, 'folia', 'index.html'))
 
     return app

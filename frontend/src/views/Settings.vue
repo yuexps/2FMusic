@@ -121,59 +121,6 @@
           </div>
         </div>
 
-        <!-- Folia Player -->
-        <div v-else-if="item.id === 'folia'" class="glass-panel p-6 rounded-2xl mb-6 box-border">
-          <h3 class="section-title">
-            <SvgIcon name="folia" /> Folia Player
-          </h3>
-
-          <div
-            class="flex justify-between items-center py-4 border-b border-border-main flex-wrap gap-4 last:border-none last:pb-0 first:pt-0">
-            <div class="flex-1 min-w-0">
-              <h4 class="m-0 mb-1 text-sm font-semibold text-ink">Folia/辞曲新境</h4>
-              <p class="m-0 text-xs text-body-muted leading-relaxed">Folia 是一个以全屏沉浸式歌词播放为核心的在线音乐播放器，支持网易云、Navidrome
-                和本地音乐库。为用户提供独特的听歌体验。</p>
-            </div>
-            <n-button round type="primary" @click="handleOpenFolia">进入Folia</n-button>
-          </div>
-
-          <!-- AI 配色自定义大模型配置 -->
-          <div class="flex justify-between items-center py-4 border-b border-border-main gap-4">
-            <div class="flex-1 min-w-0">
-              <h4 class="m-0 mb-1 text-sm font-semibold text-ink">启用 AI 自定义配色主题</h4>
-              <p class="m-0 text-xs text-body-muted leading-relaxed">开启后可直接在此配置大模型 API。由 2FMusic
-                后端代理请求大模型为当前歌曲生成沉浸式歌词主题。</p>
-            </div>
-            <n-switch v-model:value="enableFoliaAi" />
-          </div>
-
-          <div v-if="enableFoliaAi" class="flex flex-col gap-4 py-4 last:pb-0">
-            <div class="flex flex-col gap-2 w-full">
-              <label for="folia-openai-url" class="text-xs font-semibold text-body-muted">OpenAI API 接口链接</label>
-              <n-input id="folia-openai-url" v-model:value="foliaOpenaiUrl" placeholder="https://api.openai.com/v1"
-                @update:value="handleFoliaAiInputUpdate" />
-            </div>
-
-            <div class="flex flex-col gap-2 w-full">
-              <label for="folia-openai-model" class="text-xs font-semibold text-body-muted">OpenAI 模型名称</label>
-              <n-input id="folia-openai-model" v-model:value="foliaOpenaiModel"
-                placeholder="gpt-4o / gpt-4.1-mini / deepseek-chat" @update:value="handleFoliaAiInputUpdate" />
-            </div>
-
-            <div class="flex flex-col gap-2 w-full">
-              <label for="folia-openai-key" class="text-xs font-semibold text-body-muted">OpenAI API 密钥 (Key)</label>
-              <n-input id="folia-openai-key" type="password" show-password-on="mousedown" v-model:value="foliaOpenaiKey"
-                placeholder="sk-..." @update:value="handleFoliaAiInputUpdate" />
-            </div>
-
-            <div class="flex flex-col gap-2 w-full">
-              <label for="folia-openai-proxy" class="text-xs font-semibold text-body-muted">自定义 HTTP 代理地址 (可选)</label>
-              <n-input id="folia-openai-proxy" v-model:value="foliaOpenaiProxy" placeholder="例如: http://127.0.0.1:7890"
-                @update:value="handleFoliaAiInputUpdate" />
-            </div>
-          </div>
-        </div>
-
         <!-- 网易云下载全局设置 -->
         <div v-else-if="item.id === 'netease'" class="glass-panel p-6 rounded-2xl mb-6 box-border">
           <h3 class="section-title">
@@ -231,7 +178,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useSystemStore } from '../stores/system'
 import { usePreferencesStore } from '../stores/preferences'
 import { NSwitch, NButton, NInput, NRadioGroup, NRadioButton, NProgress, useMessage } from 'naive-ui'
@@ -246,7 +193,6 @@ const settingSections = [
   { id: 'login', label: '登录与维护' },
   { id: 'appearance', label: '外观设置' },
   { id: 'cache', label: '缓存设置' },
-  { id: 'folia', label: 'Folia Player' },
   { id: 'netease', label: '网易云下载全局设置' }
 ]
 
@@ -284,48 +230,6 @@ const saveCacheSettings = () => {
 // 网易云 API
 const neteaseApi = ref('')
 const neteaseDownloadDir = ref('')
-
-// Folia AI Theme settings
-const foliaOpenaiUrl = ref('')
-const foliaOpenaiModel = ref('')
-const foliaOpenaiKey = ref('')
-const foliaOpenaiProxy = ref('')
-
-const enableFoliaAi = computed({
-  get: () => systemStore.foliaAiConfig.folia_enable_ai,
-  set: (val) => {
-    saveFoliaAiSettings(val, foliaOpenaiUrl.value, foliaOpenaiModel.value, foliaOpenaiKey.value, foliaOpenaiProxy.value)
-  }
-})
-
-const syncFoliaAiStateFromStore = () => {
-  foliaOpenaiUrl.value = systemStore.foliaAiConfig.openai_url || 'https://api.openai.com/v1'
-  foliaOpenaiModel.value = systemStore.foliaAiConfig.openai_model || 'gpt-4o'
-  foliaOpenaiKey.value = systemStore.foliaAiConfig.openai_key || ''
-  foliaOpenaiProxy.value = systemStore.foliaAiConfig.openai_proxy || ''
-}
-
-watch(() => systemStore.foliaAiConfig, () => {
-  syncFoliaAiStateFromStore()
-}, { deep: true, immediate: true })
-
-const saveFoliaAiSettings = async (enable: boolean, url: string, model: string, key: string, proxy: string) => {
-  const res = await systemStore.saveFoliaAiConfig(enable, url, model, key, proxy)
-  if (res.success) {
-    message.success('AI 配色主题配置已成功保存并同步')
-  } else {
-    message.error(res.error)
-  }
-}
-
-const handleFoliaAiInputUpdate = () => {
-  saveFoliaAiSettings(enableFoliaAi.value, foliaOpenaiUrl.value, foliaOpenaiModel.value, foliaOpenaiKey.value, foliaOpenaiProxy.value)
-}
-
-// Folia新标签页
-const handleOpenFolia = () => {
-  ; (window as any).foliaWindow = window.open('./folia/', '_blank')
-}
 
 let dockerTimer: number | null = null
 

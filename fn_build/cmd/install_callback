@@ -1,9 +1,6 @@
 #!/bin/bash
 
-PYTHON_BIN="/usr/bin/python3"
-REQUIREMENTS_FILE="${TRIM_APPDEST}/server/requirements.txt"
 LOG_FILE="${TRIM_PKGVAR}/info.log"
-VENV_PATH="${TRIM_PKGVAR}/venv"
 
 # 软链日志文件
 echo "$(date '+%Y-%m-%d %H:%M:%S') - 开始配置日志文件软链..." >> "${LOG_FILE}"
@@ -11,58 +8,5 @@ mkdir -p "/var/apps/yuexps.2fmusic/shares/2FMusic" >> "${LOG_FILE}" 2>&1
 rm -rf "/var/apps/yuexps.2fmusic/shares/2FMusic/info.log" >> "${LOG_FILE}" 2>&1
 ln -sf "${LOG_FILE}" "/var/apps/yuexps.2fmusic/shares/2FMusic/info.log" >> "${LOG_FILE}" 2>&1
 
-# 检查虚拟环境是否缺失requirements.txt中的依赖
-NEED_INSTALL=false
-
-if [ ! -x "${VENV_PATH}/bin/python" ]; then
-    # 虚拟环境未初始化
-    NEED_INSTALL=true
-else
-    # 获取已安装包的列表
-    INSTALLED_FREEZE=$("${VENV_PATH}/bin/python" -m pip list --format=freeze 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr '-' '_')
-    
-    while IFS= read -r req || [ -n "$req" ]; do
-        # 过滤空行与注释
-        [[ "$req" =~ ^[[:space:]]*# ]] && continue
-        [[ -z "${req//[[:space:]]/}" ]] && continue
-
-        # 提取并归一化包名（忽略版本与空格，转小写且 - 转 _）
-        PACKAGE=$(echo "$req" | sed 's/[<>!=~=].*//' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' | tr '-' '_')
-        if [ -n "$PACKAGE" ]; then
-            # 校验是否已安装
-            if ! echo "$INSTALLED_FREEZE" | grep -Fq "${PACKAGE}="; then
-                NEED_INSTALL=true
-                break
-            fi
-        fi
-    done < "${REQUIREMENTS_FILE}"
-fi
-
-if [ "$NEED_INSTALL" = true ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - 开始配置虚拟环境及依赖..." >> "${LOG_FILE}"
-    
-    # 若虚拟环境不存在，先创建虚拟环境
-    if [ ! -x "${VENV_PATH}/bin/python" ]; then
-        "${PYTHON_BIN}" -m venv "${VENV_PATH}" >> "${LOG_FILE}" 2>&1
-        if [ $? -ne 0 ]; then
-            echo "创建虚拟环境失败，详细信息请查看 ${LOG_FILE}" >> "${TRIM_TEMP_LOGFILE}"
-            exit 1
-        fi
-    fi
-    
-    # 在虚拟环境中安装依赖（优先使用国内镜像源，官方源作为最终兜底）
-    "${VENV_PATH}/bin/python" -m pip install -r "${REQUIREMENTS_FILE}" \
-        -i https://pypi.tuna.tsinghua.edu.cn/simple/ \
-        --extra-index-url https://mirrors.aliyun.com/pypi/simple/ \
-        --extra-index-url https://pypi.org/simple >> "${LOG_FILE}" 2>&1
-    
-    if [ $? -ne 0 ]; then
-        # 安装失败，写入临时日志并退出
-        echo "依赖安装失败，详细信息请查看 ${LOG_FILE}" >> "${TRIM_TEMP_LOGFILE}"
-        exit 1
-    fi
-    
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - 虚拟环境依赖安装完成" >> "${LOG_FILE}"
-fi
-
+echo "$(date '+%Y-%m-%d %H:%M:%S') - 安装完成" >> "${LOG_FILE}"
 exit 0

@@ -12,19 +12,25 @@ export const useHistoryStore = defineStore('history', () => {
   const historyList = ref<HistoryItem[]>([])
   const isLoading = ref(false)
 
+  const clearUserData = () => {
+    historyList.value = []
+    localStorage.removeItem('2fmusic_history')
+  }
+
   // 获取云端历史记录
   const fetchHistory = async () => {
     isLoading.value = true
     try {
       const data = await wsClient.sendRequest('history/get')
-      historyList.value = data || []
+      historyList.value = Array.isArray(data) ? data : []
       localStorage.setItem('2fmusic_history', JSON.stringify(historyList.value))
-    } catch (e) {
-      console.error('通过 WebSocket 获取播放历史失败:', e)
-      // 失败时兜底使用本地缓存
-      const saved = localStorage.getItem('2fmusic_history')
-      if (saved) {
-        historyList.value = JSON.parse(saved)
+    } catch (e: any) {
+      if (!e?.isWSClosed) {
+        console.error('通过 WebSocket 获取播放历史失败:', e)
+        const saved = localStorage.getItem('2fmusic_history')
+        if (saved) {
+          historyList.value = JSON.parse(saved)
+        }
       }
     } finally {
       isLoading.value = false
@@ -70,6 +76,7 @@ export const useHistoryStore = defineStore('history', () => {
   return {
     historyList,
     isLoading,
+    clearUserData,
     fetchHistory,
     addHistory,
     clearHistory,

@@ -8,14 +8,24 @@ export const useFavoritesStore = defineStore('favorites', () => {
   const favoriteSongIds = ref<string[]>([])
   const currentPlaylistId = ref<string>('default')
 
+  const clearUserData = () => {
+    playlists.value = []
+    favoriteSongIds.value = []
+    currentPlaylistId.value = 'default'
+    localStorage.removeItem('2fmusic_cached_playlists')
+    localStorage.removeItem('2fmusic_favs')
+  }
+
   // 获取收藏夹
   const fetchPlaylists = async () => {
     try {
       const data = await wsClient.sendRequest('favorite/list_playlists')
-      playlists.value = data
+      playlists.value = Array.isArray(data) ? data : []
       localStorage.setItem('2fmusic_cached_playlists', JSON.stringify(playlists.value))
-    } catch (e) {
-      console.error('通过 WebSocket 获取收藏夹列表失败:', e)
+    } catch (e: any) {
+      if (!e?.isWSClosed) {
+        console.error('通过 WebSocket 获取收藏夹列表失败:', e)
+      }
     }
   }
 
@@ -23,12 +33,14 @@ export const useFavoritesStore = defineStore('favorites', () => {
   const fetchPlaylistSongs = async (playlistId: string) => {
     try {
       const data = await wsClient.sendRequest('favorite/playlist_songs', { playlist_id: playlistId })
-      favoriteSongIds.value = data
+      favoriteSongIds.value = Array.isArray(data) ? data : []
       if (playlistId === 'default') {
         localStorage.setItem('2fmusic_favs', JSON.stringify(favoriteSongIds.value))
       }
-    } catch (e) {
-      console.error('通过 WebSocket 获取收藏夹内歌曲失败:', e)
+    } catch (e: any) {
+      if (!e?.isWSClosed) {
+        console.error('通过 WebSocket 获取收藏夹内歌曲失败:', e)
+      }
     }
   }
 
@@ -121,6 +133,7 @@ export const useFavoritesStore = defineStore('favorites', () => {
     playlists,
     favoriteSongIds,
     currentPlaylistId,
+    clearUserData,
     fetchPlaylists,
     fetchPlaylistSongs,
     createPlaylist,

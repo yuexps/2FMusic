@@ -132,7 +132,9 @@ const historyList = computed(() => {
 })
 
 const loadHistory = () => {
-  historyStore.fetchHistory()
+  if (localStorage.getItem('2fmusic_password')) {
+    historyStore.fetchHistory()
+  }
 }
 
 const playSong = (song: Song) => {

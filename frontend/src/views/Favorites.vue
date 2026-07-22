@@ -132,7 +132,9 @@ const handleDeletePlaylist = async () => {
 }
 
 onMounted(() => {
-  favoritesStore.fetchPlaylists()
+  if (localStorage.getItem('2fmusic_password')) {
+    favoritesStore.fetchPlaylists()
+  }
 })
 </script>
 

@@ -1,6 +1,3 @@
-[submodule "folia-major"]
-	path = folia-major
-	url = https://github.com/yuexps/folia-major
 [submodule "2FMusic-Android"]
 	path = 2FMusic-Android
 	url = https://github.com/yuexps/2FMusic-Android

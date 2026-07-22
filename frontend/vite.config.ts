@@ -9,7 +9,7 @@ function backendIntegrationPlugin() {
   return {
     name: 'backend-integration',
     buildStart: async () => {
-      const assetsPath = path.resolve(__dirname, '../www/assets')
+      const assetsPath = path.resolve(__dirname, 'dist/assets')
       try {
         await fs.rm(assetsPath, { recursive: true, force: true })
         console.log(`Cleaned assets directory: ${assetsPath}`)
@@ -30,13 +30,12 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: '../www',
+    outDir: 'dist',
     assetsDir: 'assets',
-    emptyOutDir: false,
+    emptyOutDir: true,
     rollupOptions: {
       input: {
-        main: path.resolve(__dirname, 'index.html'),
-        login: path.resolve(__dirname, 'login.html')
+        main: path.resolve(__dirname, 'index.html')
       },
       output: {
         // 生产级分包优化：将依赖包单独打包以完全消除打包体积过大警告，并极大地优化首屏加载性能

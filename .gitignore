@@ -6,6 +6,6 @@ yuexps.2fmusic.fpk
 **/.DS_Store
 .DS_Store?
 lib/
-www/
+dist
 node_modules
 .agents

@@ -197,6 +197,15 @@ export const usePlayerStore = defineStore('player', () => {
     localStorage.setItem('2fmusic_state', JSON.stringify(state))
   }
 
+  const getAudioPlayUrl = (id: string) => {
+    let url = getApiUrl(`/api/music/play/${id}`)
+    const pass = localStorage.getItem('2fmusic_password')
+    if (pass) {
+      url += `?auth=${encodeURIComponent(pass)}`
+    }
+    return url
+  }
+
   const togglePlay = () => {
     if (!audio) init()
     if (!audio) return
@@ -205,7 +214,7 @@ export const usePlayerStore = defineStore('player', () => {
       audio.pause()
     } else {
       if (!audio.src && currentSong.value) {
-        audio.src = getApiUrl(`/api/music/play/${currentSong.value.id}`)
+        audio.src = getAudioPlayUrl(currentSong.value.id)
       }
       if (audio.src) {
         audio.play().catch((err) => console.error('播放音频失败:', err))
@@ -224,7 +233,7 @@ export const usePlayerStore = defineStore('player', () => {
     const isNewSong = !currentSong.value || currentSong.value.id !== song.id
     if (isNewSong) {
       currentSong.value = { ...song }
-      audio.src = getApiUrl(`/api/music/play/${song.id}`)
+      audio.src = getAudioPlayUrl(song.id)
       
       // 异步加载本地封面并刷新 MediaSession
       loadSongCover(song).then(artUrl => {

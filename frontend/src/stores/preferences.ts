@@ -72,8 +72,10 @@ export const usePreferencesStore = defineStore('preferences', () => {
       if (data && data.value) {
         lyricsSourcePref.value = data.value as 'embedded' | 'network'
       }
-    } catch (e) {
-      console.warn('获取歌词偏好设置失败:', e)
+    } catch (e: any) {
+      if (!e?.isWSClosed) {
+        console.warn('获取歌词偏好设置失败:', e)
+      }
     }
   }
 

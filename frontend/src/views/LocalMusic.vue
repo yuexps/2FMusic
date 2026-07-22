@@ -931,6 +931,11 @@ const filteredSongs = computed(() => {
 
 // 加载数据
 const loadData = async () => {
+  if (!localStorage.getItem('2fmusic_password')) {
+    isLoading.value = false
+    return
+  }
+
   // 如果之前已经有加载过的歌曲数据和歌单数据，直接利用缓存渲染，避免展示 Loading 转圈造成导航切换卡顿
   const hasCache = systemStore.songs.length > 0 && favoritesStore.playlists.length > 0
   if (!hasCache) {

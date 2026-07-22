@@ -47,7 +47,15 @@ class WSClient {
 
   connect() {
     if (this.ws || this.isConnecting) return
+    const pass = localStorage.getItem('2fmusic_password') || ''
+    // 无凭据状态下阻止建连
+    if (!pass) return
+
     this.isConnecting = true
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const authQuery = pass ? `?auth=${encodeURIComponent(pass)}` : ''
+    this.url = `${protocol}//${window.location.host}${getBaseUrl()}/api/ws${authQuery}`
 
     try {
       this.ws = new WebSocket(this.url)
@@ -123,7 +131,12 @@ class WSClient {
       this.ws.onclose = () => {
         console.log('WebSocket 连接关闭，正在重新连接...')
         this.cleanup()
-        this.scheduleReconnect()
+        const pass = localStorage.getItem('2fmusic_password')
+        if (!pass) {
+          window.dispatchEvent(new CustomEvent('2fmusic-unauthorized'))
+        } else {
+          this.scheduleReconnect()
+        }
       }
 
       this.ws.onerror = (err) => {
@@ -171,6 +184,15 @@ class WSClient {
           this.pendingRequests.delete(currentSeq)
         }
       } else {
+        const pass = localStorage.getItem('2fmusic_password')
+        if (!pass) {
+          clearTimeout(timer)
+          const err: any = new Error('WebSocket unauthenticated')
+          err.isWSClosed = true
+          reject(err)
+          return
+        }
+
         // 未连接时放入离线等待队列
         console.log(`WebSocket 未就绪。正在排队请求：${action} (seq: ${currentSeq})`)
         this.offlineQueue.push({ action, data, resolve, reject, seq: currentSeq, timer })
@@ -255,7 +277,7 @@ class WSClient {
     }, delay)
   }
 
-  private cleanup() {
+  private cleanup(reason: string = 'WebSocket connection closed') {
     this.stopHeartbeat()
     if (this.ws) {
       this.ws.onopen = null
@@ -269,14 +291,18 @@ class WSClient {
     // 清理所有 pending 请求
     this.pendingRequests.forEach((req) => {
       clearTimeout(req.timer)
-      req.reject(new Error('WebSocket connection closed'))
+      const err: any = new Error(reason)
+      err.isWSClosed = true
+      req.reject(err)
     })
     this.pendingRequests.clear()
 
     // 清理离线等待队列
     this.offlineQueue.forEach((item) => {
       clearTimeout(item.timer)
-      item.reject(new Error('WebSocket connection closed'))
+      const err: any = new Error(reason)
+      err.isWSClosed = true
+      item.reject(err)
     })
     this.offlineQueue = []
   }

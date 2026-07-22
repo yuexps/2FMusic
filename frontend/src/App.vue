@@ -6,20 +6,24 @@ import type { GlobalThemeOverrides } from 'naive-ui'
 import Sidebar from './components/Sidebar.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import FullPlayerOverlay from './components/FullPlayerOverlay.vue'
+import LoginModal from './components/LoginModal.vue'
 import { useSystemStore } from './stores/system'
 import { usePlayerStore } from './stores/player'
 import { usePreferencesStore } from './stores/preferences'
 import { useFavoritesStore } from './stores/favorites'
+import { useHistoryStore } from './stores/history'
+import client from './api/client'
 import { watch } from 'vue'
 import { wsClient } from './api/ws'
 import { musicDB } from './utils/indexedDB'
-import { getApiUrl } from './utils/path'
 
 const route = useRoute()
 const systemStore = useSystemStore()
 const playerStore = usePlayerStore()
 const preferencesStore = usePreferencesStore()
 const favoritesStore = useFavoritesStore()
+
+const historyStore = useHistoryStore()
 
 const isReady = ref(false)
 
@@ -64,8 +68,55 @@ try {
   console.error('初始化无闪烁设置发生异常:', e)
 }
 
-// 2. 异步并行加载系统状态与全部偏好，独立跟踪各初始化任务状态，消除模糊感
+// 门禁回调函数（使用 function 函数声明提升，防止 TDZ 错误）
+function handleUnauthorized() {
+  systemStore.clearUserData()
+  favoritesStore.clearUserData()
+  historyStore.clearUserData()
+  wsClient.disconnect()
+  systemStore.isAuthModalOpen = true
+}
+
+function handleAuthSuccess() {
+  systemStore.isAuthModalOpen = false
+  systemStore.initWebSocket()
+  systemStore.fetchSystemStatus()
+  preferencesStore.fetchPreferences()
+  favoritesStore.fetchPlaylists()
+  systemStore.fetchSongs()
+  systemStore.fetchNeteaseConfig()
+  systemStore.fetchNeteaseUserStatus()
+  favoritesStore.fetchPlaylistSongs('default')
+  if (playerStore.currentSong) {
+    loadLyricsForSong(playerStore.currentSong)
+  }
+}
+
+// 2. 异步并行加载系统状态与全部偏好（门禁探针通过后装载）
 const initApp = async () => {
+  const pass = localStorage.getItem('2fmusic_password')
+  if (!pass) {
+    handleUnauthorized()
+    isReady.value = true
+    return
+  }
+
+  try {
+    const res = await client.post('/api/login', { password: pass })
+    if (!res.data || !res.data.success) {
+      handleUnauthorized()
+      isReady.value = true
+      return
+    }
+  } catch (e) {
+    handleUnauthorized()
+    isReady.value = true
+    return
+  }
+
+  // 凭据有效/无需登录：建立信道并装载数据
+  systemStore.initWebSocket()
+
   const taskPromises = [
     { id: 'status', promise: systemStore.fetchSystemStatus() },
     { id: 'preferences', promise: preferencesStore.fetchPreferences() },
@@ -85,7 +136,16 @@ const initApp = async () => {
     })
   )
 
-  // 进度达到 100% 后，给用户保留 300ms 的短暂视觉反馈时间，看清完成状态后优雅切入主页
+  systemStore.fetchSongs()
+  systemStore.fetchNeteaseConfig()
+  systemStore.fetchNeteaseUserStatus()
+  favoritesStore.fetchPlaylistSongs('default')
+
+  if (playerStore.currentSong) {
+    loadLyricsForSong(playerStore.currentSong)
+  }
+
+  // 进度达到 100% 后保留 300ms 反馈后切入
   await new Promise(resolve => setTimeout(resolve, 300))
   isReady.value = true
 }
@@ -162,7 +222,6 @@ const pageTitle = computed(() => {
     '/mounts': '目录管理',
     '/netease': '网易下载',
     '/upload': '上传音乐',
-    '/folia': '辞曲新境',
     '/settings': '系统设置'
   }
   return map[route.path] || '2FMusic'
@@ -232,125 +291,11 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
   }
 })
 
-let foliaBC: BroadcastChannel | null = null
-
-// === Folia 全局广播与反向遥控逻辑 ===
-const sendToAllFoliaIframes = (type: string, data?: any) => {
-  // 1. 广播给所有的 iframe (原有的全屏 Stage 模式)
-  const iframes = document.querySelectorAll('iframe')
-  iframes.forEach((iframe) => {
-    try {
-      const src = iframe.getAttribute('src') || ''
-      if (src.includes('folia/')) {
-        iframe.contentWindow?.postMessage({ type, data }, '*')
-      }
-    } catch (e) {
-      // 跨域防御
-    }
-  })
-
-  // 2. 广播给新标签页打开的 Folia Player (如果有且未被关闭)
-  try {
-    const foliaWin = (window as any).foliaWindow
-    if (foliaWin && !foliaWin.closed) {
-      foliaWin.postMessage({ type, data }, '*')
-    }
-  } catch (e) {
-    // 跨域防御
-  }
-
-  // 3. 广播给 BroadcastChannel 同源独立标签页
-  try {
-    if (foliaBC) {
-      foliaBC.postMessage({ type, data })
-    }
-  } catch (e) {
-    // 跨标签页通信异常防御
-  }
-}
-
-const getAbsoluteCoverUrl = (art?: string) => {
-  if (!art) return ''
-  if (art.startsWith('http://') || art.startsWith('https://')) return art
-  return getApiUrl(art)
-}
-
-const sendCurrentTrackToFolia = () => {
-  const currentSong = playerStore.currentSong
-  if (currentSong) {
-    const isLiked = favoritesStore.favoriteSongIds.some(id => String(id) === String(currentSong.id))
-    const coverUrl = getAbsoluteCoverUrl(currentSong.album_art || '')
-    const payload = {
-      id: currentSong.id,
-      title: currentSong.title,
-      author: currentSong.artist,
-      album: currentSong.album,
-      cover: coverUrl,
-      duration: playerStore.duration || 0,
-      liked: isLiked,
-      path: currentSong.path || '',
-      filename: currentSong.filename || ''
-    }
-    ;(window as any).currentFoliaTrack = payload
-    sendToAllFoliaIframes('2fmusic-track', payload)
-  } else {
-    ;(window as any).currentFoliaTrack = null
-    sendToAllFoliaIframes('2fmusic-track', null)
-  }
-}
-
 const rawLyrics = ref('')
-
-const sendCurrentLyricToFolia = () => {
-  const payload = {
-    lrc: rawLyrics.value,
-    hasLyric: !!rawLyrics.value
-  }
-  ;(window as any).currentFoliaLyric = payload
-  sendToAllFoliaIframes('2fmusic-lyric', payload)
-}
-
-const sendCurrentStateToFolia = () => {
-  let loopMode: 'all' | 'one' | 'off' = 'all'
-  if (playerStore.playMode === 'single') loopMode = 'one'
-  else if (playerStore.playMode === 'random') loopMode = 'off'
-
-  const payload = {
-    isPaused: !playerStore.isPlaying,
-    progressMs: Math.round(playerStore.currentTime * 1000),
-    loopMode,
-    volume: playerStore.volume
-  }
-  ;(window as any).currentFoliaState = payload
-  sendToAllFoliaIframes('2fmusic-state', payload)
-}
-
-const sendCurrentQueueToFolia = () => {
-  const queue = playerStore.playlist.map(song => ({
-    id: song.id,
-    title: song.title,
-    artist: song.artist,
-    album: song.album,
-    cover: getAbsoluteCoverUrl(song.album_art || ''),
-    durationMs: (song.duration || 0) * 1000,
-    path: song.path || '',
-    filename: song.filename || ''
-  }))
-  ;(window as any).currentFoliaQueue = { queue }
-  sendToAllFoliaIframes('2fmusic-queue', { queue })
-}
-
-const handleAllFoliaReady = () => {
-  sendCurrentTrackToFolia()
-  sendCurrentLyricToFolia()
-  sendCurrentStateToFolia()
-  sendCurrentQueueToFolia()
-}
 
 const loadLyricsForSong = async (song: any) => {
   if (!song) {
     rawLyrics.value = ''
-    sendCurrentLyricToFolia()
     return
   }
   try {
@@ -359,8 +304,6 @@ const loadLyricsForSong = async (song: any) => {
       const cachedLyrics = await musicDB.getLyrics(song.id)
       if (cachedLyrics) {
         rawLyrics.value = cachedLyrics
-        sendCurrentLyricToFolia()
-        sendCurrentStateToFolia()
         return
       }
     }
@@ -375,242 +318,31 @@ const loadLyricsForSong = async (song: any) => {
 
     if (data && data.lyrics) {
       rawLyrics.value = data.lyrics
-      sendCurrentLyricToFolia()
-      sendCurrentStateToFolia()
       if (cacheEnabled) {
         musicDB.saveLyrics(song.id, data.lyrics).catch(() => {})
       }
     } else {
       rawLyrics.value = ''
-      sendCurrentLyricToFolia()
-      sendCurrentStateToFolia()
     }
   } catch (e) {
     rawLyrics.value = ''
-    sendCurrentLyricToFolia()
-    sendCurrentStateToFolia()
-  }
-}
-
-const handleFoliaMessage = async (event: MessageEvent) => {
-  const { type, data } = event.data || {}
-  
-  if (type && String(type).startsWith('folia-')) {
-    console.log('[Host] 收到 Folia 控制指令：', type, '数据：', data)
-  }
-
-  switch (type) {
-    case 'folia-ready':
-    case 'folia-request-sync':
-      handleAllFoliaReady()
-      break
-    case 'folia-toggle-play':
-      playerStore.togglePlay()
-      break
-    case 'folia-next':
-      playerStore.next()
-      break
-    case 'folia-prev':
-      playerStore.prev()
-      break
-    case 'folia-seek':
-      if (data && typeof data.positionMs === 'number') {
-        playerStore.seek(data.positionMs / 1000)
-        sendCurrentStateToFolia()
-      }
-      break
-    case 'folia-toggle-loop': {
-      const modes: ('list' | 'single' | 'random')[] = ['list', 'single', 'random']
-      const nextIdx = (modes.indexOf(playerStore.playMode) + 1) % modes.length
-      playerStore.playMode = modes[nextIdx]
-      const saved = localStorage.getItem('2fmusic_state')
-      const state = saved ? JSON.parse(saved) : {}
-      state.playMode = playerStore.playMode
-      localStorage.setItem('2fmusic_state', JSON.stringify(state))
-      break
-    }
-    case 'folia-play-song':
-      if (data && data.id) {
-        const song = playerStore.playlist.find(s => String(s.id) === String(data.id))
-        console.log('[Host] 播放列表中找到匹配歌曲：', song)
-        if (song) {
-          playerStore.playSong(song)
-        } else {
-          console.warn('[Host] folia-play-song: 列表中未找到该 ID 对应的歌曲：', data.id)
-        }
-      }
-      break
-    case 'folia-play-song-external':
-      if (data && data.song) {
-        const song = data.song
-        const existIdx = playerStore.playlist.findIndex(s => String(s.id) === String(song.id))
-        if (existIdx === -1) {
-          playerStore.playlist.push(song)
-          playerStore.playSong(song)
-        } else {
-          playerStore.playSong(playerStore.playlist[existIdx])
-        }
-      }
-      break
-    case 'folia-add-to-playlist':
-      if (data && data.song) {
-        const song = data.song
-        const existIdx = playerStore.playlist.findIndex(s => String(s.id) === String(song.id))
-        if (existIdx === -1) {
-          playerStore.playlist.push(song)
-        }
-      }
-      break
-    case 'folia-toggle-like':
-      if (playerStore.currentSong) {
-        const song = playerStore.currentSong
-        const isLiked = favoritesStore.favoriteSongIds.some(id => String(id) === String(song.id))
-        console.log('[Host] folia-toggle-like 当前歌曲：', song.title, '收藏状态：', isLiked)
-        if (isLiked) {
-          await favoritesStore.removeFavorite([song.id], ['default'])
-        } else {
-          await favoritesStore.addFavorite(
-            [song.id],
-            ['default'],
-            { [song.id]: { title: song.title, artist: song.artist } }
-          )
-        }
-      }
-      break
-    case 'folia-shuffle-queue':
-      playerStore.shufflePlaylist()
-      break
-    case 'folia-volume':
-      if (data && typeof data.volume === 'number') {
-        playerStore.volume = data.volume
-      }
-      break;
-    case 'folia-remove-song':
-      if (data && typeof data.index === 'number') {
-        if (data.index >= 0 && data.index < playerStore.playlist.length) {
-          const removedSong = playerStore.playlist[data.index]
-          const isCurrent = playerStore.currentSong && String(removedSong.id) === String(playerStore.currentSong.id)
-          playerStore.playlist.splice(data.index, 1)
-          localStorage.setItem('2fmusic_playlist', JSON.stringify(playerStore.playlist))
-          
-          if (isCurrent) {
-            if (playerStore.playlist.length > 0) {
-              const nextIdx = data.index % playerStore.playlist.length
-              playerStore.playSong(playerStore.playlist[nextIdx])
-            } else {
-              if (playerStore.isPlaying) {
-                playerStore.togglePlay()
-              }
-              playerStore.currentSong = null
-            }
-          }
-        }
-      }
-      break;
-    case 'folia-move-song-to-end':
-      if (data && typeof data.index === 'number') {
-        if (data.index >= 0 && data.index < playerStore.playlist.length) {
-          const song = playerStore.playlist[data.index]
-          playerStore.playlist.splice(data.index, 1)
-          playerStore.playlist.push(song)
-          localStorage.setItem('2fmusic_playlist', JSON.stringify(playerStore.playlist))
-        }
-      }
-      break;
-    case 'folia-move-song-to-next':
-      if (data && typeof data.index === 'number') {
-        if (data.index >= 0 && data.index < playerStore.playlist.length) {
-          const song = playerStore.playlist[data.index]
-          const isCurrent = playerStore.currentSong && String(song.id) === String(playerStore.currentSong.id)
-          if (isCurrent) {
-            break
-          }
-          playerStore.playlist.splice(data.index, 1)
-          let insertIdx = 0
-          const currentSong = playerStore.currentSong
-          if (currentSong) {
-            const currIdx = playerStore.playlist.findIndex(s => s.id === currentSong.id)
-            insertIdx = currIdx + 1
-          }
-          playerStore.playlist.splice(insertIdx, 0, song)
-          localStorage.setItem('2fmusic_playlist', JSON.stringify(playerStore.playlist))
-        }
-      }
-      break;
   }
 }
 
 watch(() => playerStore.currentSong, (newSong) => {
-  sendCurrentTrackToFolia()
-  sendCurrentStateToFolia()
   loadLyricsForSong(newSong)
 })
-
-watch(() => playerStore.isPlaying, () => {
-  sendCurrentStateToFolia()
-})
-
-watch(() => playerStore.playMode, () => {
-  sendCurrentStateToFolia()
-})
-
-watch(() => playerStore.volume, () => {
-  sendCurrentStateToFolia()
-})
-
-watch(() => favoritesStore.favoriteSongIds, () => {
-  sendCurrentTrackToFolia()
-}, { deep: true })
-
-watch(() => playerStore.playlist, () => {
-  sendCurrentQueueToFolia()
-}, { deep: true })
-
-watch(() => playerStore.currentTime, (time) => {
-  sendToAllFoliaIframes('2fmusic-progress', {
-    progressMs: Math.round(time * 1000)
-  })
-})
-// === Folia 广播逻辑结束 ===
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('mouseup', handleMouseUp)
-  window.addEventListener('message', handleFoliaMessage)
-
-  // 初始化 BroadcastChannel 同源频道
-  try {
-    foliaBC = new BroadcastChannel('2fmusic-folia-sync-channel')
-    foliaBC.onmessage = (event) => {
-      handleFoliaMessage(event)
-    }
-  } catch (e) {
-    console.warn('跨标签页 BroadcastChannel 初始化失败:', e)
-  }
-
-  // 全局拉起并初始化 WebSocket 实时通信信道
-  systemStore.initWebSocket()
-
-  // 异步且非阻塞拉取重度/慢速数据，不卡首屏
-  systemStore.fetchSongs()
-  systemStore.fetchNeteaseConfig()
-  systemStore.fetchNeteaseUserStatus()
-  favoritesStore.fetchPlaylistSongs('default')
-
-  // 初始化载入当前歌曲的歌词
-  if (playerStore.currentSong) {
-    loadLyricsForSong(playerStore.currentSong)
-  }
+  window.addEventListener('2fmusic-unauthorized', handleUnauthorized)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('mouseup', handleMouseUp)
-  window.removeEventListener('message', handleFoliaMessage)
-  if (foliaBC) {
-    foliaBC.close()
-    foliaBC = null
-  }
+  window.removeEventListener('2fmusic-unauthorized', handleUnauthorized)
 })
 </script>
 
@@ -693,14 +425,7 @@ onUnmounted(() => {
               <div class="w-8"></div>
             </header>
 
-            <div 
-              :class="[
-                'flex-1 min-h-0 box-border',
-                route.path === '/folia' 
-                  ? 'w-full h-full overflow-hidden' 
-                  : 'main-scroll overflow-y-auto p-[24px_28px] max-md:p-[16px_12px]'
-              ]"
-            >
+            <div class="flex-1 min-h-0 box-border main-scroll overflow-y-auto p-[24px_28px] max-md:p-[16px_12px]">
               <router-view />
             </div>
 
@@ -709,6 +434,9 @@ onUnmounted(() => {
 
           <!-- 全屏歌词覆层 -->
           <FullPlayerOverlay :show="showLyricsOverlay" @close="showLyricsOverlay = false" />
+
+          <!-- 登录解锁浮层弹窗 -->
+          <LoginModal :show="systemStore.isAuthModalOpen" @success="handleAuthSuccess" />
         </div>
       </n-dialog-provider>
     </n-message-provider>

@@ -1,14 +1,5 @@
 <template>
   <div class="fixed left-0 w-[calc(100vw/var(--ui-scale,1))] h-[calc(100vh/var(--ui-scale,1))] bg-black z-1000 flex flex-col transition-[top,visibility] duration-400 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden text-white" :class="[ show ? 'top-0 visible pointer-events-auto' : 'top-[120vh] invisible pointer-events-none' ]">
-    <!-- Folia 全屏覆盖舞台 -->
-    <div v-if="foliaMode" class="absolute inset-0 w-full h-full z-50 bg-black flex flex-col">
-      <iframe
-        :src="foliaIframeUrl"
-        class="w-full h-full border-none flex-1"
-        allow="autoplay"
-      ></iframe>
-    </div>
-
     <!-- 虚化背景封面 -->
     <div class="absolute inset-0 -z-1 overflow-hidden">
       <img v-cached-src="{ id: playerStore.currentSong?.id, src: playerStore.currentSong?.album_art }"
@@ -16,26 +7,12 @@
       <div class="absolute inset-0 bg-linear-to-b from-black/40 to-black/70"></div>
     </div>
 
-    <!-- 头部：关闭及状态（foliaMode 时隐藏，由 Folia 内部返回按钮负责切回） -->
-    <header v-if="!foliaMode" class="h-16 flex items-center justify-between px-6 box-border lg:px-20 relative z-60">
+    <!-- 头部：关闭及状态 -->
+    <header class="h-16 flex items-center justify-between px-6 box-border lg:px-20 relative z-60">
       <button class="bg-transparent border-none text-white text-[20px] cursor-pointer opacity-60 transition-all duration-150 hover:opacity-100 hover:translate-y-0.5 flex items-center justify-center" @click="emit('close')" title="收起">
         <SvgIcon name="chevron-down" />
       </button>
-      <div class="segmented-control relative flex items-center select-none">
-        <div class="segmented-slider" :style="sliderStyle"></div>
-        <button 
-          :class="{ active: playModeTab === 'classic' }" 
-          @click="playModeTab = 'classic'"
-        >
-          经典
-        </button>
-        <button 
-          :class="{ active: playModeTab === 'folia' }" 
-          @click="playModeTab = 'folia'"
-        >
-          Folia
-        </button>
-      </div>
+
       <!-- 右侧三点菜单 -->
       <n-dropdown trigger="click" :options="dropdownOptions" @select="handleMenuSelect">
         <button class="bg-transparent border-none text-white text-[20px] cursor-pointer opacity-60 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 hover:opacity-100 hover:bg-white/12 active:scale-[0.93]" title="更多操作">
@@ -45,7 +22,7 @@
     </header>
 
     <!-- 主体：双列布局 -->
-    <main v-if="!foliaMode" class="fp-body flex-1 flex px-20 py-10 box-border overflow-hidden gap-12 xl:gap-16 max-md:flex-col max-md:p-5 max-md:gap-4 md:max-lg:px-10 md:max-lg:py-7 md:max-lg:gap-10">
+    <main class="fp-body flex-1 flex px-20 py-10 box-border overflow-hidden gap-12 xl:gap-16 max-md:flex-col max-md:p-5 max-md:gap-4 md:max-lg:px-10 md:max-lg:py-7 md:max-lg:gap-10">
       <!-- 左侧：封面和元数据 -->
       <div class="flex-1 flex flex-col justify-center items-center text-center min-w-0 max-md:flex-[0_0_auto] max-md:flex-row max-md:items-center max-md:text-left max-md:gap-4 max-md:w-full">
         <div class="w-[min(360px,45vw,42vh)] lg:w-[min(380px,45vw,42vh)] xl:w-[min(440px,48vw,46vh)] 2xl:w-[min(480px,50vw,50vh)] aspect-square mb-8 flex justify-center items-center max-md:w-18 max-md:h-18 max-md:mb-0 max-md:shrink-0 md:max-lg:w-[min(240px,40vw,35vh)] md:max-lg:mb-4 xl:mb-10 shadow-[0_20px_40px_rgba(0,0,0,0.35)] dark:shadow-[0_20px_40px_rgba(0,0,0,0.55)] max-md:shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
@@ -95,7 +72,7 @@
     </main>
 
     <!-- 底部：控制台 -->
-    <footer v-if="!foliaMode" class="h-40 flex flex-col items-center px-20 pb-10 box-border gap-4 max-md:px-5 max-md:pb-5 max-md:h-32.5">
+    <footer class="h-40 flex flex-col items-center px-20 pb-10 box-border gap-4 max-md:px-5 max-md:pb-5 max-md:h-32.5">
       <div class="flex items-center gap-4 w-full max-w-180">
         <span class="text-[11px] opacity-50 min-w-9 text-center">{{ formatTime(playerStore.currentTime) }}</span>
         <n-slider v-model:value="sliderTime" :max="playerStore.duration || 100" :step="0.1" :tooltip="false"
@@ -176,7 +153,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onBeforeUpdate, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUpdate } from 'vue'
 import { usePlayerStore } from '../stores/player'
 import { useFavoritesStore } from '../stores/favorites'
 import { useSystemStore } from '../stores/system'
@@ -252,61 +229,7 @@ onBeforeUpdate(() => {
   lyricElements.value = []
 })
 
-// === Folia 模式拓展实现 ===
-const playModeTab = ref<'classic' | 'folia'>('classic')
 
-// 从 localStorage 初始化
-onMounted(() => {
-  const savedMode = localStorage.getItem('2fmusic_fullplayer_mode')
-  if (savedMode && ['classic', 'folia'].includes(savedMode)) {
-    playModeTab.value = savedMode as any
-  }
-  window.addEventListener('message', handleFoliaMessage)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('message', handleFoliaMessage)
-})
-
-// 监听模式更改并保存
-watch(playModeTab, (newVal) => {
-  localStorage.setItem('2fmusic_fullplayer_mode', newVal)
-  if (newVal === 'classic') {
-    nextTick(() => {
-      scrollToActiveLyric()
-    })
-  }
-})
-
-// 是否启用 foliaMode iframe
-const foliaMode = computed(() => playModeTab.value === 'folia')
-
-// iframe URL 计算
-const foliaIframeUrl = computed(() => {
-  return './folia/?from=FullPlayerOverlay'
-})
-
-// 计算滑块位置
-const sliderStyle = computed(() => {
-  const width = 80
-  const index = playModeTab.value === 'folia' ? 1 : 0
-  return {
-    width: `${width}px`,
-    transform: `translateX(${index * width}px)`
-  }
-})
-
-// 反向遥控事件监听，由宿主 2FMusic 执行真实控制
-const handleFoliaMessage = (event: MessageEvent) => {
-  const { type } = event.data || {}
-  if (type === 'folia-exit') {
-    emit('close')
-  } else if (type === 'folia-switch-classic') {
-    // tab 切回经典：只切视图，不关闭播放器
-    playModeTab.value = 'classic'
-  }
-}
-// === Folia 模式结束 ===
 
 // 加载歌曲歌词
 const loadLyricsForSong = async (song: any, skipCache: boolean = false) => {

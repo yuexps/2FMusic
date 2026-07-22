@@ -9,7 +9,7 @@ import { computed, type PropType } from 'vue'
 import { NIcon } from 'naive-ui'
 import { Docker, SortAmountDown, SortAmountUp } from '@vicons/fa'
 import { Playlist, Repeat, RepeatOne, Shuffle } from '@vicons/carbon'
-import { Previous32Filled, Next32Filled, Play48Filled, Pause48Filled, DrawerPlay24Regular } from '@vicons/fluent'
+import { Previous32Filled, Next32Filled, Play48Filled, Pause48Filled } from '@vicons/fluent'
 import {
   VolumeHighOutline, VolumeMuteOutline,
   Heart, HeartOutline, Add, Close,
@@ -105,8 +105,7 @@ const COMPONENT_MAP: Record<string, any> = {
   'magic': SparklesOutline,
   'palette': ColorPaletteOutline,
   'wifi': WifiOutline,
-  'menu': MenuOutline,
-  'folia': DrawerPlay24Regular
+  'menu': MenuOutline
 }
 
 const iconComponent = computed(() => {

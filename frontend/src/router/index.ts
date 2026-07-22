@@ -14,6 +14,14 @@ const routes: RouteRecordRaw[] = [
     component: LocalMusic
   },
   {
+    path: '/login',
+    name: 'Login',
+    redirect: () => {
+      window.dispatchEvent(new CustomEvent('2fmusic-unauthorized'))
+      return '/'
+    }
+  },
+  {
     path: '/favorites',
     name: 'Favorites',
     component: Favorites
@@ -21,7 +29,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/favorites/:id',
     name: 'PlaylistDetail',
-    component: LocalMusic // 路由参数过滤，复用 LocalMusic
+    component: LocalMusic
   },
   {
     path: '/history',

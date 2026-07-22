@@ -9,17 +9,21 @@ const client = axios.create({
   }
 })
 
-// 401 时跳转登录页面
+// 自动注入本地密码凭证
+client.interceptors.request.use((config) => {
+  const pass = localStorage.getItem('2fmusic_password')
+  if (pass) {
+    config.headers['X-Password'] = pass
+  }
+  return config
+})
+
+// 401 自动拉起全屏登录解锁弹窗
 client.interceptors.response.use(
-  (response) => {
-    return response
-  },
+  (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // 携带完整路径便于登录后回退
-      const fullPath = window.location.pathname + window.location.search + window.location.hash
-      const nextPath = encodeURIComponent(fullPath)
-      window.location.href = `${getBaseUrl()}/login?next=${nextPath}`
+      window.dispatchEvent(new CustomEvent('2fmusic-unauthorized'))
     }
     return Promise.reject(error)
   }
