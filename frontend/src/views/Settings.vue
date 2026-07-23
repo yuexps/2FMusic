@@ -183,7 +183,6 @@ import { useSystemStore } from '../stores/system'
 import { usePreferencesStore } from '../stores/preferences'
 import { NSwitch, NButton, NInput, NRadioGroup, NRadioButton, NProgress, useMessage } from 'naive-ui'
 import { musicDB } from '../utils/indexedDB'
-import { getBaseUrl } from '../utils/path'
 
 const systemStore = useSystemStore()
 const preferencesStore = usePreferencesStore()
@@ -330,13 +329,12 @@ const handleClearCache = async () => {
   }
 }
 
-// 退出登录
+// 退出登录：擦除凭证并触发全局未授权事件，呼出登录弹窗
 const handleLogout = () => {
   message.info('正在安全注销会话...')
   setTimeout(() => {
-    // 直接重定向至后端的 /logout 路由
-    window.location.href = `${getBaseUrl()}/logout`
-  }, 1000)
+    systemStore.logout()
+  }, 800)
 }
 
 const cleanupResources = () => {

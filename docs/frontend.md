@@ -11,6 +11,12 @@
 - **未登录安全红线**：未检测到有效凭据时，**绝对禁止拉起 WebSocket 连接**，**绝对禁止发起私有业务数据 REST 请求**。
 - **登录密码 SHA-256 兼容机制**：前端密码通过 [crypto.ts](file:///d:/Users/yuyue/Documents/Code/2FMusic/frontend/src/utils/crypto.ts) 进行哈希处理。优先使用原生 Web Crypto API (`crypto.subtle.digest`)；在非安全上下文（如局域网/公网纯 HTTP 环境，`window.crypto.subtle` 为 `undefined`）时，自动降级切至纯 JavaScript (Pure JS) UTF-8 算法进行计算，确保 HTTP/HTTPS 场景下均可正常登录。
 - **登录成功一键装载**：解锁成功后，集中初始化 WebSocket 连接，并按序装载 Pinia Store 业务数据。
+- **会话注销与退出登录**：
+  - 前端注销必须执行闭环擦除：
+    1. 擦除本地持久化凭据 `localStorage.removeItem('2fmusic_password')`；
+    2. 主动断开当前 WebSocket 信道连接（`wsClient.disconnect()`）；
+    3. 重置并清空所有 Pinia 内存数据及播放器状态（`systemStore.clearUserData()`、`favoritesStore.clearUserData()`、`historyStore.clearUserData()`、`playerStore.stop()`）；
+    4. 触发全局 `2fmusic-unauthorized` 事件，呼出 `LoginModal.vue` 解锁遮罩阻断交互。
 
 ### 1.2 REST 请求与 401 拦截
 - **客户端文件**：`frontend/src/api/client.ts`。

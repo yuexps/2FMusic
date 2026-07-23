@@ -70,6 +70,7 @@ try {
 
 // 门禁回调函数（使用 function 函数声明提升，防止 TDZ 错误）
 function handleUnauthorized() {
+  localStorage.removeItem('2fmusic_password')
   systemStore.clearUserData()
   favoritesStore.clearUserData()
   historyStore.clearUserData()

@@ -108,7 +108,7 @@ export const usePlayerStore = defineStore('player', () => {
           }
           currentSong.value = restored
           audio.src = getApiUrl(`/api/music/play/${state.currentSong.id}`)
-          
+
           loadSongCover(restored).then(artUrl => {
             if (currentSong.value && currentSong.value.id === restored.id) {
               currentSong.value.album_art = artUrl
@@ -179,6 +179,8 @@ export const usePlayerStore = defineStore('player', () => {
     })
 
     audio.addEventListener('error', (e) => {
+      // 播放器空时忽略
+      if (!currentSong.value) return
       console.warn('音频资源加载/播放失败，尝试自动清洗并跳过:', e)
       const failedSong = currentSong.value
       if (failedSong && failedSong.id) {
@@ -271,7 +273,7 @@ export const usePlayerStore = defineStore('player', () => {
     if (isNewSong) {
       currentSong.value = { ...song }
       audio.src = getAudioPlayUrl(song.id)
-      
+
       // 异步加载本地封面并刷新 MediaSession
       loadSongCover(song).then(artUrl => {
         if (currentSong.value && currentSong.value.id === song.id) {
@@ -392,14 +394,14 @@ export const usePlayerStore = defineStore('player', () => {
     if (playlist.value.length <= 1) return
     const currentId = currentSong.value?.id
     let songsToShuffle = playlist.value.filter(s => s.id !== currentId)
-    
+
     for (let i = songsToShuffle.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [songsToShuffle[i], songsToShuffle[j]] = [songsToShuffle[j], songsToShuffle[i]]
     }
-    
-    playlist.value = currentSong.value 
-      ? [currentSong.value, ...songsToShuffle] 
+
+    playlist.value = currentSong.value
+      ? [currentSong.value, ...songsToShuffle]
       : songsToShuffle
     saveState()
   }
@@ -425,11 +427,11 @@ export const usePlayerStore = defineStore('player', () => {
     if (!('mediaSession' in navigator) || !currentSong.value) return
 
     const song = currentSong.value
-    const displayTitle = currentLyric.value 
-      ? `${song.title} - ${song.artist}` 
+    const displayTitle = currentLyric.value
+      ? `${song.title} - ${song.artist}`
       : song.title
-    const displayArtist = currentLyric.value 
-      ? currentLyric.value 
+    const displayArtist = currentLyric.value
+      ? currentLyric.value
       : song.artist
 
     navigator.mediaSession.metadata = new MediaMetadata({
@@ -488,7 +490,7 @@ export const usePlayerStore = defineStore('player', () => {
       })
       if (data && data.album_art) {
         const artUrl = data.album_art
-        
+
         // 缓存到 IndexedDB
         const cacheEnabled = localStorage.getItem('2fmusic_cache_covers') === 'true'
         if (cacheEnabled && artUrl && !artUrl.startsWith('blob:') && !artUrl.startsWith('data:')) {

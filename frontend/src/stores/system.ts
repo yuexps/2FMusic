@@ -206,6 +206,12 @@ export const useSystemStore = defineStore('system', () => {
     playerStore.stop()
   }
 
+  // 安全注销用户会话凭据
+  const logout = () => {
+    localStorage.removeItem('2fmusic_password')
+    window.dispatchEvent(new CustomEvent('2fmusic-unauthorized'))
+  }
+
   const deleteSong = async (songId: string) => {
     try {
       await wsClient.sendRequest('music/delete', { song_id: songId })
@@ -480,6 +486,7 @@ export const useSystemStore = defineStore('system', () => {
     neteaseRecommendSongs,
     initWebSocket,
     clearUserData,
+    logout,
     fetchSongs,
     deleteSong,
     clearMetadata,
