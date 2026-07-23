@@ -114,9 +114,9 @@ func InitFromArgs() {
 	flag.StringVar(&GlobalConfig.UnixSocket, "unix-socket", os.Getenv("UNIX_SOCKET"), "Unix Domain Socket path")
 	flag.StringVar(&GlobalConfig.BaseURL, "base-url", os.Getenv("BASE_URL"), "Application base URL prefix")
 
-	passwordEnv := os.Getenv("APP_AUTH_PASSWORD")
+	passwordEnv := strings.TrimSpace(os.Getenv("APP_AUTH_PASSWORD"))
 	if passwordEnv == "" {
-		passwordEnv = os.Getenv("APP_PASSWORD")
+		passwordEnv = strings.TrimSpace(os.Getenv("APP_PASSWORD"))
 	}
 	flag.StringVar(&GlobalConfig.Password, "password", passwordEnv, "Optional password for web access")
 

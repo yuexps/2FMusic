@@ -1,12 +1,4 @@
 #!/bin/bash
-# 环境变量说明:
-# TRIM_APPDEST    - 应用可执行文件目录 (target目录)   -> @appcenter
-# TRIM_PKGVAR     - 应用数据目录 (var目录)           -> @appdata
-# TRIM_PKGETC     - 应用配置目录 (etc目录)           -> @appconf
-# TRIM_PKGHOME    - 应用home目录 (home目录)          -> @apphome
-# TRIM_PKGTMP     - 应用临时目录 (tmp目录)           -> @apptemp
-# TRIM_SHARES     - 应用共享目录 (shares目录)        -> @appshare
-# TRIM_SERVICE_PORT - 服务端口
 
 LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
@@ -19,24 +11,20 @@ else
     MUSIC_LIBRARY_PATH="/var/apps/yuexps.2fmusic/shares/2FMusic/Music"
 fi
 
-# 根据运行方式构建参数
-RUN_MODE="${wizard_run_mode:-both}"
-PORT_ARG=""
-SOCKET_ARG=""
-
-if [ "${RUN_MODE}" = "both" ]; then
-    PORT_ARG="--port ${wizard_port:-23237}"
+# 根据运行模式配置 PORT
+if [ "${wizard_run_mode:-both}" = "both" ]; then
+    export PORT="${wizard_port:-23237}"
 fi
 
-if [ "${RUN_MODE}" = "both" ] || [ "${RUN_MODE}" = "socket" ]; then
-    SOCKET_ARG="--unix-socket ${TRIM_APPDEST}/app.sock"
-fi
-
-# 定义通用的启动参数
-APP_ARGS="--music-library-path ${MUSIC_LIBRARY_PATH} --log-path ${LOG_FILE} ${PORT_ARG} ${SOCKET_ARG} --base-url /app/yuexps-2fmusic --password ${wizard_password}"
+# 环境变量配置
+export MUSIC_LIBRARY_PATH="${MUSIC_LIBRARY_PATH}"
+export LOG_PATH="${LOG_FILE}"
+export BASE_URL="/app/yuexps-2fmusic"
+export UNIX_SOCKET="${TRIM_APPDEST}/app.sock"
+export APP_PASSWORD="${wizard_password}"
 
 # 启动后端
-CMD="${TRIM_APPDEST}/2fmusic ${APP_ARGS}"
+CMD="${TRIM_APPDEST}/2fmusic"
 
 log_msg() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> ${LOG_FILE}

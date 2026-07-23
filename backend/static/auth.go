@@ -85,10 +85,11 @@ func SHA256String(s string) string {
 
 // ValidatePassword 校验系统凭证 (仅允许 SHA-256 哈希匹配)
 func ValidatePassword(provided string) bool {
-	expected := core.GlobalConfig.Password
+	expected := strings.TrimSpace(core.GlobalConfig.Password)
 	if expected == "" {
 		return true
 	}
+	provided = strings.TrimSpace(provided)
 	if provided == "" {
 		return false
 	}

@@ -80,7 +80,7 @@ const handleLogin = async (e: Event) => {
     }
   } catch (err: any) {
     showError.value = true
-    errorMessage.value = err?.message || err?.response?.data?.error || err?.response?.data?.message || '密码不正确'
+    errorMessage.value = err?.response?.data?.error || err?.response?.data?.message || err?.message || '密码错误'
   } finally {
     loading.value = false
   }
