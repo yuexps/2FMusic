@@ -5,6 +5,8 @@ import { wsClient } from '../api/ws'
 import { musicDB } from '../utils/indexedDB'
 import { coverCacheManager } from '../utils/coverCache'
 import { usePlayerStore } from './player'
+import { useHistoryStore } from './history'
+import { useFavoritesStore } from './favorites'
 
 export const useSystemStore = defineStore('system', () => {
   let parsedPlaylist: Song[] = []
@@ -133,25 +135,39 @@ export const useSystemStore = defineStore('system', () => {
         }
       }
 
-      // 3. 按 event_type 局部增量刷新或重新拉取列表
-      if (event_type === 'update' && song_ids.length > 0) {
-        songs.value = songs.value.map(song => {
-          if (song_ids.includes(song.id)) {
-            const updated = { ...song }
-            if (fields.includes('cover')) {
-              updated.has_cover = true
-              const baseUrl = (updated.album_art || `/api/music/covers/${song.id}.webp`).split('?')[0]
-              updated.album_art = `${baseUrl}?v=${timestamp}`
+      // 根据广播变更类型按需更新状态
+      if (fields.includes('history')) {
+        const historyStore = useHistoryStore()
+        historyStore.fetchHistory()
+      }
+
+      if (fields.includes('favorite')) {
+        const favoritesStore = useFavoritesStore()
+        favoritesStore.fetchPlaylists()
+      }
+
+      // 仅在曲库关联字段变动时更新歌曲列表
+      const isMusicListField = fields.length === 0 || fields.some((f: string) => ['audio', 'metadata', 'cover', 'lyrics'].includes(f))
+      if (isMusicListField) {
+        if (event_type === 'update' && song_ids.length > 0) {
+          songs.value = songs.value.map(song => {
+            if (song_ids.includes(song.id)) {
+              const updated = { ...song }
+              if (fields.includes('cover')) {
+                updated.has_cover = true
+                const baseUrl = (updated.album_art || `/api/music/covers/${song.id}.webp`).split('?')[0]
+                updated.album_art = `${baseUrl}?v=${timestamp}`
+              }
+              if (fields.includes('lyrics')) {
+                updated.has_lyrics = true
+              }
+              return updated
             }
-            if (fields.includes('lyrics')) {
-              updated.has_lyrics = true
-            }
-            return updated
-          }
-          return song
-        })
-      } else {
-        fetchSongs()
+            return song
+          })
+        } else {
+          fetchSongs()
+        }
       }
 
       fetchSystemStatus()

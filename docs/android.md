@@ -28,10 +28,12 @@
 ---
 
 ## 2. 精细化广播与本地缓存重载规范
-- 收到 `library_changed` 精细化广播帧时：
+- 收到 `library_changed` 精细化广播帧时，按 `fields` 分类隔离处理：
   - 若 `fields` 包含 `'cover'`：擦除 `covers/cover_${songId}.webp` 本地磁盘文件，并通知 Coil/图片加载器使 Memory/Disk Cache 失效。
   - 若 `fields` 包含 `'lyrics'`：擦除 `lyrics/lyrics_${songId}` 本地文件。
-  - 若正在播放该曲目：`AndroidPlayerController` 重新发起 WS `music/lyrics` 请求并推流刷新 Compose `PlayerScreen` 界面。
+  - 若 `fields` 包含 `'history'`：触发 `GlobalState.triggerHistoryRefresh()`，仅驱动播放历史列表重载。
+  - 若 `fields` 包含 `'favorite'`：触发 `GlobalState.triggerFavoriteRefresh()`，仅驱动歌单与收藏夹界面同步。
+  - 若 `fields` 包含 `'audio'` / `'metadata'`：触发 `GlobalState.triggerMusicListRefresh()`，驱动歌曲列表更新。
 
 ---
 

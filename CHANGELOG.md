@@ -1,5 +1,16 @@
 # CHANGELOG - 2FMusic 变更日志
 
+## [广播解耦隔离与文案优化] - 2026-07-23
+
+### 挂载点文案精准化
+- **缺漏刮削文案更名**：更新 `docs/api.md`；将 `MountManager.vue` 按钮更名为「补全刮削」，提示语同步更新为「补全缺失的封面与歌词」，准确匹配仅针对缺失元数据（`!has_cover || !has_lyrics`）的底层逻辑。
+
+### 广播解耦与多端隔离
+- **Android 列表底部留白**：扩充所有 `LazyColumn` 的 `contentPadding` 至 `160.dp`，解决卡片被底栏遮挡问题。
+- **模块广播解耦架构**：划分 `audio/metadata`、`favorite` 与 `history` 独立频道，Go 后端按 `fields` 隔离派发，Web 与 Android 端分支订阅刷新。
+- **播放历史去重与裁切**：`GetPlayHistory` 聚合最新时间并自动清理失效记录，追加 >100 条历史旧记录自动裁切逻辑。
+
+
 ## [前端退出登录适配] - 2026-07-23
 
 ### 前端鉴权与注销

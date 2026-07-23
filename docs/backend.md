@@ -137,8 +137,12 @@ CREATE TABLE IF NOT EXISTS system_settings (
 3. **媒体缓存监听器 (`LC_Watcher`)**：
    - 监听路径：`covers/` 与 `lyrics/` 缓存目录。
    - 职责：监听到 `covers/` 或 `lyrics/` 产生文件新增、修改或删除时（绝不漏报已有文件的覆盖更新），根据文件名（即 MD5 ID）更新数据库 `has_cover` 或 `has_lyrics` 状态，并调用 `NotifySongChangedDebounced` 将变更推入 200ms 防抖批处理队列，聚合下发精细化广播。
-4. **WebSocket 广播防抖与聚合引擎 (`NotifySongChangedDebounced`)**：
+4. **WebSocket 广播防抖与聚合引擎 (`NotifySongChangedDebounced` / `NotifyLibraryChangedDetailed`)**：
    - 防抖机制：在 200ms 窗口内收集变动的 `song_ids` 与 `fields` 集中去重后一次性推送精细化 `library_changed`。若单批次变动数量 > 50，自动合并降级为 `event_type: "reload_all"` 全量刷新通知，防止通信满载抛帧。
+   - 广播分类与触发规约：
+     - 曲库/增量扫描/标签变动：调用 `NotifyLibraryChangedDetailed` 推送 `fields: ["audio"]` / `["cover"]` / `["lyrics"]` / `["metadata"]`。
+     - 收藏夹动作 (`favorite/*`)：写入 SQLite 成功后调用 `NotifyLibraryChangedDetailed` 推送 `fields: ["favorite"]`。
+     - 播放历史动作 (`history/*`)：写入 SQLite 成功后调用 `NotifyLibraryChangedDetailed` 推送 `fields: ["history"]`。
 
 ### 4.1.1 缓存隔离与 SafeRemoveFile
 - **音频上传与在线刮削隔离**：音频上传、网易云下载及封面/歌词解出刮削均在 `.cache` 临时目录下完成。所有 Watcher 显式屏蔽忽略 `.cache` 目录。完全落盘后再使用同盘 `os.Rename` 移动至目标目录，确保 Watcher 捕获事件时文件内容完全闭合。

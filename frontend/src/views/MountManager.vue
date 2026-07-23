@@ -54,12 +54,12 @@
               <span class="max-md:hidden">增量扫描</span>
             </n-button>
 
-            <n-button round size="small" @click="handleTriggerRescrape(path)" title="重新刮削封面与歌词"
+            <n-button round size="small" @click="handleTriggerRescrape(path)" title="补全缺失的封面与歌词"
               class="max-md:w-8 max-md:h-8 max-md:p-0 max-md:rounded-full max-md:min-w-8 max-md:shrink-0 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!">
               <template #icon>
                 <SvgIcon name="magic" class="max-md:m-0!" />
               </template>
-              <span class="max-md:hidden">重新刮削</span>
+              <span class="max-md:hidden">补全刮削</span>
             </n-button>
 
             <n-button round size="small" type="error" secondary @click="confirmRemoveMount(path)" title="移除该目录"
@@ -132,7 +132,7 @@ const handleTriggerScan = async (path: string) => {
 const handleTriggerRescrape = async (path: string) => {
   const res = await systemStore.triggerRescrape(path)
   if (res.success) {
-    message.success(res.message || '元数据刮削已触发，请查看侧边栏进度')
+    message.success(res.message || '缺漏元数据刮削已触发，正在为缺失封面或歌词的曲目在线检索')
   } else {
     message.error(res.error)
   }

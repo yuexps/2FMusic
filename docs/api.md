@@ -115,7 +115,7 @@
   - **请求 `data`**：`{"path": "D:\\Music"}`
 - **`mount/scan`**：触发指定挂载点局部增量扫描。
   - **请求 `data`**：`{"path": "D:\\Music"}`
-- **`mount/retry_scrape`**：触发指定挂载点重新在线刮削。
+- **`mount/retry_scrape`**：触发指定挂载点缺漏在线刮削（仅针对缺失封面或歌词的曲目）。
   - **请求 `data`**：`{"path": "D:\\Music"}`
 
 ### 3.5 系统偏好与状态动作
@@ -150,9 +150,13 @@
 
 客户端建立 WS 连接后，服务端在特定事件触发时会主动推送不带 `seq` 属性的广播帧：
 1. **`library_changed`**：
-   - 载荷：`{"type": "broadcast", "action": "library_changed", "data": {"event_type": "update"|"insert"|"delete"|"reload_all", "song_ids": ["xxx"], "fields": ["cover"|"lyrics"|"metadata"], "timestamp": 1784689724530}}`
-   - 触发时机：增量扫描/重新刮削/Watcher 捕获封面或歌词落盘、歌曲删除或挂载点变更。
-   - 载荷规约：`event_type` 标识变更性质；`song_ids` 为变更曲目 ID 列表；`fields` 为具体变更数据类型。客户端收到后根据 `song_ids` 和 `fields` 精准擦除本地缓存并刷新当前播放试图。
+   - 载荷：`{"type": "broadcast", "action": "library_changed", "data": {"event_type": "update"|"insert"|"delete"|"reload_all", "song_ids": ["xxx"], "fields": ["cover"|"lyrics"|"metadata"|"audio"|"favorite"|"history"], "timestamp": 1784689724530}}`
+   - 触发时机：增量扫描/重新刮削/Watcher 捕获封面或歌词落盘、歌曲删除或挂载点变更（`audio`/`metadata`/`cover`/`lyrics`）、收藏夹增删变动（`favorite`）、播放历史记录变动（`history`）。
+   - 载荷规约与模块隔离原则：
+     - **歌曲列表变动** (`fields` 包含 `"audio"` | `"metadata"` | `"cover"` | `"lyrics"`)：仅更新歌曲列表数据与缓存。
+     - **歌单与收藏夹变动** (`fields` 包含 `"favorite"`)：仅更新歌单与收藏夹数据。
+     - **播放历史变动** (`fields` 包含 `"history"`)：仅更新播放历史列表数据。
+     - 客户端收到广播后依据 `fields` 按模块隔离更新，避免跨模块重复加载。
 2. **`download_status`**：
    - 载荷：`{"type": "download_status", "data": {"task_id": "xxx", "status": "downloading"|"success"|"error", "progress": 85, ...}}`
    - 触发时机：网易云异步下载任务进度更新。

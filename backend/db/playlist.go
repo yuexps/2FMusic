@@ -140,17 +140,27 @@ func DeleteFavoritePlaylist(id string) error {
 	return err
 }
 
-// AddPlayHistory 添加播放历史
+// AddPlayHistory 添加播放历史记录
 func AddPlayHistory(songID string) error {
 	dbMu.Lock()
 	defer dbMu.Unlock()
 
 	now := float64(time.Now().UnixNano()) / 1e9
-	_, err := DB.Exec("INSERT INTO play_history (song_id, play_time) VALUES (?, ?)", songID, now)
-	return err
+	if _, err := DB.Exec("INSERT INTO play_history (song_id, play_time) VALUES (?, ?)", songID, now); err != nil {
+		return err
+	}
+
+	var count int
+	if err := DB.QueryRow("SELECT COUNT(*) FROM play_history").Scan(&count); err == nil && count > 100 {
+		var threshold float64
+		if err := DB.QueryRow("SELECT play_time FROM play_history ORDER BY play_time DESC LIMIT 1 OFFSET 99").Scan(&threshold); err == nil {
+			_, _ = DB.Exec("DELETE FROM play_history WHERE play_time < ?", threshold)
+		}
+	}
+	return nil
 }
 
-// GetPlayHistory 获取播放历史
+// GetPlayHistory 获取播放历史列表，按歌曲去重并按最新时间倒序排列
 func GetPlayHistory(limit int) ([]core.PlayHistory, error) {
 	dbMu.RLock()
 	defer dbMu.RUnlock()
@@ -161,11 +171,12 @@ func GetPlayHistory(limit int) ([]core.PlayHistory, error) {
 
 	query := `
 		SELECT 
-			ph.id, ph.song_id, ph.play_time,
+			MAX(ph.id) as id, ph.song_id, MAX(ph.play_time) as play_time,
 			s.id, s.path, s.filename, s.title, s.artist, s.album, s.album_artist, s.mtime, s.size, s.has_cover, s.has_lyrics, s.scrape_retry_count
 		FROM play_history ph
-		LEFT JOIN songs s ON ph.song_id = s.id
-		ORDER BY ph.id DESC LIMIT ?`
+		INNER JOIN songs s ON ph.song_id = s.id
+		GROUP BY ph.song_id
+		ORDER BY play_time DESC LIMIT ?`
 
 	rows, err := DB.Query(query, limit)
 	if err != nil {
@@ -213,7 +224,7 @@ func GetPlayHistory(limit int) ([]core.PlayHistory, error) {
 	return history, nil
 }
 
-// DeletePlayHistoryItem 删除歌曲播放历史
+// DeletePlayHistoryItem 删除指定歌曲的播放历史
 func DeletePlayHistoryItem(songID string) error {
 	dbMu.Lock()
 	defer dbMu.Unlock()
@@ -222,21 +233,9 @@ func DeletePlayHistoryItem(songID string) error {
 	return err
 }
 
-// DeletePlayHistoryItemWithTime 根据歌曲与时间戳删除单条播放历史
+// DeletePlayHistoryItemWithTime 删除指定歌曲的播放历史
 func DeletePlayHistoryItemWithTime(songID string, playTime float64) error {
-	if playTime <= 0 {
-		return DeletePlayHistoryItem(songID)
-	}
-
-	if playTime > 1e11 {
-		playTime = playTime / 1000.0
-	}
-
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	_, err := DB.Exec("DELETE FROM play_history WHERE song_id = ? AND ABS(play_time - ?) < 0.5", songID, playTime)
-	return err
+	return DeletePlayHistoryItem(songID)
 }
 
 // ClearPlayHistory 清空播放历史

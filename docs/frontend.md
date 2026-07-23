@@ -57,10 +57,12 @@
 
 ## 3. 本地缓存与性能优化 (IndexedDB Cache)
 
-- **精细化广播与缓存擦除规约**：监听到 `library_changed` 精细化载荷时：
+- **精细化广播与缓存擦除规约**：监听到 `library_changed` 精细化载荷时按 `fields` 分类隔离处理：
   - 若 `fields` 包含 `'cover'`：调用 `musicDB.deleteCover(id)` 擦除 IndexedDB 中的封面 Blob，并调用 `coverCacheManager.delete(id)` 销毁 Blob URL；列表及组件使用带修改时间戳的 URL (`album_art + '?v=' + timestamp`) 彻底穿透 HTTP 300 天强缓存。
   - 若 `fields` 包含 `'lyrics'`：调用 `musicDB.deleteLyrics(id)` 擦除 IndexedDB 歌词缓存。
-  - 若变更列表中包含当前播放歌曲（`currentSong.id`）：对包含 `lyrics` 变更的曲目立即重新发起 WS `music/lyrics` 请求并无缝替换当前播放器面板上的歌词。
+  - 若 `fields` 包含 `'favorite'`：仅触发 `favoritesStore.fetchPlaylists()` 刷新歌单与收藏夹列表。
+  - 若 `fields` 包含 `'history'`：仅触发 `historyStore.fetchHistory()` 重新拉取最新云端播放历史。
+  - 若 `fields` 包含 `'audio'` / `'metadata'` / `'cover'` / `'lyrics'`：触发 `fetchSongs()` 更新歌曲列表。
 
 ### 3.2 子路径与 Web 资源匹配 (`getApiUrl`)
 - **部署适配**：应用支持子路径反向代理部署（如 `/app/yuexps-2fmusic/`）。

@@ -192,6 +192,7 @@ func HandleWSAction(c *Client, req core.WSClientRequest) {
 				_ = db.AddFavorite(sID, pID, title, artist)
 			}
 		}
+		NotifyLibraryChangedDetailed(songIDs, "update", []string{"favorite"})
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
 	case "favorite/delete":
@@ -227,14 +228,17 @@ func HandleWSAction(c *Client, req core.WSClientRequest) {
 				_ = db.RemoveFavorite(sID, pID)
 			}
 		}
+		NotifyLibraryChangedDetailed(songIDs, "delete", []string{"favorite"})
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
 	case "favorite/batch_move":
 		songIDsRaw, _ := data["song_ids"].([]interface{})
 		fromPL, _ := data["from_playlist_id"].(string)
 		toPL, _ := data["to_playlist_id"].(string)
+		var movedIDs []string
 		for _, id := range songIDsRaw {
 			if sID, ok := id.(string); ok {
+				movedIDs = append(movedIDs, sID)
 				if fromPL != "" {
 					_ = db.RemoveFavorite(sID, fromPL)
 				}
@@ -243,6 +247,7 @@ func HandleWSAction(c *Client, req core.WSClientRequest) {
 				}
 			}
 		}
+		NotifyLibraryChangedDetailed(movedIDs, "update", []string{"favorite"})
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
 	case "favorite/create_playlist":
@@ -260,6 +265,7 @@ func HandleWSAction(c *Client, req core.WSClientRequest) {
 			SendErrorResponse(c, seq, action, err.Error())
 			return
 		}
+		NotifyLibraryChangedDetailed([]string{}, "update", []string{"favorite"})
 		SendSuccessResponse(c, seq, action, map[string]string{"id": id, "name": name})
 
 	case "favorite/delete_playlist":
@@ -272,6 +278,7 @@ func HandleWSAction(c *Client, req core.WSClientRequest) {
 			SendErrorResponse(c, seq, action, err.Error())
 			return
 		}
+		NotifyLibraryChangedDetailed([]string{}, "delete", []string{"favorite"})
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
 	case "history/get":
@@ -298,6 +305,7 @@ func HandleWSAction(c *Client, req core.WSClientRequest) {
 		songID, _ := data["song_id"].(string)
 		if songID != "" {
 			_ = db.AddPlayHistory(songID)
+			NotifyLibraryChangedDetailed([]string{songID}, "update", []string{"history"})
 		}
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
@@ -306,11 +314,13 @@ func HandleWSAction(c *Client, req core.WSClientRequest) {
 		playTime, _ := data["play_time"].(float64)
 		if songID != "" {
 			_ = db.DeletePlayHistoryItemWithTime(songID, playTime)
+			NotifyLibraryChangedDetailed([]string{songID}, "delete", []string{"history"})
 		}
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
 	case "history/clear":
 		_ = db.ClearPlayHistory()
+		NotifyLibraryChangedDetailed([]string{}, "delete", []string{"history"})
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
 	case "mount/list":
