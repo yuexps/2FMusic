@@ -100,14 +100,61 @@ export const useSystemStore = defineStore('system', () => {
       }
     })
 
-    // 库文件变更通知
-    wsClient.subscribe('library_changed', (data: any) => {
+    // 库变更通知处理
+    wsClient.subscribe('library_changed', async (data: any) => {
       console.log('WebSocket：收到音乐库变更通知:', data)
-      if (data && data.library_version) {
-        status.value.library_version = data.library_version
+      if (!data) return
+
+      const { event_type, song_ids = [], fields = [], timestamp = Date.now() } = data
+      const playerStore = usePlayerStore()
+
+      // 1. 定向擦除本地 IndexedDB 缓存与 ObjectURL
+      for (const id of song_ids) {
+        if (fields.includes('cover')) {
+          await musicDB.deleteCover(id)
+          coverCacheManager.delete(id)
+        }
+        if (fields.includes('lyrics')) {
+          await musicDB.deleteLyrics(id)
+        }
       }
-      fetchSongs()
-      fetchSystemStatus() // 触发状态更新以获取最新音乐数量统计
+
+      // 2. 当前播放曲目定向热重载
+      const currentSong = playerStore.currentSong
+      if (currentSong && song_ids.includes(currentSong.id)) {
+        if (fields.includes('lyrics')) {
+          playerStore.reloadCurrentLyrics()
+        }
+        if (fields.includes('cover')) {
+          if (currentSong.album_art) {
+            const baseUrl = currentSong.album_art.split('?')[0]
+            currentSong.album_art = `${baseUrl}?v=${timestamp}`
+          }
+        }
+      }
+
+      // 3. 按 event_type 局部增量刷新或重新拉取列表
+      if (event_type === 'update' && song_ids.length > 0) {
+        songs.value = songs.value.map(song => {
+          if (song_ids.includes(song.id)) {
+            const updated = { ...song }
+            if (fields.includes('cover')) {
+              updated.has_cover = true
+              const baseUrl = (updated.album_art || `/api/music/covers/${song.id}.webp`).split('?')[0]
+              updated.album_art = `${baseUrl}?v=${timestamp}`
+            }
+            if (fields.includes('lyrics')) {
+              updated.has_lyrics = true
+            }
+            return updated
+          }
+          return song
+        })
+      } else {
+        fetchSongs()
+      }
+
+      fetchSystemStatus()
     })
 
     // 下载任务进度
@@ -192,6 +239,7 @@ export const useSystemStore = defineStore('system', () => {
           song_id: songId,
           title: targetSong.title,
           artist: targetSong.artist,
+          album: targetSong.album,
           filename: targetSong.filename
         }
         wsClient.sendRequest('music/album-art', payload).catch(e => console.warn('重新获取专辑封面失败:', e))

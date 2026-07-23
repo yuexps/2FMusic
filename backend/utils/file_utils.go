@@ -1,10 +1,13 @@
 package utils
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"time"
 )
 
 // SanitizeFilename 优雅清洗文件名，避免斜杠等非法字符破坏路径并保持美观
@@ -71,4 +74,33 @@ func SafeMoveFile(src, dst string) error {
 	// 移动成功后删除源文件
 	_ = os.Remove(src)
 	return nil
+}
+
+// SafeRemoveFile 安全物理删除文件。尝试多次重试与 GC 句柄释放，若仍被独占则显式返回错误
+func SafeRemoveFile(targetPath string) error {
+	if targetPath == "" {
+		return nil
+	}
+
+	fi, err := os.Stat(targetPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if fi.IsDir() {
+		return os.RemoveAll(targetPath)
+	}
+
+	// 5 轮轻量重试 + 强制 GC 释放文件句柄
+	for i := 0; i < 5; i++ {
+		if err := os.Remove(targetPath); err == nil || os.IsNotExist(err) {
+			return nil
+		}
+		runtime.GC()
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return fmt.Errorf("文件正被操作系统其他进程独占，无法物理删除: %s", filepath.Base(targetPath))
 }

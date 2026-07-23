@@ -150,8 +150,9 @@
 
 客户端建立 WS 连接后，服务端在特定事件触发时会主动推送不带 `seq` 属性的广播帧：
 1. **`library_changed`**：
-   - 载荷：`{"type": "broadcast", "action": "library_changed", "data": {"status": "updated"}}`
-   - 触发时机：扫描完成、元数据刮削落盘、歌曲删除或挂载点更新。
+   - 载荷：`{"type": "broadcast", "action": "library_changed", "data": {"event_type": "update"|"insert"|"delete"|"reload_all", "song_ids": ["xxx"], "fields": ["cover"|"lyrics"|"metadata"], "timestamp": 1784689724530}}`
+   - 触发时机：增量扫描/重新刮削/Watcher 捕获封面或歌词落盘、歌曲删除或挂载点变更。
+   - 载荷规约：`event_type` 标识变更性质；`song_ids` 为变更曲目 ID 列表；`fields` 为具体变更数据类型。客户端收到后根据 `song_ids` 和 `fields` 精准擦除本地缓存并刷新当前播放试图。
 2. **`download_status`**：
    - 载荷：`{"type": "download_status", "data": {"task_id": "xxx", "status": "downloading"|"success"|"error", "progress": 85, ...}}`
    - 触发时机：网易云异步下载任务进度更新。

@@ -43,17 +43,6 @@ func RefreshLCWatchPaths() {
 
 // lcWatchLoop 封面与歌词物理目录监听循环
 func lcWatchLoop() {
-	var lastNotifyTime time.Time
-
-	notifyChanged := func() {
-		if time.Since(lastNotifyTime) > 300*time.Millisecond {
-			lastNotifyTime = time.Now()
-			if NotifyLibraryChanged != nil {
-				NotifyLibraryChanged()
-			}
-		}
-	}
-
 	var (
 		lastPathTime = make(map[string]time.Time)
 		lastPathMu   sync.Mutex
@@ -101,33 +90,31 @@ func lcWatchLoop() {
 
 			// 判断是 Covers 目录还是 Lyrics 目录
 			if dir == core.GlobalConfig.CoversDir && ext == ".webp" {
-				song, _ := db.GetSongByID(songID)
 				if fi, err := os.Stat(cleanPath); err == nil && !fi.IsDir() {
-					if song == nil || !song.HasCover {
-						core.Info("[LC_Watcher] 捕捉封面新增: %s.webp", songID)
-						db.UpdateSongHasCover(songID, true)
-						notifyChanged()
+					core.Info("[LC_Watcher] 捕捉封面新增/修改: %s.webp", songID)
+					db.UpdateSongHasCover(songID, true)
+					if NotifySongChangedDebounced != nil {
+						NotifySongChangedDebounced(songID, "update", []string{"cover"})
 					}
 				} else {
-					if song != nil && song.HasCover {
-						core.Info("[LC_Watcher] 捕捉封面删除: %s.webp", songID)
-						db.UpdateSongHasCover(songID, false)
-						notifyChanged()
+					core.Info("[LC_Watcher] 捕捉封面删除: %s.webp", songID)
+					db.UpdateSongHasCover(songID, false)
+					if NotifySongChangedDebounced != nil {
+						NotifySongChangedDebounced(songID, "update", []string{"cover"})
 					}
 				}
 			} else if dir == core.GlobalConfig.LyricsDir && ext == ".lrc" {
-				song, _ := db.GetSongByID(songID)
 				if fi, err := os.Stat(cleanPath); err == nil && !fi.IsDir() {
-					if song == nil || !song.HasLyrics {
-						core.Info("[LC_Watcher] 捕捉歌词新增: %s.lrc", songID)
-						db.UpdateSongHasLyrics(songID, true)
-						notifyChanged()
+					core.Info("[LC_Watcher] 捕捉歌词新增/修改: %s.lrc", songID)
+					db.UpdateSongHasLyrics(songID, true)
+					if NotifySongChangedDebounced != nil {
+						NotifySongChangedDebounced(songID, "update", []string{"lyrics"})
 					}
 				} else {
-					if song != nil && song.HasLyrics {
-						core.Info("[LC_Watcher] 捕捉歌词删除: %s.lrc", songID)
-						db.UpdateSongHasLyrics(songID, false)
-						notifyChanged()
+					core.Info("[LC_Watcher] 捕捉歌词删除: %s.lrc", songID)
+					db.UpdateSongHasLyrics(songID, false)
+					if NotifySongChangedDebounced != nil {
+						NotifySongChangedDebounced(songID, "update", []string{"lyrics"})
 					}
 				}
 			}

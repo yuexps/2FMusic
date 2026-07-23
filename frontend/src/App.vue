@@ -311,6 +311,7 @@ const loadLyricsForSong = async (song: any) => {
     const data = await wsClient.sendRequest('music/lyrics', {
       title: song.title,
       artist: song.artist,
+      album: song.album,
       filename: song.filename,
       song_id: song.id,
       yrc: true
@@ -331,6 +332,12 @@ const loadLyricsForSong = async (song: any) => {
 
 watch(() => playerStore.currentSong, (newSong) => {
   loadLyricsForSong(newSong)
+})
+
+watch(() => playerStore.lyricsReloadVersion, () => {
+  if (playerStore.currentSong) {
+    loadLyricsForSong(playerStore.currentSong)
+  }
 })
 
 onMounted(() => {

@@ -535,18 +535,39 @@ export const usePlayerStore = defineStore('player', () => {
     if (!Array.isArray(validSongs)) return
 
     const validIdSet = new Set(validSongs.map(s => String(s.id)))
+    const validPathSet = new Set(validSongs.map(s => s.path ? String(s.path) : ''))
 
-    // 1. 过滤播放列表与队列，剔除已删除的失效歌曲（保留非 DB 源歌曲）
-    playlist.value = playlist.value.filter(s => !s.id || validIdSet.has(String(s.id)))
-    queue.value = queue.value.filter(s => !s.id || validIdSet.has(String(s.id)))
+    const isSongValid = (s: Song) => {
+      if (!s) return false
+      const hasId = s.id !== undefined && s.id !== null && String(s.id) !== ''
+      const hasPath = s.path !== undefined && s.path !== null && String(s.path) !== ''
+
+      // 若同时无 ID 也无 Path（离线损坏坏项），判定为无效
+      if (!hasId && !hasPath) return false
+
+      // 只要匹配到了有效 ID 或 Path 即可认为有效
+      if (hasId && validIdSet.has(String(s.id))) return true
+      if (hasPath && validPathSet.has(String(s.path))) return true
+
+      return false
+    }
+
+    // 1. 过滤播放列表与队列，剔除已删除的失效歌曲
+    playlist.value = playlist.value.filter(isSongValid)
+    queue.value = queue.value.filter(isSongValid)
 
     // 2. 校验当前播放器歌曲
-    if (currentSong.value && currentSong.value.id && !validIdSet.has(String(currentSong.value.id))) {
-      console.warn(`[PlayerStore] 发现失效歌曲 ${currentSong.value.title} (ID: ${currentSong.value.id})，已全自动清洗重置`)
+    if (currentSong.value && !isSongValid(currentSong.value)) {
+      console.warn(`[PlayerStore] 发现失效歌曲 ${currentSong.value.title || 'Unknown'}，已全自动清洗重置`)
       stop()
     } else {
       saveState()
     }
+  }
+
+  const lyricsReloadVersion = ref(0)
+  const reloadCurrentLyrics = () => {
+    lyricsReloadVersion.value++
   }
 
   return {
@@ -574,6 +595,8 @@ export const usePlayerStore = defineStore('player', () => {
     fetchAlbumArt,
     currentLyric,
     updateLyric,
-    cleanInvalidSongs
+    cleanInvalidSongs,
+    lyricsReloadVersion,
+    reloadCurrentLyrics
   }
 })

@@ -86,13 +86,98 @@ func BroadcastJSON(v interface{}) {
 	}
 }
 
-// NotifyLibraryChanged 广播曲库发生变动
-func NotifyLibraryChanged() {
+var (
+	debounceMu       sync.Mutex
+	debounceTimer    *time.Timer
+	pendingSongIDs   = make(map[string]bool)
+	pendingFields    = make(map[string]bool)
+	pendingEventType = "update"
+)
+
+// NotifySongChangedDebounced 推送 200ms 防抖精细化歌曲变更广播
+func NotifySongChangedDebounced(songID string, eventType string, fields []string) {
+	if songID == "" {
+		return
+	}
+	debounceMu.Lock()
+	defer debounceMu.Unlock()
+
+	pendingSongIDs[songID] = true
+	for _, f := range fields {
+		pendingFields[f] = true
+	}
+	if eventType != "" {
+		pendingEventType = eventType
+	}
+
+	if debounceTimer != nil {
+		debounceTimer.Stop()
+	}
+
+	debounceTimer = time.AfterFunc(200*time.Millisecond, flushDebouncedNotifications)
+}
+
+func flushDebouncedNotifications() {
+	debounceMu.Lock()
+	if len(pendingSongIDs) == 0 {
+		debounceMu.Unlock()
+		return
+	}
+
+	songIDs := make([]string, 0, len(pendingSongIDs))
+	for id := range pendingSongIDs {
+		songIDs = append(songIDs, id)
+	}
+
+	fields := make([]string, 0, len(pendingFields))
+	for f := range pendingFields {
+		fields = append(fields, f)
+	}
+
+	eventType := pendingEventType
+
+	pendingSongIDs = make(map[string]bool)
+	pendingFields = make(map[string]bool)
+	pendingEventType = "update"
+	debounceTimer = nil
+	debounceMu.Unlock()
+
+	if len(songIDs) > 50 {
+		NotifyLibraryReloadAll()
+		return
+	}
+
+	NotifyLibraryChangedDetailed(songIDs, eventType, fields)
+}
+
+// NotifyLibraryChangedDetailed 发送精细化广播
+func NotifyLibraryChangedDetailed(songIDs []string, eventType string, fields []string) {
+	if songIDs == nil {
+		songIDs = []string{}
+	}
+	if fields == nil {
+		fields = []string{}
+	}
 	BroadcastJSON(map[string]interface{}{
 		"type":   "broadcast",
 		"action": "library_changed",
-		"data":   map[string]interface{}{"status": "updated", "library_version": float64(time.Now().UnixNano()) / 1e9},
+		"data": map[string]interface{}{
+			"event_type": eventType,
+			"song_ids":   songIDs,
+			"fields":     fields,
+			"timestamp":  time.Now().UnixMilli(),
+		},
 	})
+}
+
+// NotifyLibraryReloadAll 广播全库全量刷新通知
+func NotifyLibraryReloadAll() {
+	NotifyLibraryChangedDetailed([]string{}, "reload_all", []string{})
+}
+
+// NotifyLibraryChanged 广播曲库全量变动兜底
+func NotifyLibraryChanged() {
+	NotifyLibraryReloadAll()
 }
 
 // BroadcastScanStatus 广播扫描与在线刮削实时进度数据

@@ -58,29 +58,10 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => ({
   }
 }))
 
-// 校验当前浏览器是否支持 Web Crypto SHA-256
-function isCryptoSupported(): boolean {
-  return typeof window !== 'undefined' && !!(window.crypto && window.crypto.subtle && typeof window.crypto.subtle.digest === 'function')
-}
-
-// 异步计算 SHA-256 密码哈希
-async function sha256(message: string): Promise<string> {
-  if (!isCryptoSupported()) {
-    throw new Error('当前浏览器不支持 SHA-256 ，请升级或更换现代浏览器！')
-  }
-  const msgBuffer = new TextEncoder().encode(message)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-}
+import { sha256 } from '../utils/crypto'
 
 const handleLogin = async (e: Event) => {
   e.preventDefault()
-  if (!isCryptoSupported()) {
-    showError.value = true
-    errorMessage.value = '当前浏览器不支持 SHA-256 ，请升级或更换现代浏览器！'
-    return
-  }
   if (!password.value) return
   loading.value = true
   showError.value = false
@@ -108,13 +89,8 @@ const handleLogin = async (e: Event) => {
 watch(() => props.show, (newVal) => {
   if (newVal) {
     password.value = ''
-    if (!isCryptoSupported()) {
-      showError.value = true
-      errorMessage.value = '当前浏览器不支持 SHA-256 ，请升级或更换现代浏览器！'
-    } else {
-      showError.value = false
-      errorMessage.value = ''
-    }
+    showError.value = false
+    errorMessage.value = ''
   }
 })
 </script>

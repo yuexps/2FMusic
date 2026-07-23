@@ -57,46 +57,48 @@
           已选 {{ selectedSongIds.size }} 首
         </n-checkbox>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 max-md:gap-1.5">
+        <!-- 1. 添加 -->
         <n-dropdown v-if="!playlistId" trigger="click" :options="batchPlaylistOptions"
           @select="handleBatchAddToPlaylist">
-          <n-button round secondary :disabled="selectedSongIds.size === 0"
-            class="max-md:w-9 max-md:h-9 max-md:p-0 max-md:rounded-full max-md:min-w-9 max-md:shrink-0 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!">
+          <n-button round type="primary" secondary :disabled="selectedSongIds.size === 0"
+            class="max-md:w-8 max-md:h-8 max-md:p-0 max-md:rounded-full max-md:min-w-8 max-md:shrink-0 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!"
+            title="添加到收藏夹">
             <template #icon>
               <SvgIcon name="plus" class="max-md:m-0!" />
             </template>
-            <span class="max-md:hidden">添加到收藏夹</span>
+            <span class="max-md:hidden">添加</span>
           </n-button>
         </n-dropdown>
 
-        <n-button v-else round type="error" secondary :disabled="selectedSongIds.size === 0"
+        <!-- 2. 删除 (收藏夹移出 / 物理删除) -->
+        <n-button v-if="playlistId" round type="error" secondary :disabled="selectedSongIds.size === 0"
           @click="handleBatchRemoveFromPlaylist"
-          class="max-md:w-9 max-md:h-9 max-md:p-0 max-md:rounded-full max-md:min-w-9 max-md:shrink-0 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!">
+          class="max-md:w-8 max-md:h-8 max-md:p-0 max-md:rounded-full max-md:min-w-8 max-md:shrink-0 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!"
+          title="从收藏夹移出">
           <template #icon>
             <SvgIcon name="trash" class="max-md:m-0!" />
           </template>
-          <span class="max-md:hidden">从收藏夹移除</span>
+          <span class="max-md:hidden">删除</span>
         </n-button>
-
-        <n-button v-if="!playlistId" round type="error" secondary :disabled="selectedSongIds.size === 0"
+        <n-button v-else round type="error" secondary :disabled="selectedSongIds.size === 0"
           @click="showBatchDeleteModal = true"
-          class="max-md:w-9 max-md:h-9 max-md:p-0 max-md:rounded-full max-md:min-w-9 max-md:shrink-0 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!">
+          class="max-md:w-8 max-md:h-8 max-md:p-0 max-md:rounded-full max-md:min-w-8 max-md:shrink-0 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!"
+          title="物理删除歌曲">
           <template #icon>
             <SvgIcon name="trash" class="max-md:m-0!" />
           </template>
-          <span class="max-md:hidden">物理删除</span>
+          <span class="max-md:hidden">删除</span>
         </n-button>
 
-        <n-button class="max-md:hidden!" round text :disabled="selectedSongIds.size === 0" @click="clearSelection">
-          取消选择
-        </n-button>
-        <n-button class="max-md:hidden!" round text @click="toggleBatchMode">
-          退出管理
-        </n-button>
-        <n-button class="hidden! max-md:inline-flex!" circle secondary @click="toggleBatchMode" title="退出管理">
+        <!-- 3. 取消（即退出批量管理） -->
+        <n-button round secondary @click="toggleBatchMode"
+          class="max-md:w-8 max-md:h-8 max-md:p-0 max-md:rounded-full max-md:min-w-8 max-md:shrink-0 max-md:flex max-md:items-center max-md:justify-center [&_.n-button__icon]:max-md:mr-0!"
+          title="取消并退出管理">
           <template #icon>
-            <SvgIcon name="close" />
+            <SvgIcon name="times" class="max-md:m-0!" />
           </template>
+          <span class="max-md:hidden">取消</span>
         </n-button>
       </div>
     </div>
@@ -120,9 +122,7 @@
         <!-- 1. 单曲列表视图 -->
         <template v-if="viewMode === 'list'">
           <!-- 固定在顶部的极简表头 -->
-          <div
-            class="song-grid-header max-md:hidden!"
-            :style="{ paddingRight: `${16 + scrollbarWidth}px` }">
+          <div class="song-grid-header max-md:hidden!" :style="{ paddingRight: `${16 + scrollbarWidth}px` }">
             <div v-if="isBatchMode" class="col-check"></div>
             <div class="col-title">标题</div>
             <div class="col-artist">歌手</div>
@@ -133,31 +133,31 @@
           </div>
 
           <!-- 高性能虚拟列表滚动区 -->
-          <n-virtual-list ref="virtualListRef" class="flex-1 min-h-0 overflow-hidden" :item-size="64" :items="filteredSongs" key-field="id"
-            :item-resizable="false" :ignore-item-resize="true" @resize="updateScrollbarWidth">
+          <n-virtual-list ref="virtualListRef" class="flex-1 min-h-0 overflow-hidden" :item-size="64"
+            :items="filteredSongs" key-field="id" :item-resizable="false" :ignore-item-resize="true"
+            @resize="updateScrollbarWidth">
             <template #default="{ item: song }">
               <div
                 class="group song-row max-md:grid! max-md:grid-cols-[auto_auto_1fr_auto] max-md:grid-rows-[auto_auto] max-md:[grid-template-areas:'check_cover_title_action'_'check_cover_artist_action'] max-md:items-center max-md:p-[8px_12px] max-md:gap-x-3 max-md:gap-y-[2px]"
                 :class="{
                   'text-(--primary) font-semibold': playerStore.currentSong?.id === song.id,
                   'bg-(--primary-alpha-16) backdrop-blur-card border border-(--primary-alpha-10) dark:bg-(--primary-on-dark-alpha-16) dark:border-(--primary-on-dark-alpha-12)': selectedSongIds.has(song.id)
-                }" @click="handleRowClick(song)" @dblclick="playSong(song)" @contextmenu.prevent="handleContextMenu($event, song)">
+                }" @click="handleRowClick(song)" @dblclick="playSong(song)"
+                @contextmenu.prevent="handleContextMenu($event, song)">
                 <!-- 复选框 -->
                 <div v-if="isBatchMode"
-                  class="col-check max-md:[grid-area:check] max-md:w-auto max-md:flex max-md:items-center"
-                  @click.stop>
+                  class="col-check max-md:[grid-area:check] max-md:w-auto max-md:flex max-md:items-center" @click.stop>
                   <n-checkbox :checked="selectedSongIds.has(song.id)"
                     @update:checked="(val) => toggleSongSelection(song.id, val)" />
                 </div>
 
                 <!-- 标题（含封面、播放状态指示） -->
-                <div
-                  class="col-title max-md:contents!">
+                <div class="col-title max-md:contents!">
                   <div
                     class="w-10 h-10 rounded-md overflow-hidden relative shrink-0 max-md:[grid-area:cover] max-md:row-[span_2] max-md:w-10 max-md:h-10"
                     @click.stop="handlePlayBtnClick(song)">
-                    <img class="w-full h-full object-contain bg-black/5 dark:bg-white/5" v-cached-src="{ id: song.id, src: song.album_art }"
-                      loading="lazy" alt="Cover" />
+                    <img class="w-full h-full object-contain bg-black/5 dark:bg-white/5"
+                      v-cached-src="{ id: song.id, src: song.album_art }" loading="lazy" alt="Cover" />
                     <div
                       class="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 text-xs transition-opacity duration-200 group-hover:opacity-100">
                       <SvgIcon
@@ -179,9 +179,7 @@
                   :title="song.artist">{{ song.artist }}</div>
 
                 <!-- 专辑 -->
-                <div
-                  class="col-album max-md:hidden!"
-                  :title="song.album">{{ song.album || '-' }}</div>
+                <div class="col-album max-md:hidden!" :title="song.album">{{ song.album || '-' }}</div>
 
                 <!-- 大小 -->
                 <div class="col-size max-md:hidden!">{{
@@ -212,18 +210,22 @@
         <!-- 2. 歌手网格视图 -->
         <template v-else-if="viewMode === 'artist'">
           <div class="flex-1 overflow-y-auto min-h-0 p-1">
-            <div v-auto-animate class="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6 max-md:grid-cols-[repeat(auto-fill,minmax(100px,1fr))] max-md:gap-4">
+            <div v-auto-animate
+              class="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6 max-md:grid-cols-[repeat(auto-fill,minmax(100px,1fr))] max-md:gap-4">
               <div v-for="artist in artistsGroup" :key="artist.name"
                 class="group flex flex-col items-center text-center cursor-pointer select-none transition-all duration-300"
                 @click="openGroupDetail(artist.name, '歌手', artist.songs, artist.cover)">
                 <!-- 圆形歌手头像 -->
-                <div class="relative w-28 h-28 max-md:w-20 max-md:h-20 rounded-full overflow-hidden shadow-md border border-hairline/10 transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg group-hover:border-primary/20">
-                  <img v-if="artist.cover" :src="getApiUrl(artist.cover)" class="w-full h-full object-cover" loading="lazy" />
+                <div
+                  class="relative w-28 h-28 max-md:w-20 max-md:h-20 rounded-full overflow-hidden shadow-md border border-hairline/10 transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg group-hover:border-primary/20">
+                  <img v-if="artist.cover" :src="getApiUrl(artist.cover)" class="w-full h-full object-cover"
+                    loading="lazy" />
                   <div v-else class="w-full h-full bg-sidebar flex items-center justify-center text-body-muted">
                     <SvgIcon name="user" class="text-3xl max-md:text-xl" />
                   </div>
                   <!-- 遮罩播放状态 -->
-                  <div class="absolute inset-0 bg-black/35 opacity-0 flex items-center justify-center text-white transition-opacity duration-300 group-hover:opacity-100">
+                  <div
+                    class="absolute inset-0 bg-black/35 opacity-0 flex items-center justify-center text-white transition-opacity duration-300 group-hover:opacity-100">
                     <SvgIcon name="play" class="text-xl" />
                   </div>
                 </div>
@@ -238,18 +240,22 @@
         <!-- 3. 专辑网格视图 -->
         <template v-else-if="viewMode === 'album'">
           <div class="flex-1 overflow-y-auto min-h-0 p-1">
-            <div v-auto-animate class="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-6 max-md:grid-cols-[repeat(auto-fill,minmax(110px,1fr))] max-md:gap-4">
+            <div v-auto-animate
+              class="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-6 max-md:grid-cols-[repeat(auto-fill,minmax(110px,1fr))] max-md:gap-4">
               <div v-for="album in albumsGroup" :key="album.albumName"
                 class="group flex flex-col cursor-pointer select-none transition-all duration-300"
                 @click="openGroupDetail(album.albumName, album.artist, album.songs, album.cover)">
                 <!-- 1:1 专辑封套 -->
-                <div class="relative aspect-square w-full rounded-xl overflow-hidden shadow-md border border-hairline/10 transition-all duration-300 group-hover:scale-103 group-hover:shadow-xl group-hover:border-primary/20">
-                  <img v-if="album.cover" :src="getApiUrl(album.cover)" class="w-full h-full object-contain bg-black/5 dark:bg-white/5" loading="lazy" />
+                <div
+                  class="relative aspect-square w-full rounded-xl overflow-hidden shadow-md border border-hairline/10 transition-all duration-300 group-hover:scale-103 group-hover:shadow-xl group-hover:border-primary/20">
+                  <img v-if="album.cover" :src="getApiUrl(album.cover)"
+                    class="w-full h-full object-contain bg-black/5 dark:bg-white/5" loading="lazy" />
                   <div v-else class="w-full h-full bg-sidebar flex items-center justify-center text-body-muted">
                     <SvgIcon name="music" class="text-3xl max-md:text-xl" />
                   </div>
                   <!-- 遮罩播放状态 -->
-                  <div class="absolute inset-0 bg-black/35 opacity-0 flex items-center justify-center text-white transition-opacity duration-300 group-hover:opacity-100">
+                  <div
+                    class="absolute inset-0 bg-black/35 opacity-0 flex items-center justify-center text-white transition-opacity duration-300 group-hover:opacity-100">
                     <SvgIcon name="play" class="text-xl" />
                   </div>
                 </div>
@@ -265,14 +271,17 @@
         <template v-else-if="viewMode === 'folder'">
           <div class="flex-1 flex flex-col min-h-0 p-1">
             <!-- 面包屑导航栏 -->
-            <div class="flex items-center flex-wrap gap-1.5 mb-4 text-xs select-none bg-sidebar/20 p-[8px_16px] rounded-lg border border-hairline/5 w-fit">
-              <span class="text-body-muted cursor-pointer hover:text-primary transition-colors flex items-center gap-1" @click="currentDirPath = ''">
+            <div
+              class="flex items-center flex-wrap gap-1.5 mb-4 text-xs select-none bg-sidebar/20 p-[8px_16px] rounded-lg border border-hairline/5 w-fit">
+              <span class="text-body-muted cursor-pointer hover:text-primary transition-colors flex items-center gap-1"
+                @click="currentDirPath = ''">
                 <SvgIcon name="music" class="text-xs" />
                 <span>所有挂载</span>
               </span>
               <template v-for="crumb in breadcrumbs" :key="crumb.path">
                 <span class="text-body-muted/30 select-none">/</span>
-                <span class="text-ink cursor-pointer hover:text-primary transition-colors font-medium" @click="currentDirPath = crumb.path">
+                <span class="text-ink cursor-pointer hover:text-primary transition-colors font-medium"
+                  @click="currentDirPath = crumb.path">
                   {{ crumb.name.substring(crumb.name.lastIndexOf('/') + 1) || crumb.name }}
                 </span>
               </template>
@@ -280,7 +289,7 @@
 
             <div class="flex-1 overflow-y-auto min-h-0">
               <!-- 文件夹网格列表 -->
-              <div v-if="currentFolderContent.folders.length > 0" 
+              <div v-if="currentFolderContent.folders.length > 0"
                 class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4 max-md:grid-cols-1 mb-6">
                 <div v-for="folderPath in currentFolderContent.folders" :key="folderPath"
                   class="flex items-center gap-3 p-3.5 rounded-xl bg-sidebar/30 border border-hairline/10 cursor-pointer select-none transition-all duration-300 hover:bg-sidebar/80 hover:-translate-y-0.5 hover:shadow-md"
@@ -297,9 +306,7 @@
 
               <!-- 当前目录下的单曲文件列表 -->
               <template v-if="currentFolderContent.songs.length > 0">
-                <div
-                  class="song-grid-header max-md:hidden!"
-                  :style="{ paddingRight: `${16 + scrollbarWidth}px` }">
+                <div class="song-grid-header max-md:hidden!" :style="{ paddingRight: `${16 + scrollbarWidth}px` }">
                   <div v-if="isBatchMode" class="col-check"></div>
                   <div class="col-title">标题</div>
                   <div class="col-artist">歌手</div>
@@ -315,8 +322,9 @@
                     :class="{
                       'text-(--primary) font-semibold': playerStore.currentSong?.id === song.id,
                       'bg-(--primary-alpha-16) backdrop-blur-card border border-(--primary-alpha-10) dark:bg-(--primary-on-dark-alpha-16) dark:border-(--primary-on-dark-alpha-12)': selectedSongIds.has(song.id)
-                    }" @click="handleRowClick(song)" @dblclick="playSong(song, currentFolderContent.songs)" @contextmenu.prevent="handleContextMenu($event, song)">
-                    
+                    }" @click="handleRowClick(song)" @dblclick="playSong(song, currentFolderContent.songs)"
+                    @contextmenu.prevent="handleContextMenu($event, song)">
+
                     <!-- 复选框 -->
                     <div v-if="isBatchMode"
                       class="col-check max-md:[grid-area:check] max-md:w-auto max-md:flex max-md:items-center"
@@ -330,8 +338,8 @@
                       <div
                         class="w-10 h-10 rounded-md overflow-hidden relative shrink-0 max-md:[grid-area:cover] max-md:row-[span_2] max-md:w-10 max-md:h-10"
                         @click.stop="handlePlayBtnClick(song, currentFolderContent.songs)">
-                        <img class="w-full h-full object-contain bg-black/5 dark:bg-white/5" v-cached-src="{ id: song.id, src: song.album_art }"
-                          loading="lazy" alt="Cover" />
+                        <img class="w-full h-full object-contain bg-black/5 dark:bg-white/5"
+                          v-cached-src="{ id: song.id, src: song.album_art }" loading="lazy" alt="Cover" />
                         <div
                           class="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 text-xs transition-opacity duration-200 group-hover:opacity-100">
                           <SvgIcon
@@ -353,9 +361,7 @@
                       :title="song.artist">{{ song.artist }}</div>
 
                     <!-- 专辑 -->
-                    <div
-                      class="col-album max-md:hidden!"
-                      :title="song.album">{{ song.album || '-' }}</div>
+                    <div class="col-album max-md:hidden!" :title="song.album">{{ song.album || '-' }}</div>
 
                     <!-- 大小 -->
                     <div class="col-size max-md:hidden!">{{ formatSize(song.size) }}</div>
@@ -400,18 +406,20 @@
         <template #header>
           <div class="flex items-center gap-4 py-1 select-none">
             <div class="w-14 h-14 rounded-lg overflow-hidden shadow-md shrink-0 border border-hairline/10">
-              <img v-if="detailDrawerGroup.cover" :src="getApiUrl(detailDrawerGroup.cover)" class="w-full h-full object-contain bg-black/5 dark:bg-white/5" />
+              <img v-if="detailDrawerGroup.cover" :src="getApiUrl(detailDrawerGroup.cover)"
+                class="w-full h-full object-contain bg-black/5 dark:bg-white/5" />
               <div v-else class="w-full h-full bg-sidebar flex items-center justify-center text-body-muted">
                 <SvgIcon :name="detailDrawerGroup.subtitle === '歌手' ? 'user' : 'music'" class="text-2xl" />
               </div>
             </div>
             <div class="flex flex-col min-w-0">
               <span class="text-base font-bold text-ink truncate leading-tight">{{ detailDrawerGroup.title }}</span>
-              <span class="text-xs text-body-muted mt-1">{{ detailDrawerGroup.subtitle }} · {{ detailDrawerGroup.songs.length }} 首歌曲</span>
+              <span class="text-xs text-body-muted mt-1">{{ detailDrawerGroup.subtitle }} · {{
+                detailDrawerGroup.songs.length }} 首歌曲</span>
             </div>
           </div>
         </template>
-        
+
         <n-list hoverable clickable class="mt-2">
           <n-list-item v-for="(song, idx) in detailDrawerGroup.songs" :key="song.id"
             class="transition-colors duration-200"
@@ -427,8 +435,11 @@
               </div>
               <div class="flex items-center gap-2 shrink-0">
                 <span class="text-[11px] text-body-muted">{{ formatSize(song.size) }}</span>
-                <n-dropdown trigger="click" :options="getRowDropdownOptions(song)" @select="(key) => handleRowAction(key, song)">
-                  <n-button circle text :depth="3" class="w-7 h-7 hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center" @click.stop>
+                <n-dropdown trigger="click" :options="getRowDropdownOptions(song)"
+                  @select="(key) => handleRowAction(key, song)">
+                  <n-button circle text :depth="3"
+                    class="w-7 h-7 hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center"
+                    @click.stop>
                     <template #icon>
                       <SvgIcon name="ellipsis-h" class="text-xs" />
                     </template>
@@ -452,7 +463,7 @@
       <template #action>
         <n-space>
           <n-button round @click="showDeleteConfirm = false">取消</n-button>
-          <n-button round type="error" @click="confirmDeleteSong">确认物理删除</n-button>
+          <n-button round type="error" @click="confirmDeleteSong">确认</n-button>
         </n-space>
       </template>
     </n-modal>
@@ -463,27 +474,20 @@
         <div>确认批量物理删除</div>
       </template>
       <div>
-        确定要<strong>物理删除</strong>选中的 {{ selectedSongIds.size }} 首歌曲吗？此操作将永久抹除这些磁盘文件，无法恢复。
+        确定要<strong>物理删除</strong>选中的 {{ selectedSongIds.size }} 首歌曲吗？此操作不可撤销，文件及关联封面、歌词都将被清理。
       </div>
       <template #action>
         <n-space>
           <n-button round @click="showBatchDeleteModal = false">取消</n-button>
-          <n-button round type="error" @click="confirmBatchDelete">确认批量物理删除</n-button>
+          <n-button round type="error" @click="confirmBatchDelete">确认</n-button>
         </n-space>
       </template>
     </n-modal>
 
     <!-- 专属右键上下文操作菜单 -->
-    <n-dropdown
-      trigger="manual"
-      placement="bottom-start"
-      :show="showDropdown"
-      :options="dropdownSong ? getRowDropdownOptions(dropdownSong) : []"
-      :x="x"
-      :y="y"
-      @select="handleDropdownSelect"
-      @clickoutside="handleClickOutside"
-    />
+    <n-dropdown trigger="manual" placement="bottom-start" :show="showDropdown"
+      :options="dropdownSong ? getRowDropdownOptions(dropdownSong) : []" :x="x" :y="y" @select="handleDropdownSelect"
+      @clickoutside="handleClickOutside" />
   </div>
 </template>
 
@@ -541,7 +545,7 @@ const artistsGroup = computed(() => {
       map.get(art)!.push(song)
     })
   })
-  
+
   const rawList = Array.from(map.entries()).map(([name, songs]) => {
     const firstWithCover = songs.find(s => s.album_art)
     const latestMtime = Math.max(...songs.map(s => s.mtime || 0))
@@ -573,7 +577,7 @@ const artistsGroup = computed(() => {
 const albumsGroup = computed(() => {
   const map = new Map<string, { albumName: string; folderPath: string; albumArtist: string | null; songs: Song[]; cover: string; latestMtime: number }>()
   const sourceSongs = filteredSongs.value
-  
+
   sourceSongs.forEach(song => {
     const albumName = song.album || '未知专辑'
     // 提取物理父目录
@@ -581,10 +585,10 @@ const albumsGroup = computed(() => {
     const normalized = songPath.replace(/\\/g, '/').replace(/\/$/, '')
     const lastSlash = normalized.lastIndexOf('/')
     const folderPath = lastSlash !== -1 ? normalized.substring(0, lastSlash) : ''
-    
+
     // 使用“专辑名 + 物理文件夹”作为唯一 Key 聚合，彻底解决合辑被切碎问题
     const key = `${albumName}_${folderPath}`
-    
+
     if (!map.has(key)) {
       map.set(key, {
         albumName,
@@ -608,7 +612,7 @@ const albumsGroup = computed(() => {
       item.albumArtist = song.album_artist
     }
   })
-  
+
   const rawList = Array.from(map.values()).map(item => {
     // 优先采用标准的专辑艺术家字段，若缺失则动态计算
     let finalArtist = item.albumArtist
@@ -622,7 +626,7 @@ const albumsGroup = computed(() => {
         finalArtist = '未知歌手'
       }
     }
-    
+
     return {
       albumName: item.albumName,
       artist: finalArtist,
@@ -631,7 +635,7 @@ const albumsGroup = computed(() => {
       latestMtime: item.latestMtime
     }
   })
-  
+
   return rawList.sort((a, b) => {
     let result = 0
     if (currentSort.value === 'title') {
@@ -661,10 +665,10 @@ const getCommonPrefix = (paths: string[]): string => {
   if (paths.length === 0) return ''
   const cleanPaths = paths.filter(Boolean)
   if (cleanPaths.length === 0) return ''
-  
+
   const splitPaths = cleanPaths.map(p => p.split('/'))
   const minLen = Math.min(...splitPaths.map(sp => sp.length))
-  
+
   const common: string[] = []
   for (let i = 0; i < minLen; i++) {
     const val = splitPaths[0][i]
@@ -681,12 +685,12 @@ const getCommonPrefix = (paths: string[]): string => {
 // 获取所有的根挂载点目录
 const rootDirs = computed(() => {
   const list = new Set<string>()
-  
+
   // 1. 塞入所有挂载盘符
   systemStore.mountPoints.forEach(p => {
     list.add(normalizePath(p))
   })
-  
+
   // 2. 针对不在挂载盘符范围内的歌曲，自适应计算其公共最长前缀目录，作为“默认曲库”
   const defaultSongsPaths: string[] = []
   filteredSongs.value.forEach(song => {
@@ -699,14 +703,14 @@ const rootDirs = computed(() => {
       }
     }
   })
-  
+
   if (defaultSongsPaths.length > 0) {
     const commonPrefix = getCommonPrefix(defaultSongsPaths)
     if (commonPrefix) {
       list.add(commonPrefix)
     }
   }
-  
+
   return Array.from(list)
 })
 
@@ -714,7 +718,7 @@ const rootDirs = computed(() => {
 const breadcrumbs = computed(() => {
   if (!currentDirPath.value) return []
   const path = currentDirPath.value
-  
+
   // 寻找匹配的挂载根目录
   const matchedRoot = rootDirs.value.find(r => path.startsWith(r))
   if (!matchedRoot) {
@@ -723,7 +727,7 @@ const breadcrumbs = computed(() => {
       path: arr.slice(0, idx + 1).join('/')
     }))
   }
-  
+
   const relativePart = path.substring(matchedRoot.length).replace(/^\//, '')
   const result = [{ name: matchedRoot, path: matchedRoot }]
   if (relativePart) {
@@ -878,10 +882,6 @@ const toggleSelectAll = (checked: boolean) => {
   } else {
     selectedSongIds.value.clear()
   }
-}
-
-const clearSelection = () => {
-  selectedSongIds.value.clear()
 }
 
 // 歌曲数据源（路由过滤）
@@ -1160,14 +1160,20 @@ const handleRowAction = async (key: string, song: Song) => {
 const confirmDeleteSong = async () => {
   if (!songToDelete.value) return
   const id = songToDelete.value.id
-  const res = await systemStore.deleteSong(id)
-  showDeleteConfirm.value = false
-  if (res.success) {
-    message.success('歌曲文件已从磁盘上彻底物理删除')
-    // 如果删除的正是正在播放的歌，停止它
-    if (playerStore.currentSong?.id === id) {
-      playerStore.currentSong = null
+
+  // 若删除的恰好是当前正在播放的曲目，先优雅切歌或停止以立刻释放 <audio> 音频流对后端的独占锁
+  if (playerStore.currentSong?.id === id) {
+    if (playerStore.playlist.length > 1) {
+      playerStore.next()
+    } else {
+      playerStore.stop()
     }
+  }
+
+  showDeleteConfirm.value = false
+  const res = await systemStore.deleteSong(id)
+  if (res.success) {
+    message.success('删除成功')
   } else {
     message.error(res.error)
   }
@@ -1217,15 +1223,22 @@ const handleBatchRemoveFromPlaylist = async () => {
 const confirmBatchDelete = async () => {
   showBatchDeleteModal.value = false
   const ids = Array.from(selectedSongIds.value)
-  let successCount = 0
 
+  // 如果选中的待删列表中包含当前正在播放的曲目，先切歌/停止释放占用
+  if (playerStore.currentSong && ids.includes(playerStore.currentSong.id)) {
+    const hasOtherRemaining = playerStore.playlist.some(s => !ids.includes(s.id))
+    if (hasOtherRemaining) {
+      playerStore.next()
+    } else {
+      playerStore.stop()
+    }
+  }
+
+  let successCount = 0
   for (const id of ids) {
     const res = await systemStore.deleteSong(id)
     if (res.success) {
       successCount++
-      if (playerStore.currentSong?.id === id) {
-        playerStore.currentSong = null
-      }
     }
   }
 

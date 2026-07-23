@@ -58,6 +58,7 @@ func createTables() error {
 			artist TEXT,
 			album TEXT,
 			album_artist TEXT,
+			duration_ms INTEGER DEFAULT 0,
 			mtime REAL,
 			size INTEGER,
 			has_cover INTEGER DEFAULT 0,

@@ -22,6 +22,7 @@ func main() {
 	downloader.BroadcastJSON = api.BroadcastJSON
 	downloader.NotifyLibraryChanged = api.NotifyLibraryChanged
 	scanner.NotifyLibraryChanged = api.NotifyLibraryChanged
+	scanner.NotifySongChangedDebounced = api.NotifySongChangedDebounced
 	scanner.BroadcastScanStatus = api.BroadcastScanStatus
 
 	core.InitFromArgs()

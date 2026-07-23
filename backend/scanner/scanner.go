@@ -4,28 +4,44 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
 	"2fmusic/backend/core"
 	"2fmusic/backend/db"
+	"2fmusic/backend/utils"
 )
 
+// getOptimalScrapeConcurrency 计算刮削并发 Worker 数
+func getOptimalScrapeConcurrency() int {
+	workers := runtime.NumCPU() * 2
+	if workers < 4 {
+		workers = 4
+	}
+	if workers > 12 {
+		workers = 12
+	}
+	return workers
+}
+
 var (
-	NotifyLibraryChanged func()
-	BroadcastScanStatus  func(scanning, isScraping bool, total, processed, failed int, currentFile, currentPath string)
-	scanExecutionLock    sync.Mutex
-	isScanningVal        bool
-	isScrapingVal        bool
-	totalFilesVal        int
-	processedFilesVal    int
-	failedFilesVal       int
-	currentFileVal       string
-	currentPathVal       string
-	statusMu             sync.RWMutex
-	lastBroadcastTime    time.Time
-	lastBroadcastMu      sync.Mutex
+	NotifyLibraryChanged       func()
+	NotifySongChangedDebounced func(songID string, eventType string, fields []string)
+	BroadcastScanStatus        func(scanning, isScraping bool, total, processed, failed int, currentFile, currentPath string)
+	scanExecutionLock          sync.Mutex
+	mediaSaveMu                sync.Mutex
+	isScanningVal              bool
+	isScrapingVal              bool
+	totalFilesVal              int
+	processedFilesVal          int
+	failedFilesVal             int
+	currentFileVal             string
+	currentPathVal             string
+	statusMu                   sync.RWMutex
+	lastBroadcastTime          time.Time
+	lastBroadcastMu            sync.Mutex
 )
 
 func triggerStatusBroadcast() {
@@ -40,6 +56,28 @@ func triggerStatusBroadcast() {
 		return
 	}
 	lastBroadcastTime = now
+	lastBroadcastMu.Unlock()
+
+	statusMu.RLock()
+	scanning := isScanningVal
+	isScraping := isScrapingVal
+	total := totalFilesVal
+	processed := processedFilesVal
+	failed := failedFilesVal
+	currentFile := currentFileVal
+	currentPath := currentPathVal
+	statusMu.RUnlock()
+
+	BroadcastScanStatus(scanning, isScraping, total, processed, failed, currentFile, currentPath)
+}
+
+func forceBroadcastStatus() {
+	if BroadcastScanStatus == nil {
+		return
+	}
+
+	lastBroadcastMu.Lock()
+	lastBroadcastTime = time.Now()
 	lastBroadcastMu.Unlock()
 
 	statusMu.RLock()
@@ -128,7 +166,7 @@ func CleanTempPartFiles() {
 		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 			if err == nil && !info.IsDir() {
 				if strings.HasSuffix(path, ".part") || strings.HasSuffix(path, ".tmp") {
-					if os.Remove(path) == nil {
+					if utils.SafeRemoveFile(path) == nil {
 						cleanedCount++
 					}
 				}
@@ -194,7 +232,7 @@ func ScanDirectoryInternal(targetDir string) {
 	processedFilesVal = 0
 	totalFilesVal = 0
 	statusMu.Unlock()
-	triggerStatusBroadcast()
+	forceBroadcastStatus()
 
 	defer func() {
 		statusMu.Lock()
@@ -202,7 +240,7 @@ func ScanDirectoryInternal(targetDir string) {
 		currentFileVal = ""
 		currentPathVal = ""
 		statusMu.Unlock()
-		triggerStatusBroadcast()
+		forceBroadcastStatus()
 	}()
 
 	if targetDir != "" {
@@ -229,6 +267,7 @@ func ScanDirectoryInternal(targetDir string) {
 		}
 	}
 
+	var audioFiles []string
 	diskPaths := make(map[string]bool)
 
 	for _, dir := range scanDirs {
@@ -249,19 +288,34 @@ func ScanDirectoryInternal(targetDir string) {
 				return nil
 			}
 			if core.IsAudioFile(path) {
-				diskPaths[path] = true
-				statusMu.Lock()
-				processedFilesVal++
-				totalFilesVal = len(diskPaths)
-				currentFileVal = filepath.Base(path)
-				currentPathVal = path
-				statusMu.Unlock()
-
-				triggerStatusBroadcast()
-				IndexSingleFile(path)
+				if !diskPaths[path] {
+					diskPaths[path] = true
+					audioFiles = append(audioFiles, path)
+				}
 			}
 			return nil
 		})
+	}
+
+	statusMu.Lock()
+	totalFilesVal = len(audioFiles)
+	processedFilesVal = 0
+	statusMu.Unlock()
+	forceBroadcastStatus()
+
+	for _, path := range audioFiles {
+		statusMu.Lock()
+		currentFileVal = filepath.Base(path)
+		currentPathVal = path
+		statusMu.Unlock()
+
+		IndexSingleFile(path)
+
+		statusMu.Lock()
+		processedFilesVal++
+		statusMu.Unlock()
+
+		triggerStatusBroadcast()
 	}
 
 	cleanedCount := db.CleanStaleSongs(diskPaths)
@@ -289,7 +343,7 @@ func AutoScrapeMissingMetadata(targetDir ...string) {
 	totalFilesVal = 0
 	failedFilesVal = 0
 	statusMu.Unlock()
-	triggerStatusBroadcast()
+	forceBroadcastStatus()
 
 	defer func() {
 		statusMu.Lock()
@@ -297,7 +351,7 @@ func AutoScrapeMissingMetadata(targetDir ...string) {
 		currentFileVal = ""
 		currentPathVal = ""
 		statusMu.Unlock()
-		triggerStatusBroadcast()
+		forceBroadcastStatus()
 
 		if NotifyLibraryChanged != nil {
 			NotifyLibraryChanged()
@@ -314,17 +368,17 @@ func AutoScrapeMissingMetadata(targetDir ...string) {
 		for _, s := range songs {
 			if strings.HasPrefix(core.NormalizePath(s.Path), filterDir) {
 				_ = db.SaveSong(&core.Song{
-					ID:                s.ID,
-					Path:              s.Path,
-					Filename:          s.Filename,
-					Title:             s.Title,
-					Artist:            s.Artist,
-					Album:             s.Album,
-					AlbumArtist:       s.AlbumArtist,
-					MTime:             s.MTime,
-					Size:              s.Size,
-					HasCover:          s.HasCover,
-					HasLyrics:         s.HasLyrics,
+					ID:               s.ID,
+					Path:             s.Path,
+					Filename:         s.Filename,
+					Title:            s.Title,
+					Artist:           s.Artist,
+					Album:            s.Album,
+					AlbumArtist:      s.AlbumArtist,
+					MTime:            s.MTime,
+					Size:             s.Size,
+					HasCover:         s.HasCover,
+					HasLyrics:        s.HasLyrics,
 					ScrapeRetryCount: 0,
 				})
 			}
@@ -341,8 +395,25 @@ func AutoScrapeMissingMetadata(targetDir ...string) {
 			continue
 		}
 		if IsNeteaseDownloadFile(s.Path) {
-			// 网易云下载目录隔离刮削
-			continue
+			// 网易云下载目录优先提取内嵌数据
+			_, picData, embeddedLyrics, _ := ExtractAudioMetadata(s.Path)
+			updatedMedia := false
+			if !s.HasCover && len(picData) > 0 {
+				if SaveCoverWebP(picData, s.ID) {
+					s.HasCover = true
+					updatedMedia = true
+				}
+			}
+			if !s.HasLyrics && embeddedLyrics != "" {
+				lrcPath := filepath.Join(core.GlobalConfig.LyricsDir, s.ID+".lrc")
+				if saveLyricsFile(lrcPath, []byte(embeddedLyrics)) {
+					s.HasLyrics = true
+					updatedMedia = true
+				}
+			}
+			if updatedMedia {
+				db.UpdateSongMediaStatus(s.ID, s.HasCover, s.HasLyrics)
+			}
 		}
 		if s.HasCover && s.HasLyrics {
 			continue
@@ -355,11 +426,17 @@ func AutoScrapeMissingMetadata(targetDir ...string) {
 	processedFilesVal = 0
 	failedFilesVal = 0
 	statusMu.Unlock()
-	triggerStatusBroadcast()
+	forceBroadcastStatus()
 
-	core.Info("发现 %d 首曲目需要刮削封面与歌词，开始并发拉取...", len(songsToScrape))
+	if len(songsToScrape) == 0 {
+		core.Info("所有曲目元数据均已完整，无须在线刮削")
+		return
+	}
 
-	semaphore := make(chan struct{}, 5)
+	concurrency := getOptimalScrapeConcurrency()
+	core.Info("发现 %d 首曲目待在线刮削，并发 Worker: %d", len(songsToScrape), concurrency)
+
+	semaphore := make(chan struct{}, concurrency)
 	var wg sync.WaitGroup
 	for _, s := range songsToScrape {
 		semaphore <- struct{}{}
@@ -380,65 +457,14 @@ func AutoScrapeMissingMetadata(targetDir ...string) {
 			statusMu.Unlock()
 			triggerStatusBroadcast()
 
-			core.Info("正在在线刮削元数据: %s - %s", song.Artist, song.Title)
-			best := SearchSongFastSequential(song.Title, song.Artist, song.Album)
-			if best != nil {
-				updated := false
-				if !song.HasCover {
-					if coverURL, ok := best["cover"].(string); ok && coverURL != "" {
-						imgData, err := DownloadImageBytes(coverURL)
-						if err == nil && SaveCoverWebP(imgData, song.ID) {
-							song.HasCover = true
-							updated = true
-						}
-					}
-				}
-				if !song.HasLyrics {
-					lyricsPref := strings.ToLower(core.GlobalConfig.LyricsPreference)
-					embeddedHandled := false
-					if lyricsPref != "network" { // 优先内嵌或默认
-						if _, _, embeddedLyrics, err := ExtractAudioMetadata(song.Path); err == nil && embeddedLyrics != "" {
-							lrcPath := filepath.Join(core.GlobalConfig.LyricsDir, song.ID+".lrc")
-							if saveLyricsFile(lrcPath, []byte(embeddedLyrics)) {
-								song.HasLyrics = true
-								updated = true
-								embeddedHandled = true
-							}
-						}
-					}
-					if !embeddedHandled {
-						if lyrics, ok := best["lyrics"].(string); ok && lyrics != "" {
-							_ = os.WriteFile(filepath.Join(core.GlobalConfig.LyricsDir, song.ID+".lrc"), []byte(lyrics), 0644)
-							song.HasLyrics = true
-							updated = true
-						} else if lyricsPref == "network" {
-							// 优先网络但网络源无歌词时，退避解出内嵌歌词
-							if _, _, embeddedLyrics, err := ExtractAudioMetadata(song.Path); err == nil && embeddedLyrics != "" {
-								lrcPath := filepath.Join(core.GlobalConfig.LyricsDir, song.ID+".lrc")
-								if saveLyricsFile(lrcPath, []byte(embeddedLyrics)) {
-									song.HasLyrics = true
-									updated = true
-								}
-							}
-						}
-					}
-				}
-
-				if updated {
-					core.Info("元数据刮削成功并同步落盘: %s", song.Title)
-					db.UpdateSongMediaStatus(song.ID, song.HasCover, song.HasLyrics)
-					if NotifyLibraryChanged != nil {
-						NotifyLibraryChanged()
-					}
-					return
-				}
+			if EnsureSongMediaResolved(&song) {
+				core.Info("元数据解析与刮削落盘成功: %s", song.Title)
+			} else {
+				statusMu.Lock()
+				failedFilesVal++
+				statusMu.Unlock()
+				db.IncrementScrapeRetryCount(song.ID)
 			}
-
-			// 退避重试计数加 1
-			statusMu.Lock()
-			failedFilesVal++
-			statusMu.Unlock()
-			db.IncrementScrapeRetryCount(song.ID)
 		}(s)
 	}
 	wg.Wait()
@@ -566,73 +592,147 @@ func GetOrScrapeLyrics(songID, title, artist, filename string, yrc bool) (string
 			return string(b), nil
 		}
 
-		// 若为网易云下载目录下的歌曲且没有本地缓存歌词，直接禁止在线刮削，优先提取内嵌歌词
+		// 若为网易云下载目录下的歌曲且没有本地缓存歌词，优先提取内嵌歌词
 		if s, err := db.GetSongByID(songID); err == nil && s != nil && IsNeteaseDownloadFile(s.Path) {
 			_, _, embeddedLyrics, _ := ExtractAudioMetadata(s.Path)
 			if embeddedLyrics != "" {
-				_ = saveLyricsFile(lrcPath, []byte(embeddedLyrics))
-				db.UpdateSongMediaStatus(songID, s.HasCover, true)
-				return embeddedLyrics, nil
+				if saveLyricsFile(lrcPath, []byte(embeddedLyrics)) {
+					db.UpdateSongMediaStatus(songID, s.HasCover, true)
+					core.Info("[GetOrScrapeLyrics] 内嵌歌词保存成功: song_id=%s", songID)
+					return embeddedLyrics, nil
+				}
 			}
-			return "", fmt.Errorf("lyrics not found for netease download file")
+			// 内嵌为空时自动下钻降级走 SearchSongBest 在线刮削
 		}
 	}
 
-	// 刮削
-	if title == "" && filename != "" {
-		title = strings.TrimSuffix(filename, filepath.Ext(filename))
+	album := ""
+	durationMs := 0
+	if songID != "" {
+		if s, err := db.GetSongByID(songID); err == nil && s != nil {
+			durationMs = s.DurationMs
+			album = s.Album
+		}
 	}
 
-	best := SearchSongBest(title, artist, "")
+	best := SearchSongBest(title, artist, album, durationMs)
 	if best != nil {
 		lyrics, _ := best["lyrics"].(string)
-		if lyrics != "" && songID != "" {
-			lrcPath := filepath.Join(core.GlobalConfig.LyricsDir, songID+".lrc")
-			_ = saveLyricsFile(lrcPath, []byte(lyrics))
+		source, _ := best["source"].(string)
+		if lyrics != "" {
+			if songID != "" {
+				lrcPath := filepath.Join(core.GlobalConfig.LyricsDir, songID+".lrc")
+				mediaSaveMu.Lock()
+				if _, err := os.Stat(lrcPath); err == nil {
+					mediaSaveMu.Unlock()
+					return lyrics, nil
+				}
+				if saveLyricsFile(lrcPath, []byte(lyrics)) {
+					if s, err := db.GetSongByID(songID); err == nil && s != nil {
+						db.UpdateSongMediaStatus(songID, s.HasCover, true)
+					}
+					core.Info("[GetOrScrapeLyrics] 在线歌词保存成功: source=%s, song_id=%s", source, songID)
+				}
+				mediaSaveMu.Unlock()
+			}
+			return lyrics, nil
 		}
-		return lyrics, nil
 	}
 
+	core.Info("[GetOrScrapeLyrics] 未找到匹配歌词: song_id=%s, title='%s'", songID, title)
 	return "", fmt.Errorf("lyrics not found")
 }
 
-// GetOrScrapeCover 获取或刮削封面
+// GetOrScrapeCover 获取或刮削封面 (带多源下载退避降级机制)
 func GetOrScrapeCover(songID, title, artist, album string) (string, error) {
+	durationMs := 0
 	if songID != "" {
 		coverPath := filepath.Join(core.GlobalConfig.CoversDir, songID+".webp")
 		if _, err := os.Stat(coverPath); err == nil {
 			return fmt.Sprintf("/api/music/covers/%s.webp", songID), nil
 		}
 
-		// 若为网易云下载目录下的歌曲且没有本地缓存封面，直接禁止在线刮削，优先提取内嵌封面
-		if s, err := db.GetSongByID(songID); err == nil && s != nil && IsNeteaseDownloadFile(s.Path) {
-			_, picData, _, _ := ExtractAudioMetadata(s.Path)
-			if len(picData) > 0 {
-				if SaveCoverWebP(picData, songID) {
-					db.UpdateSongMediaStatus(songID, true, s.HasLyrics)
-					return fmt.Sprintf("/api/music/covers/%s.webp", songID), nil
+		// 若为网易云下载目录下的歌曲且没有本地缓存封面，优先提取内嵌封面
+		if s, err := db.GetSongByID(songID); err == nil && s != nil {
+			durationMs = s.DurationMs
+			if album == "" && s.Album != "" {
+				album = s.Album
+			}
+			if IsNeteaseDownloadFile(s.Path) {
+				_, picData, _, _ := ExtractAudioMetadata(s.Path)
+				if len(picData) > 0 {
+					if SaveCoverWebP(picData, songID) {
+						db.UpdateSongMediaStatus(songID, true, s.HasLyrics)
+						return fmt.Sprintf("/api/music/covers/%s.webp", songID), nil
+					}
 				}
 			}
-			return "", fmt.Errorf("cover not found for netease download file")
 		}
 	}
 
-	best := SearchSongBest(title, artist, album)
+	best := SearchSongBest(title, artist, album, durationMs)
 	if best != nil {
-		coverURL, _ := best["cover"].(string)
-		if coverURL != "" && songID != "" {
-			// 下载封面并转码落盘
-			imgData, err := DownloadImageBytes(coverURL)
-			if err == nil && len(imgData) > 0 {
-				if SaveCoverWebP(imgData, songID) {
-					return fmt.Sprintf("/api/music/covers/%s.webp", songID), nil
-				}
+		candidates, _ := best["candidate_covers"].([]map[string]string)
+		if len(candidates) == 0 {
+			if coverURL, _ := best["cover"].(string); coverURL != "" {
+				source, _ := best["source"].(string)
+				candidates = append(candidates, map[string]string{
+					"source": source,
+					"cover":  coverURL,
+				})
 			}
 		}
-		return coverURL, nil
+
+		for idx, cand := range candidates {
+			if idx >= 3 {
+				break
+			}
+			coverURL := cand["cover"]
+			source := cand["source"]
+			if coverURL == "" {
+				continue
+			}
+
+			if songID != "" {
+				coverPath := filepath.Join(core.GlobalConfig.CoversDir, songID+".webp")
+				mediaSaveMu.Lock()
+				if _, err := os.Stat(coverPath); err == nil {
+					mediaSaveMu.Unlock()
+					return fmt.Sprintf("/api/music/covers/%s.webp", songID), nil
+				}
+				mediaSaveMu.Unlock()
+			}
+
+			imgData, err := DownloadImageBytes(coverURL)
+			if err != nil || len(imgData) == 0 {
+				core.Info("[GetOrScrapeCover] 数据源 [%s] 封面下载失败 (%v)，尝试备用源 (index=%d)...", source, err, idx+2)
+				continue
+			}
+
+			if songID != "" {
+				coverPath := filepath.Join(core.GlobalConfig.CoversDir, songID+".webp")
+				mediaSaveMu.Lock()
+				if _, err := os.Stat(coverPath); err == nil {
+					mediaSaveMu.Unlock()
+					return fmt.Sprintf("/api/music/covers/%s.webp", songID), nil
+				}
+				saved := SaveCoverWebP(imgData, songID)
+				if saved {
+					if s, err := db.GetSongByID(songID); err == nil && s != nil {
+						db.UpdateSongMediaStatus(songID, true, s.HasLyrics)
+					}
+					core.Info("[GetOrScrapeCover] 封面保存成功: source=%s, song_id=%s.webp", source, songID)
+				}
+				mediaSaveMu.Unlock()
+				if saved {
+					return fmt.Sprintf("/api/music/covers/%s.webp", songID), nil
+				}
+			} else {
+				return coverURL, nil
+			}
+		}
 	}
 
+	core.Info("[GetOrScrapeCover] 未找到匹配封面: song_id=%s, title='%s'", songID, title)
 	return "", fmt.Errorf("cover not found")
 }
-
-

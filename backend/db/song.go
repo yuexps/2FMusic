@@ -4,15 +4,28 @@ import (
 	"fmt"
 	"os"
 
+	"path/filepath"
+
 	"2fmusic/backend/core"
 )
+
+func getCoverVersion(id string) int64 {
+	if core.GlobalConfig.CoversDir == "" {
+		return 0
+	}
+	coverPath := filepath.Join(core.GlobalConfig.CoversDir, id+".webp")
+	if fi, err := os.Stat(coverPath); err == nil {
+		return fi.ModTime().UnixMilli()
+	}
+	return 0
+}
 
 // GetAllSongs 获取去重后的全量歌曲列表
 func GetAllSongs() ([]core.Song, error) {
 	dbMu.RLock()
 	defer dbMu.RUnlock()
 
-	rows, err := DB.Query(`SELECT id, path, filename, title, artist, album, album_artist, mtime, size, has_cover, has_lyrics, scrape_retry_count FROM songs ORDER BY title ASC`)
+	rows, err := DB.Query(`SELECT id, path, filename, title, artist, album, album_artist, duration_ms, mtime, size, has_cover, has_lyrics, scrape_retry_count FROM songs ORDER BY title ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -22,11 +35,16 @@ func GetAllSongs() ([]core.Song, error) {
 	for rows.Next() {
 		var s core.Song
 		var hasCover, hasLyrics int
-		if err := rows.Scan(&s.ID, &s.Path, &s.Filename, &s.Title, &s.Artist, &s.Album, &s.AlbumArtist, &s.MTime, &s.Size, &hasCover, &hasLyrics, &s.ScrapeRetryCount); err == nil {
+		if err := rows.Scan(&s.ID, &s.Path, &s.Filename, &s.Title, &s.Artist, &s.Album, &s.AlbumArtist, &s.DurationMs, &s.MTime, &s.Size, &hasCover, &hasLyrics, &s.ScrapeRetryCount); err == nil {
 			s.HasCover = hasCover == 1
 			s.HasLyrics = hasLyrics == 1
 			if s.HasCover {
-				s.AlbumArt = fmt.Sprintf("/api/music/covers/%s.webp", s.ID)
+				v := getCoverVersion(s.ID)
+				if v > 0 {
+					s.AlbumArt = fmt.Sprintf("/api/music/covers/%s.webp?v=%d", s.ID, v)
+				} else {
+					s.AlbumArt = fmt.Sprintf("/api/music/covers/%s.webp", s.ID)
+				}
 			}
 			songs = append(songs, s)
 		}
@@ -44,8 +62,8 @@ func GetSongByID(id string) (*core.Song, error) {
 
 	var s core.Song
 	var hasCover, hasLyrics int
-	err := DB.QueryRow(`SELECT id, path, filename, title, artist, album, album_artist, mtime, size, has_cover, has_lyrics, scrape_retry_count FROM songs WHERE id = ?`, id).Scan(
-		&s.ID, &s.Path, &s.Filename, &s.Title, &s.Artist, &s.Album, &s.AlbumArtist, &s.MTime, &s.Size, &hasCover, &hasLyrics, &s.ScrapeRetryCount,
+	err := DB.QueryRow(`SELECT id, path, filename, title, artist, album, album_artist, duration_ms, mtime, size, has_cover, has_lyrics, scrape_retry_count FROM songs WHERE id = ?`, id).Scan(
+		&s.ID, &s.Path, &s.Filename, &s.Title, &s.Artist, &s.Album, &s.AlbumArtist, &s.DurationMs, &s.MTime, &s.Size, &hasCover, &hasLyrics, &s.ScrapeRetryCount,
 	)
 	if err != nil {
 		return nil, err
@@ -53,7 +71,12 @@ func GetSongByID(id string) (*core.Song, error) {
 	s.HasCover = hasCover == 1
 	s.HasLyrics = hasLyrics == 1
 	if s.HasCover {
-		s.AlbumArt = fmt.Sprintf("/api/music/covers/%s.webp", s.ID)
+		v := getCoverVersion(s.ID)
+		if v > 0 {
+			s.AlbumArt = fmt.Sprintf("/api/music/covers/%s.webp?v=%d", s.ID, v)
+		} else {
+			s.AlbumArt = fmt.Sprintf("/api/music/covers/%s.webp", s.ID)
+		}
 	}
 	return &s, nil
 }
@@ -66,8 +89,8 @@ func GetSongByPath(path string) (*core.Song, error) {
 
 	var s core.Song
 	var hasCover, hasLyrics int
-	err := DB.QueryRow(`SELECT id, path, filename, title, artist, album, album_artist, mtime, size, has_cover, has_lyrics, scrape_retry_count FROM songs WHERE path = ?`, path).Scan(
-		&s.ID, &s.Path, &s.Filename, &s.Title, &s.Artist, &s.Album, &s.AlbumArtist, &s.MTime, &s.Size, &hasCover, &hasLyrics, &s.ScrapeRetryCount,
+	err := DB.QueryRow(`SELECT id, path, filename, title, artist, album, album_artist, duration_ms, mtime, size, has_cover, has_lyrics, scrape_retry_count FROM songs WHERE path = ?`, path).Scan(
+		&s.ID, &s.Path, &s.Filename, &s.Title, &s.Artist, &s.Album, &s.AlbumArtist, &s.DurationMs, &s.MTime, &s.Size, &hasCover, &hasLyrics, &s.ScrapeRetryCount,
 	)
 	if err != nil {
 		return nil, err
@@ -75,7 +98,12 @@ func GetSongByPath(path string) (*core.Song, error) {
 	s.HasCover = hasCover == 1
 	s.HasLyrics = hasLyrics == 1
 	if s.HasCover {
-		s.AlbumArt = fmt.Sprintf("/api/music/covers/%s.webp", s.ID)
+		v := getCoverVersion(s.ID)
+		if v > 0 {
+			s.AlbumArt = fmt.Sprintf("/api/music/covers/%s.webp?v=%d", s.ID, v)
+		} else {
+			s.AlbumArt = fmt.Sprintf("/api/music/covers/%s.webp", s.ID)
+		}
 	}
 	return &s, nil
 }
@@ -120,8 +148,8 @@ func SaveSong(s *core.Song) error {
 		hasLyricsInt = 1
 	}
 
-	query := `INSERT INTO songs (id, path, filename, title, artist, album, album_artist, mtime, size, has_cover, has_lyrics, scrape_retry_count)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	query := `INSERT INTO songs (id, path, filename, title, artist, album, album_artist, duration_ms, mtime, size, has_cover, has_lyrics, scrape_retry_count)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(path) DO UPDATE SET
 			id = excluded.id,
 			filename = excluded.filename,
@@ -129,13 +157,14 @@ func SaveSong(s *core.Song) error {
 			artist = excluded.artist,
 			album = excluded.album,
 			album_artist = excluded.album_artist,
+			duration_ms = excluded.duration_ms,
 			mtime = excluded.mtime,
 			size = excluded.size,
 			has_cover = excluded.has_cover,
 			has_lyrics = excluded.has_lyrics,
 			scrape_retry_count = excluded.scrape_retry_count`
 
-	_, err := DB.Exec(query, s.ID, s.Path, s.Filename, s.Title, s.Artist, s.Album, s.AlbumArtist, s.MTime, s.Size, hasCoverInt, hasLyricsInt, s.ScrapeRetryCount)
+	_, err := DB.Exec(query, s.ID, s.Path, s.Filename, s.Title, s.Artist, s.Album, s.AlbumArtist, s.DurationMs, s.MTime, s.Size, hasCoverInt, hasLyricsInt, s.ScrapeRetryCount)
 	if err == nil {
 		NotifySongInserted(s)
 	}

@@ -9,6 +9,7 @@ type Song struct {
 	Artist           string  `json:"artist"`
 	Album            string  `json:"album"`
 	AlbumArtist      string  `json:"album_artist,omitempty"`
+	DurationMs       int     `json:"duration_ms,omitempty"`
 	MTime            float64 `json:"mtime"`
 	Size             int64   `json:"size"`
 	HasCover         bool    `json:"has_cover"`

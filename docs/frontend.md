@@ -9,6 +9,7 @@
 ### 1.1 登录门禁拦截规约 (Auth Gate)
 - **登录先行**：应用挂载 (`App.vue`) 时，优先检查本地存储 `localStorage.getItem('2fmusic_password')`。若无凭证，直接触发未授权阻断遮罩 `LoginModal.vue`。
 - **未登录安全红线**：未检测到有效凭据时，**绝对禁止拉起 WebSocket 连接**，**绝对禁止发起私有业务数据 REST 请求**。
+- **登录密码 SHA-256 兼容机制**：前端密码通过 [crypto.ts](file:///d:/Users/yuyue/Documents/Code/2FMusic/frontend/src/utils/crypto.ts) 进行哈希处理。优先使用原生 Web Crypto API (`crypto.subtle.digest`)；在非安全上下文（如局域网/公网纯 HTTP 环境，`window.crypto.subtle` 为 `undefined`）时，自动降级切至纯 JavaScript (Pure JS) UTF-8 算法进行计算，确保 HTTP/HTTPS 场景下均可正常登录。
 - **登录成功一键装载**：解锁成功后，集中初始化 WebSocket 连接，并按序装载 Pinia Store 业务数据。
 
 ### 1.2 REST 请求与 401 拦截
@@ -32,7 +33,8 @@
 
 ### 2.1 播放器状态树恢复
 - 自动恢复 `currentSong`、`playlist`（当前播放列表）、`queue`（待播插队队列）、`playMode`（顺序/单曲循环/随机）以及 `currentTime`。
-- 与 `<audio>` 播放器引擎保持单向数据流映射：Store 控制 Source/Play/Pause，`<audio>` 原生事件 (`timeupdate`, `ended`, `error`) 闭环更新 Store 状态。
+- **物理删除与播放状态解封**：
+  在发起物理删除 API（`systemStore.deleteSong(id)`）前，若要删除的歌曲包含当前正在播放的曲目（`playerStore.currentSong?.id`），必须优先切至下一首（`playerStore.next()`）或优雅停止（`playerStore.stop()`），断开 `<audio>` 对后端的 HTTP 音频流独占请求，确保后端 SafeRemoveFile 毫秒级物理秒删成功。与 `<audio>` 播放器引擎保持单向数据流映射：Store 控制 Source/Play/Pause，`<audio>` 原生事件 (`timeupdate`, `ended`, `error`) 闭环更新 Store 状态。
 - **底栏播放器清空与重置规约 (`clearPlaylist` & `stop`)**：
   - 在当前播放列表（`playlist`）或待播队列（`queue`）执行清空时，调用 `clearPlaylist()` 与 `clearQueue()`。
   - 列表为空或手动重置时触发 `stop()`，自动执行 `<audio>` 暂停、`audio.src = ''` 清空、歌词 `currentLyric` 清空、进度与时长归零，并同步将 `currentSong` 置为 `null` 写入 `localStorage` (`saveState`)，实现底栏播放器全状态 100% 干净重置。
@@ -49,11 +51,10 @@
 
 ## 3. 本地缓存与性能优化 (IndexedDB Cache)
 
-### 3.1 封面大图、Blob URL 物理引用计数与 UI 展示规范
-- 采用 **IndexedDB** 在本地离线持久化存储音频 WebP 封面。
-- **Blob URL 生命周期控制**：在创建 `URL.createObjectURL(blob)` 时记录引用计数；在 DOM 销毁或封面切替时，严格执行 `URL.revokeObjectURL(url)` 释放内存，防止内存泄露。
-- **封面 UI 展示规范 (`object-contain`)**：为确保任意长宽比例的音乐封面能够完整无损展示，列表卡片与播放控制栏封面统一使用 `object-contain` 配合底相衬底进行适应性渲染，防止边缘图像裁切。
-- **网易云已下载判定规约 (`isSongDownloaded`)**：在网易云下载界面中，判断歌曲是否已在本地曲库存在时，必须同时比对歌名、歌手与专辑名（组合为 `${title}_${artist}_${album}`），确保判定准确。
+- **精细化广播与缓存擦除规约**：监听到 `library_changed` 精细化载荷时：
+  - 若 `fields` 包含 `'cover'`：调用 `musicDB.deleteCover(id)` 擦除 IndexedDB 中的封面 Blob，并调用 `coverCacheManager.delete(id)` 销毁 Blob URL；列表及组件使用带修改时间戳的 URL (`album_art + '?v=' + timestamp`) 彻底穿透 HTTP 300 天强缓存。
+  - 若 `fields` 包含 `'lyrics'`：调用 `musicDB.deleteLyrics(id)` 擦除 IndexedDB 歌词缓存。
+  - 若变更列表中包含当前播放歌曲（`currentSong.id`）：对包含 `lyrics` 变更的曲目立即重新发起 WS `music/lyrics` 请求并无缝替换当前播放器面板上的歌词。
 
 ### 3.2 子路径与 Web 资源匹配 (`getApiUrl`)
 - **部署适配**：应用支持子路径反向代理部署（如 `/app/yuexps-2fmusic/`）。

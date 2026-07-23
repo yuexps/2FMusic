@@ -14,6 +14,7 @@ import (
 	"2fmusic/backend/db"
 	"2fmusic/backend/downloader"
 	"2fmusic/backend/scanner"
+	"2fmusic/backend/utils"
 )
 
 // HandleWSAction 分发并响应所有 WebSocket 请求动作
@@ -46,17 +47,8 @@ func HandleWSAction(c *Client, req core.WSClientRequest) {
 				return
 			}
 
-			deletedSuccess := false
-			for i := 0; i < 10; i++ {
-				if err := os.Remove(targetPath); err == nil || os.IsNotExist(err) {
-					deletedSuccess = true
-					break
-				}
-				time.Sleep(200 * time.Millisecond)
-			}
-
-			if !deletedSuccess {
-				SendErrorResponse(c, seq, action, "文件正被其他进程锁定，无法物理删除")
+			if err := utils.SafeRemoveFile(targetPath); err != nil {
+				SendErrorResponse(c, seq, action, err.Error())
 				return
 			}
 
@@ -77,11 +69,12 @@ func HandleWSAction(c *Client, req core.WSClientRequest) {
 		}
 
 		if song != nil {
-			_ = os.Remove(filepath.Join(core.GlobalConfig.CoversDir, song.ID+".webp"))
-			_ = os.Remove(filepath.Join(core.GlobalConfig.LyricsDir, song.ID+".lrc"))
-			_ = os.Remove(filepath.Join(core.GlobalConfig.LyricsDir, song.ID+".yrc"))
+			core.Info("清理单曲元数据与缓存: %s (ID=%s)", song.Title, song.ID)
+			_ = utils.SafeRemoveFile(filepath.Join(core.GlobalConfig.CoversDir, song.ID+".webp"))
+			_ = utils.SafeRemoveFile(filepath.Join(core.GlobalConfig.LyricsDir, song.ID+".lrc"))
+			_ = utils.SafeRemoveFile(filepath.Join(core.GlobalConfig.LyricsDir, song.ID+".yrc"))
 			db.UpdateSongMediaStatus(song.ID, false, false)
-			NotifyLibraryChanged()
+			NotifySongChangedDebounced(song.ID, "update", []string{"cover", "lyrics", "metadata"})
 		}
 		SendSuccessResponse(c, seq, action, map[string]bool{"success": true})
 
@@ -116,8 +109,12 @@ func HandleWSAction(c *Client, req core.WSClientRequest) {
 		title, _ := data["title"].(string)
 		artist, _ := data["artist"].(string)
 		album, _ := data["album"].(string)
+		durationMs := 0
+		if d, ok := data["duration_ms"].(float64); ok {
+			durationMs = int(d)
+		}
 
-		best := scanner.SearchSongBest(title, artist, album)
+		best := scanner.SearchSongBest(title, artist, album, durationMs)
 		if best == nil {
 			SendErrorResponse(c, seq, action, "No matching result found")
 			return

@@ -3,12 +3,12 @@ package scanner
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
 	"2fmusic/backend/core"
 	"2fmusic/backend/db"
+	"2fmusic/backend/utils"
 )
 
 var (
@@ -58,7 +58,7 @@ func processPendingMediaExtraction() {
 		}
 		if !s.HasCover || !s.HasLyrics {
 			songRef := s
-			handleSongInserted(&songRef)
+			go handleSongInserted(&songRef)
 		}
 	}
 }
@@ -79,65 +79,8 @@ func handleSongInserted(song *core.Song) {
 		inFlightScrapeMu.Unlock()
 	}()
 
-	coverPath := filepath.Join(core.GlobalConfig.CoversDir, song.ID+".webp")
-	lrcPath := filepath.Join(core.GlobalConfig.LyricsDir, song.ID+".lrc")
-
-	hasCoverFile := fileExists(coverPath)
-	hasLyricsFile := fileExists(lrcPath)
-
-	if hasCoverFile && hasLyricsFile {
-		return
-	}
-
-	// 1. 尝试从物理文件提取 Tag 内嵌数据
-	_, picData, embeddedLyrics, _ := ExtractAudioMetadata(song.Path)
-
-	if !hasCoverFile && len(picData) > 0 {
-		_ = SaveCoverWebP(picData, song.ID)
-		hasCoverFile = fileExists(coverPath)
-	}
-
-	lyricsPref := strings.ToLower(core.GlobalConfig.LyricsPreference)
-	isNeteaseDir := IsNeteaseDownloadFile(song.Path)
-
-	if !hasLyricsFile && embeddedLyrics != "" && (isNeteaseDir || lyricsPref != "network") {
-		_ = saveLyricsFile(lrcPath, []byte(embeddedLyrics))
-		hasLyricsFile = fileExists(lrcPath)
-	}
-
-	// 2. 若仍缺失且非网易云目录，发起单次在线全网刮削
-	needScrapeCover := !hasCoverFile
-	needScrapeLyrics := !hasLyricsFile
-
-	if (needScrapeCover || needScrapeLyrics) && !isNeteaseDir && song.ScrapeRetryCount < 3 {
-		best := SearchSongBest(song.Title, song.Artist, song.Album)
-		if best != nil {
-			if needScrapeCover {
-				if coverURL, ok := best["cover"].(string); ok && coverURL != "" {
-					if imgData, err := DownloadImageBytes(coverURL); err == nil && len(imgData) > 0 {
-						_ = SaveCoverWebP(imgData, song.ID)
-					}
-				}
-			}
-			if needScrapeLyrics {
-				if lyrics, ok := best["lyrics"].(string); ok && lyrics != "" {
-					_ = saveLyricsFile(lrcPath, []byte(lyrics))
-				} else if embeddedLyrics != "" {
-					// 优先网络但网络无歌词时，退避使用内嵌歌词
-					_ = saveLyricsFile(lrcPath, []byte(embeddedLyrics))
-				}
-			}
-		} else {
-			// 在线刮削无匹配结果，自增重试计数
-			db.IncrementScrapeRetryCount(song.ID)
-		}
-	}
-
-	// 兜底：处理前后均无封面/歌词落盘时，LC_Watcher 不会被唤醒，显式广播通知
-	if !hasCoverFile && !hasLyricsFile && !fileExists(coverPath) && !fileExists(lrcPath) {
-		if NotifyLibraryChanged != nil {
-			NotifyLibraryChanged()
-		}
+	if !EnsureSongMediaResolved(song) {
+		db.IncrementScrapeRetryCount(song.ID)
 	}
 }
 
@@ -150,11 +93,11 @@ func handleSongDeleted(songID string) {
 	hasLyricsFile := fileExists(lrcPath)
 
 	if hasCoverFile {
-		_ = os.Remove(coverPath)
+		_ = utils.SafeRemoveFile(coverPath)
 		core.Info("[DB_Watcher] 清理封面缓存: %s.webp", songID)
 	}
 	if hasLyricsFile {
-		_ = os.Remove(lrcPath)
+		_ = utils.SafeRemoveFile(lrcPath)
 		core.Info("[DB_Watcher] 清理歌词缓存: %s.lrc", songID)
 	}
 

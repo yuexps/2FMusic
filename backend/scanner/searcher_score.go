@@ -237,3 +237,52 @@ func isExactMatch(title, artist, searchTitle, searchArtist string) bool {
 
 	return strings.Contains(cSearchArtist, cArtist) || strings.Contains(cArtist, cSearchArtist)
 }
+
+// cleanTitleForSearch 剥离歌名中的修饰/企划括号，提取主歌名用于退避检索
+func cleanTitleForSearch(title string) string {
+	reg := regexp.MustCompile(`[\(\[（【].*?[\)\]）】]`)
+	cleaned := strings.TrimSpace(reg.ReplaceAllString(title, ""))
+	if cleaned != "" {
+		return cleaned
+	}
+	return title
+}
+
+// calculateItemMatchScore 综合标题(45%)、歌手(25%)、专辑(30%)及时长权重计算匹配得分
+func calculateItemMatchScore(title, artist, album string, durationMs int, item searchResult) float64 {
+	titleSim := StringSimilarity(normalizeLyricMatchText(title), normalizeLyricMatchText(item.title))
+	artistSim := 1.0
+	if artist != "" {
+		artistSim = calculateArtistMatchSimilarity(artist, item.artist)
+	}
+	albumSim := 1.0
+	if album != "" && item.album != "" {
+		albumSim = StringSimilarity(normalizeLyricMatchText(album), normalizeLyricMatchText(item.album))
+	}
+
+	identityScore := 0.45*titleSim + 0.25*artistSim + 0.30*albumSim
+	if titleSim < 0.65 || artistSim < 0.5 {
+		identityScore = math.Min(identityScore, 0.74)
+	}
+
+	durMult := calculateDurationMultiplier(durationMs, item.durationMs)
+	finalScore := identityScore * durMult
+
+	apiBonus := map[string]float64{"qq": 0.01, "netease": 0.005, "kugou": 0.0}
+	finalScore += apiBonus[item.source]
+
+	if item.hasTranslation {
+		finalScore += 0.02
+	}
+
+	switch item.platformRank {
+	case 0:
+		finalScore += 0.05
+	case 1:
+		finalScore += 0.03
+	case 2:
+		finalScore += 0.01
+	}
+
+	return finalScore
+}

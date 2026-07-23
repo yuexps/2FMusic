@@ -183,5 +183,6 @@ func indexAudioFileBasic(filePath string, fi os.FileInfo) {
 		core.Error("[Audio_Watcher] 音频入库失败: %s, err: %v", song.Filename, err)
 	} else {
 		core.Info("[Audio_Watcher] 音频入库索引成功: %s (ID: %s)", song.Filename, song.ID)
+		go EnsureSongMediaResolved(song)
 	}
 }

@@ -256,6 +256,7 @@ const loadLyricsForSong = async (song: any, skipCache: boolean = false) => {
     const data = await wsClient.sendRequest('music/lyrics', {
       title: song.title,
       artist: song.artist,
+      album: song.album,
       filename: song.filename,
       song_id: song.id,
       yrc: true
