@@ -16,23 +16,6 @@
                 "portPerm": "readonly",
                 "pathPerm": "readonly"
             }
-        },
-        "yuexps.2fmusic.folia": {
-            "title": "Folia",
-            "icon": "images/folia_{0}.png",
-            "type": "iframe",
-            "protocol": "http",
-            "gatewaySocket": "app.sock",
-            "gatewayPrefix": "/app/yuexps-2fmusic",
-            "url": "/app/yuexps-2fmusic/folia/",
-            "allUsers": false,
-            "noDisplay": false,
-            "control": {
-                "accessPerm": "readonly",
-                "fullUrlPerm": "readonly",
-                "portPerm": "readonly",
-                "pathPerm": "readonly"
-            }
         }
     }
 }
